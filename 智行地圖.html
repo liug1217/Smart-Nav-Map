@@ -2245,7 +2245,7 @@ if (navigator.geolocation) {
 
     // 距離播報：1000m → 900 → 800 → ... → 200 → 100m（請轉彎）
     // 速度快時自動跳過中間段，避免太頻繁
-    const NAV_THRESHOLDS = [1000,900,800,700,600,500,400,300,200,100]; // 遠到近
+    const NAV_THRESHOLDS = [1000, 300, 100]; // 只播 3 次：1公里、300公尺、請轉彎
 
     if (meters <= 15) {
       const already = navStepVoiceState[currentStepIndex];
@@ -2300,26 +2300,18 @@ if (navigator.geolocation) {
     } else if (!isDepart) {
       const curState = navStepVoiceState[currentStepIndex] || 'idle';
       const curIdx = curState === 'idle' ? -1 : NAV_THRESHOLDS.indexOf(parseInt(curState.slice(1)));
-      const spd = window.currentSpeedKmh || 0;
-      // 根據速度決定最小播報間隔（公尺）
-      const minGap = spd > 90 ? 500 : spd > 60 ? 200 : 100;
 
       for (let i = 0; i < NAV_THRESHOLDS.length; i++) {
         const th = NAV_THRESHOLDS[i];
-        if (meters > th) continue;        // 還沒到這個門檻
-        if (i <= curIdx) continue;        // 已播過這個或更近的段
-        // 標記為已到達（無論播不播，避免重複）
+        if (meters > th) continue;
+        if (i <= curIdx) continue;
         navStepVoiceState[currentStepIndex] = 'w' + th;
-        // 決定是否播報：速度太快時跳過中間段（只播 1000m、每 minGap 的整數倍、100m）
-        const shouldPlay = th === 1000 || th === 100 || (th % minGap === 0);
-        if (shouldPlay) {
-          if (th === 100) {
-            speakText('請' + text + (roadPart ? '，'+roadPart : ''));
-          } else {
-            speakText('前方' + (th >= 1000 ? '1公里' : th+'公尺') + '，' + text + (roadPart ? '，'+roadPart : ''));
-          }
+        if (th === 100) {
+          speakText('請' + text + (roadPart ? '，'+roadPart : ''));
+        } else {
+          speakText('前方' + (th >= 1000 ? '1公里' : th+'公尺') + '，' + text + (roadPart ? '，'+roadPart : ''));
         }
-        break; // 每次 GPS 更新只觸發一個門檻
+        break;
       }
     }
   }
@@ -2612,7 +2604,7 @@ if (navigator.geolocation) {
         const firstStepDistanceMeters = prevStep ? prevStep.distance : null;
         // 標記這一步已經播報過,避免GPS之後在200公尺/30公尺門檻又重複講一次
         currentStepIndex = firstTurnIndex;
-        navStepVoiceState[firstTurnIndex] = 'warned200';
+        navStepVoiceState[firstTurnIndex] = 'w1000';
         updateRect8Display(firstStepDistanceMeters);
 
         if (fromPosition) {
