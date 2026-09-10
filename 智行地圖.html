@@ -1115,30 +1115,6 @@ html, body {
     cursor: pointer;
   ">測試轉彎播報</button>
 
-  <div style="height:1px; background:#444; margin:10px 0;"></div>
-
-  <div style="font-weight:700; margin-bottom:6px;">🚨 超速效果測試</div>
-  <button id="speedingTestBtn" style="
-    width: 100%;
-    padding: 6px 0;
-    border-radius: 6px;
-    border: none;
-    background: #FF0000;
-    color: #fff;
-    font-weight: 700;
-    cursor: pointer;
-  ">開始超速效果</button>
-  <button id="speedingTestStopBtn" style="
-    width: 100%;
-    padding: 6px 0;
-    border-radius: 6px;
-    border: none;
-    background: #333;
-    color: #fff;
-    font-weight: 700;
-    cursor: pointer;
-    margin-top: 4px;
-  ">停止效果</button>
 </div>
 
 <div class="rect8" id="rect8" style="display:none;">
@@ -1157,40 +1133,60 @@ html, body {
 <!-- 超速手機邊框紅色發亮 -->
 <div id="speedingGlow"></div>
 
-<!-- 超速效果測試按鈕 -->
+<!-- 速度模擬器 -->
 <div id="speedingTestWidget" style="
   position:fixed;
   left:8px;
-  bottom:200px;
+  bottom:160px;
   z-index:9999;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
+  background:rgba(0,0,0,0.82);
+  border-radius:16px;
+  padding:12px 12px 10px;
+  width:172px;
+  box-shadow:0 4px 20px rgba(0,0,0,0.45);
+  font-family:-apple-system,sans-serif;
 ">
-  <button onclick="(function(){var r=document.getElementById('rect6'),g=document.getElementById('speedingGlow');if(r)r.classList.add('speeding');if(g)g.classList.add('active');})()" style="
-    padding:8px 14px;
-    border-radius:20px;
-    border:none;
-    background:#FF0000;
-    color:#fff;
-    font-weight:700;
-    font-size:13px;
-    cursor:pointer;
-    box-shadow:0 2px 8px rgba(0,0,0,0.3);
-    white-space:nowrap;
-  ">🚨 超速效果</button>
-  <button onclick="(function(){var r=document.getElementById('rect6'),g=document.getElementById('speedingGlow');if(r)r.classList.remove('speeding');if(g)g.classList.remove('active');})()" style="
-    padding:8px 14px;
-    border-radius:20px;
-    border:none;
-    background:#555;
-    color:#fff;
-    font-weight:700;
-    font-size:13px;
-    cursor:pointer;
-    box-shadow:0 2px 8px rgba(0,0,0,0.3);
-    white-space:nowrap;
-  ">✅ 停止</button>
+  <div style="color:#fff;font-weight:700;font-size:13px;margin-bottom:8px;text-align:center;">🚦 速度模擬器</div>
+
+  <!-- 速限設定 -->
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+    <input id="simSpeedLimitInput" type="number" value="60" min="0" max="200" style="
+      width:58px;padding:5px 6px;border-radius:8px;border:none;
+      font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;
+    ">
+    <span style="color:#aaa;font-size:11px;flex:1;">km/h 速限</span>
+  </div>
+  <button id="simSetLimitBtn" style="
+    width:100%;padding:6px;border-radius:8px;border:none;
+    background:#2F80FF;color:#fff;font-weight:700;font-size:13px;
+    cursor:pointer;margin-bottom:10px;
+  ">確認</button>
+
+  <!-- 目前速度顯示 -->
+  <div style="text-align:center;margin-bottom:10px;line-height:1;">
+    <span id="simSpeedDisplay" style="color:#fff;font-size:32px;font-weight:700;">0</span>
+    <span style="color:#aaa;font-size:12px;"> km/h</span>
+  </div>
+
+  <!-- 煞車 / 油門 -->
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button id="simBrakeBtn" style="
+      flex:1;padding:16px 0;border-radius:14px;border:none;
+      background:#FF6B00;color:#fff;font-weight:700;font-size:13px;
+      cursor:pointer;user-select:none;-webkit-user-select:none;line-height:1.4;
+    ">🛑<br>煞車</button>
+    <button id="simThrottleBtn" style="
+      flex:1;padding:16px 0;border-radius:14px;border:none;
+      background:#00C853;color:#fff;font-weight:700;font-size:13px;
+      cursor:pointer;user-select:none;-webkit-user-select:none;line-height:1.4;
+    ">⚡<br>油門</button>
+  </div>
+
+  <!-- 重置 -->
+  <button id="simResetBtn" style="
+    width:100%;padding:5px;border-radius:8px;border:none;
+    background:#333;color:#999;font-size:11px;cursor:pointer;
+  ">重置</button>
 </div>
 
 <!-- 速限標誌（隱藏，保留 id 供 JS 參考） -->
@@ -2894,23 +2890,6 @@ if (navigator.geolocation) {
       });
     }
 
-    // 超速效果測試按鈕
-    const speedingTestBtn = document.getElementById('speedingTestBtn');
-    const speedingTestStopBtn = document.getElementById('speedingTestStopBtn');
-    const _glowEl = document.getElementById('speedingGlow');
-    const _r6 = document.getElementById('rect6');
-    if (speedingTestBtn) {
-      speedingTestBtn.addEventListener('click', () => {
-        if (_r6) _r6.classList.add('speeding');
-        if (_glowEl) _glowEl.classList.add('active');
-      });
-    }
-    if (speedingTestStopBtn) {
-      speedingTestStopBtn.addEventListener('click', () => {
-        if (_r6) _r6.classList.remove('speeding');
-        if (_glowEl) _glowEl.classList.remove('active');
-      });
-    }
   })();
 
 
@@ -4633,6 +4612,72 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   const cd = document.getElementById('coinDisplay');
   if(cd) cd.addEventListener('click', renderStats);
 
+})();
+</script>
+
+<script>
+// ===== 🚦 速度模擬器 =====
+(function(){
+  var simSpeed = 0;
+  var simLimit = 60;
+  var simTimer = null;
+
+  function applySpeed(speed) {
+    simSpeed = Math.max(0, Math.min(250, speed));
+    var display  = document.getElementById('simSpeedDisplay');
+    var speedVal = document.getElementById('rect6SpeedValue');
+    var rect6    = document.getElementById('rect6');
+    var glow     = document.getElementById('speedingGlow');
+    if (display)  display.textContent  = Math.round(simSpeed);
+    if (speedVal) speedVal.textContent = Math.round(simSpeed);
+    var over = simLimit > 0 && simSpeed > simLimit;
+    if (rect6) rect6.classList.toggle('speeding', over);
+    if (glow)  glow.classList.toggle('active', over);
+  }
+
+  function startHold(delta) {
+    clearInterval(simTimer);
+    window.simRunning = true;
+    applySpeed(simSpeed + delta);
+    simTimer = setInterval(function(){ applySpeed(simSpeed + delta); }, 80);
+  }
+
+  function stopHold() {
+    clearInterval(simTimer);
+    simTimer = null;
+  }
+
+  function bindHold(btn, delta) {
+    ['mousedown','touchstart'].forEach(function(ev){
+      btn.addEventListener(ev, function(e){ e.preventDefault(); startHold(delta); }, {passive:false});
+    });
+    ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){
+      btn.addEventListener(ev, stopHold, {passive:true});
+    });
+  }
+
+  var setBtn      = document.getElementById('simSetLimitBtn');
+  var resetBtn    = document.getElementById('simResetBtn');
+  var brakeBtn    = document.getElementById('simBrakeBtn');
+  var throttleBtn = document.getElementById('simThrottleBtn');
+  var limitInput  = document.getElementById('simSpeedLimitInput');
+
+  if (setBtn) setBtn.addEventListener('click', function(){
+    simLimit = Number(limitInput ? limitInput.value : 60) || 0;
+    applySpeed(simSpeed);
+    var orig = setBtn.textContent;
+    setBtn.textContent = '✅ 已設定 ' + simLimit + ' km/h';
+    setTimeout(function(){ setBtn.textContent = orig; }, 1500);
+  });
+
+  if (resetBtn) resetBtn.addEventListener('click', function(){
+    stopHold();
+    window.simRunning = false;
+    applySpeed(0);
+  });
+
+  if (brakeBtn)    bindHold(brakeBtn,    -10);
+  if (throttleBtn) bindHold(throttleBtn,   6);
 })();
 </script>
 </body>
