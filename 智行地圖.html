@@ -2451,6 +2451,7 @@ if (navigator.geolocation) {
       _smoothedHeading = (_smoothedHeading + _COMPASS_ALPHA * diff + 360) % 360;
     }
     window.compassHeading = _smoothedHeading;
+    if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
 
     // 即時更新地圖旋轉（只在跟隨模式下，duration 短讓畫面跟得上）
     if (followUser && map) {
@@ -2901,6 +2902,11 @@ if (navigator.geolocation) {
         });
       }
 
+      // 更新車子位置
+      if (typeof window.updateCarMarker === 'function') {
+        window.updateCarMarker(currentLon, currentLat);
+      }
+
       // 地圖跟隨（不強制 zoom，由使用者控制縮放層級）
       if (followUser) {
         map.easeTo({
@@ -2943,6 +2949,103 @@ if (navigator.geolocation) {
   } else {
     alert('您的瀏覽器不支援地理定位功能');
   }
+</script>
+
+<script>
+// ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
+map.on('load', function() {
+  // 用 Canvas 畫車子，轉成 MapLibre 圖片資源
+  (function() {
+    const W = 30, H = 48, S = 3; // S=像素密度倍率（Retina）
+    const cv = document.createElement('canvas');
+    cv.width = W * S; cv.height = H * S;
+    const c = cv.getContext('2d');
+    c.scale(S, S);
+
+    function rr(x, y, w, h, r, fill) {
+      c.beginPath();
+      c.moveTo(x+r, y); c.lineTo(x+w-r, y);
+      c.arcTo(x+w,y, x+w,y+r, r); c.lineTo(x+w, y+h-r);
+      c.arcTo(x+w,y+h, x+w-r,y+h, r); c.lineTo(x+r, y+h);
+      c.arcTo(x,y+h, x,y+h-r, r); c.lineTo(x, y+r);
+      c.arcTo(x,y, x+r,y, r); c.closePath();
+      c.fillStyle = fill; c.fill();
+    }
+
+    rr(4,8,22,32,6,'#1E88E5');          // 車身
+    rr(0,10,5,10,2.5,'#1a1a1a');        // 前輪左
+    rr(25,10,5,10,2.5,'#1a1a1a');       // 前輪右
+    rr(0,28,5,10,2.5,'#1a1a1a');        // 後輪左
+    rr(25,28,5,10,2.5,'#1a1a1a');       // 後輪右
+    rr(7,12,16,10,3,'rgba(200,235,255,0.65)'); // 擋風玻璃
+    rr(7,28,16,8,2,'rgba(200,235,255,0.3)');   // 後車窗
+    rr(5,8,6,3,1.5,'#FFEE58');          // 頭燈左
+    rr(19,8,6,3,1.5,'#FFEE58');         // 頭燈右
+    rr(5,37,6,3,1.5,'#EF5350');         // 尾燈左
+    rr(19,37,6,3,1.5,'#EF5350');        // 尾燈右
+    rr(13,23,4,5,2,'rgba(255,255,255,0.18)'); // 車頂
+
+    map.addImage('car-icon', { width: W*S, height: H*S, data: c.getImageData(0,0,W*S,H*S).data }, { pixelRatio: S });
+  })();
+
+  // GeoJSON source：只有一個點（使用者位置）
+  map.addSource('user-pos', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
+  // 藍色脈衝光暈（在車子下面）
+  map.addLayer({
+    id: 'user-pulse',
+    type: 'circle',
+    source: 'user-pos',
+    paint: {
+      'circle-radius': 18,
+      'circle-color': '#1E88E5',
+      'circle-opacity': 0.18,
+      'circle-stroke-color': '#1E88E5',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-opacity': 0.35
+    }
+  });
+
+  // 車子 symbol layer（GPU 原生旋轉，不用 CSS transform）
+  map.addLayer({
+    id: 'user-car',
+    type: 'symbol',
+    source: 'user-pos',
+    layout: {
+      'icon-image': 'car-icon',
+      'icon-size': 1,
+      'icon-rotate': ['get', 'heading'],
+      'icon-rotation-alignment': 'map',
+      'icon-pitch-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true
+    }
+  });
+
+  // 更新車子位置（每次 GPS 更新呼叫）
+  window.updateCarMarker = function(lng, lat) {
+    const heading = window.compassHeading != null ? window.compassHeading : 0;
+    map.getSource('user-pos').setData({
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
+    });
+  };
+
+  // 更新車子方向（羅盤轉動時呼叫）
+  window.updateUserMarkerHeading = function() {
+    if (window.currentLon != null && window.currentLat != null) {
+      window.updateCarMarker(window.currentLon, window.currentLat);
+    }
+  };
+
+  // 若已有定位立即顯示
+  if (window.currentLon != null && window.currentLat != null) {
+    window.updateCarMarker(window.currentLon, window.currentLat);
+  }
+});
 </script>
 
 <script>
