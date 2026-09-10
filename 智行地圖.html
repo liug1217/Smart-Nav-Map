@@ -475,12 +475,32 @@ body.navigating .coinToast{ top:155px; }
 @keyframes toastIn{from{opacity:0;transform:translateX(8px);}to{opacity:1;transform:none;}}
 @keyframes toastOut{to{opacity:0;transform:translateX(8px);}}
 
-/* ===== 超速：速度計變紅閃爍 ===== */
+/* ===== 超速：速度計紅框 + 數字閃爍 ===== */
+.rect6.speeding{
+  border-color:#FF0000 !important;
+}
 .rect6.speeding .speed-value{
   color:#FF3B30!important;
   animation:speedFlash 0.6s ease-in-out infinite;
 }
 @keyframes speedFlash{0%,100%{opacity:1;}50%{opacity:0.5;}}
+
+/* ===== 超速：手機邊框紅色發亮 ===== */
+#speedingGlow{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:9998;
+  display:none;
+}
+#speedingGlow.active{
+  display:block;
+  animation:speedGlowPulse 0.75s ease-in-out infinite;
+}
+@keyframes speedGlowPulse{
+  0%,100%{ box-shadow:inset 0 0 45px 14px rgba(255,0,0,0.42); }
+  50%{ box-shadow:inset 0 0 70px 26px rgba(255,0,0,0.82); }
+}
 
 /* ===== 金幣進度條 ===== */
 .coinDisplayRow{ display:flex;align-items:center;gap:5px; }
@@ -623,9 +643,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   z-index:5;
 }
-.rect6.camAlert{
-  border-color:#FF1744;
-}
 .rect6 .speed-value{
   font-size:32px;
   font-weight:600;
@@ -635,31 +652,8 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:400;
 }
 
-/* ===== 速限標誌（移到 rect6 右邊）===== */
-.speedLimitSign{
-  position:fixed;
-  left:92px;
-  top:95px;
-  width:50px;
-  height:50px;
-  border:5px solid red;
-  border-radius:25px;
-  background:#fff;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,0.28);
-  z-index:4;
-  pointer-events:none;
-  flex-direction:column;
-}
-.speedLimitSign .limit-num{
-  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:22px;
-  font-weight:400;
-  color:#000;
-  line-height:1;
-}
+/* ===== 速限標誌（隱藏，僅保留 JS 用的 currentSpeedLimit 邏輯）===== */
+.speedLimitSign{ display:none!important; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -1135,8 +1129,11 @@ html, body {
   <div class="speed-unit">km/h</div>
 </div>
 
-<!-- 速限標誌 -->
-<div class="speedLimitSign" id="speedLimitSign">
+<!-- 超速手機邊框紅色發亮 -->
+<div id="speedingGlow"></div>
+
+<!-- 速限標誌（隱藏，保留 id 供 JS 參考） -->
+<div class="speedLimitSign" id="speedLimitSign" style="display:none!important">
   <div class="limit-num" id="speedLimitNum">110</div>
 </div>
 
@@ -2737,18 +2734,8 @@ if (navigator.geolocation) {
         }
       }
     });
-    // 更新速限標誌 + rect6 紅框
-    if (_speedSignEl) {
-      if (nearestLimit) {
-        window.currentSpeedLimit = Number(nearestLimit);
-        if (_speedNumEl) _speedNumEl.textContent = nearestLimit;
-        _speedSignEl.style.display = 'flex';
-      } else {
-        window.currentSpeedLimit = null;
-        _speedSignEl.style.display = 'none';
-      }
-    }
-    if (rect6El) rect6El.classList.toggle('camAlert', !!nearestLimit);
+    // 更新 currentSpeedLimit（供 updateDisplay 超速判斷用）
+    window.currentSpeedLimit = nearestLimit ? Number(nearestLimit) : null;
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
@@ -2857,12 +2844,15 @@ if (navigator.geolocation) {
     return `${hours}小時${minutes}分鐘`;
   }
 
+  const _speedingGlowEl = document.getElementById('speedingGlow');
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
     if (rect6El) {
       const lim = window.currentSpeedLimit;
-      rect6El.classList.toggle('speeding', !!(lim && speed > lim));
+      const isSpeeding = !!(lim && speed > lim);
+      rect6El.classList.toggle('speeding', isSpeeding);
+      if (_speedingGlowEl) _speedingGlowEl.classList.toggle('active', isSpeeding);
     }
     // 導航中(已經規劃好真實路線)時,.info要顯示「全程距離/時間」,
     // 不能被這裡的GPS行程記錄(從0開始算)覆蓋掉
