@@ -2582,6 +2582,9 @@ if (navigator.geolocation) {
       if (rect6El) rect6El.style.display = 'flex';
       updateRect8Display();
       togglePoiLayers(false); // 導航時隱藏POI地標
+      // 確保車子圖層在導航時保持可見
+      try { map.setLayoutProperty('user-car', 'visibility', 'visible'); } catch(e) {}
+      try { map.setLayoutProperty('user-pulse', 'visibility', 'visible'); } catch(e) {}
 
       // 找出第一個真正的轉彎(跳過出發點depart)
       const firstTurnIndex = navSteps.findIndex(s => s.maneuver && s.maneuver.type !== 'depart');
