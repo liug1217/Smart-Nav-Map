@@ -1114,6 +1114,31 @@ html, body {
     font-weight: 700;
     cursor: pointer;
   ">測試轉彎播報</button>
+
+  <div style="height:1px; background:#444; margin:10px 0;"></div>
+
+  <div style="font-weight:700; margin-bottom:6px;">🚨 超速效果測試</div>
+  <button id="speedingTestBtn" style="
+    width: 100%;
+    padding: 6px 0;
+    border-radius: 6px;
+    border: none;
+    background: #FF0000;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  ">開始超速效果</button>
+  <button id="speedingTestStopBtn" style="
+    width: 100%;
+    padding: 6px 0;
+    border-radius: 6px;
+    border: none;
+    background: #333;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
+  ">停止效果</button>
 </div>
 
 <div class="rect8" id="rect8" style="display:none;">
@@ -2830,6 +2855,24 @@ if (navigator.geolocation) {
           return;
         }
         if (speedInput) speedInput.value = Math.round(real);
+      });
+    }
+
+    // 超速效果測試按鈕
+    const speedingTestBtn = document.getElementById('speedingTestBtn');
+    const speedingTestStopBtn = document.getElementById('speedingTestStopBtn');
+    const _glowEl = document.getElementById('speedingGlow');
+    const _r6 = document.getElementById('rect6');
+    if (speedingTestBtn) {
+      speedingTestBtn.addEventListener('click', () => {
+        if (_r6) _r6.classList.add('speeding');
+        if (_glowEl) _glowEl.classList.add('active');
+      });
+    }
+    if (speedingTestStopBtn) {
+      speedingTestStopBtn.addEventListener('click', () => {
+        if (_r6) _r6.classList.remove('speeding');
+        if (_glowEl) _glowEl.classList.remove('active');
       });
     }
   })();
