@@ -3005,35 +3005,13 @@ map.on('load', () => {
     el.style.transform = `rotate(${heading}deg)`;
   };
 
-  // 更新車子 marker 位置（平滑動畫插值，不瞬間跳轉）
-  let _carAnimFrame = null;
-  let _carFrom = null;
-
+  // 更新車子 marker 位置（直接貼 GPS，流暢感由地圖 easeTo 提供）
   window.updateCarMarker = function(lng, lat) {
     if (!userMarker) {
       userMarker = createUserDot(lng, lat).addTo(map);
-      _carFrom = [lng, lat];
-      return;
-    }
-    if (!_carFrom) {
+    } else {
       userMarker.setLngLat([lng, lat]);
-      _carFrom = [lng, lat];
-      return;
     }
-    const startLng = _carFrom[0], startLat = _carFrom[1];
-    const t0 = performance.now();
-    const dur = 900;
-    if (_carAnimFrame) cancelAnimationFrame(_carAnimFrame);
-    function step() {
-      const t = Math.min(1, (performance.now() - t0) / dur);
-      const e = 1 - Math.pow(1 - t, 3);
-      const curLng = startLng + (lng - startLng) * e;
-      const curLat = startLat + (lat - startLat) * e;
-      userMarker.setLngLat([curLng, curLat]);
-      if (t < 1) { _carAnimFrame = requestAnimationFrame(step); }
-      else { _carFrom = [lng, lat]; }
-    }
-    _carAnimFrame = requestAnimationFrame(step);
   };
 
   // updateCarMarker 定義完成後，若 updateUserLocation 已有定位資料則立即補顯示
