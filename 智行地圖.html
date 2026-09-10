@@ -1133,27 +1133,7 @@ html, body {
 <!-- 超速手機邊框紅色發亮 -->
 <div id="speedingGlow"></div>
 
-<!-- 速度模擬器切換按鈕 -->
-<button id="speedSimToggleBtn" onclick="(function(){var w=document.getElementById('speedingTestWidget');w.style.display=w.style.display==='none'?'block':'none';})()" style="
-  position:fixed;
-  left:8px;
-  bottom:160px;
-  z-index:9999;
-  width:40px;
-  height:40px;
-  border-radius:20px;
-  border:none;
-  background:rgba(0,0,0,0.65);
-  color:#fff;
-  font-size:18px;
-  cursor:pointer;
-  box-shadow:0 2px 8px rgba(0,0,0,0.35);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-">🚦</button>
-
-<!-- 速度模擬器 -->
+<!-- 速度模擬器（隱藏；在 Console 輸入 showSpeedSim() 開啟）-->
 <div id="speedingTestWidget" style="
   position:fixed;
   left:8px;
@@ -4699,6 +4679,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   if (brakeBtn)    bindHold(brakeBtn,    -10);
   if (throttleBtn) bindHold(throttleBtn,   6);
+
+  window.showSpeedSim = function(){
+    var w = document.getElementById('speedingTestWidget');
+    if (w) w.style.display = w.style.display === 'none' ? 'block' : 'none';
+  };
 })();
 </script>
 </body>
