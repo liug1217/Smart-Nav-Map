@@ -1157,6 +1157,42 @@ html, body {
 <!-- 超速手機邊框紅色發亮 -->
 <div id="speedingGlow"></div>
 
+<!-- 超速效果測試按鈕 -->
+<div id="speedingTestWidget" style="
+  position:fixed;
+  left:8px;
+  bottom:200px;
+  z-index:9999;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+">
+  <button onclick="(function(){var r=document.getElementById('rect6'),g=document.getElementById('speedingGlow');if(r)r.classList.add('speeding');if(g)g.classList.add('active');})()" style="
+    padding:8px 14px;
+    border-radius:20px;
+    border:none;
+    background:#FF0000;
+    color:#fff;
+    font-weight:700;
+    font-size:13px;
+    cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    white-space:nowrap;
+  ">🚨 超速效果</button>
+  <button onclick="(function(){var r=document.getElementById('rect6'),g=document.getElementById('speedingGlow');if(r)r.classList.remove('speeding');if(g)g.classList.remove('active');})()" style="
+    padding:8px 14px;
+    border-radius:20px;
+    border:none;
+    background:#555;
+    color:#fff;
+    font-weight:700;
+    font-size:13px;
+    cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    white-space:nowrap;
+  ">✅ 停止</button>
+</div>
+
 <!-- 速限標誌（隱藏，保留 id 供 JS 參考） -->
 <div class="speedLimitSign" id="speedLimitSign" style="display:none!important">
   <div class="limit-num" id="speedLimitNum">110</div>
