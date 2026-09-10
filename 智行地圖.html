@@ -1277,19 +1277,12 @@ html, body {
 let userMarker = null;
 
 function updateUserLocation(position) {
-  const lng = position.coords.longitude;
-  const lat = position.coords.latitude;
-
-  window.currentLat = lat;
-  window.currentLon = lng;
-  // 地圖和 updateCarMarker 都 ready 時立刻顯示車子，不等第二個 watchPosition
-  if (typeof window.updateCarMarker === 'function') {
-    window.updateCarMarker(lng, lat);
-  }
+  window.currentLat = position.coords.latitude;
+  window.currentLon = position.coords.longitude;
 }
 
 if (navigator.geolocation) {
-  navigator.geolocation.watchPosition(updateUserLocation);
+  navigator.geolocation.watchPosition(updateUserLocation, null, { enableHighAccuracy: true });
 }
 </script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-geocoder/dist/maplibre-gl-geocoder.min.js"></script>
@@ -1368,7 +1361,6 @@ if (navigator.geolocation) {
   let lastPosition = null;
   let totalDistance = 0;
   let routeCoordinates = [];
-  let marker = null;
   let routeSource = null;
 
   // ===== 最近目的地 (localStorage) =====
@@ -2871,47 +2863,6 @@ if (navigator.geolocation) {
     }
   }
 
-  // ===== 平滑移動定位點(用動畫插值,不要瞬間跳轉) =====
-  let markerAnimFrame = null;
-  let markerDisplayLngLat = null; // 目前畫面上實際顯示的位置(動畫的起點)
-
-  function animateMarkerTo(targetLng, targetLat, duration){
-    if(!marker) return;
-
-    // 第一次還沒有起點位置時,直接定位過去,不需要動畫
-    if(!markerDisplayLngLat){
-      markerDisplayLngLat = [targetLng, targetLat];
-      marker.setLngLat(markerDisplayLngLat);
-      return;
-    }
-
-    const startLng = markerDisplayLngLat[0];
-    const startLat = markerDisplayLngLat[1];
-    const startTimeMs = performance.now();
-
-    if(markerAnimFrame){
-      cancelAnimationFrame(markerAnimFrame);
-    }
-
-    function step(){
-      const elapsed = performance.now() - startTimeMs;
-      const t = Math.min(1, elapsed / duration);
-      // easeOutCubic,讓移動有自然的減速感,不會死板地等速移動
-      const eased = 1 - Math.pow(1 - t, 3);
-
-      const lng = startLng + (targetLng - startLng) * eased;
-      const lat = startLat + (targetLat - startLat) * eased;
-
-      markerDisplayLngLat = [lng, lat];
-      marker.setLngLat(markerDisplayLngLat);
-
-      if(t < 1){
-        markerAnimFrame = requestAnimationFrame(step);
-      }
-    }
-
-    markerAnimFrame = requestAnimationFrame(step);
-  }
 
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition((pos) => {
@@ -3055,13 +3006,35 @@ map.on('load', () => {
     el.style.transform = `rotate(${heading}deg)`;
   };
 
-  // 更新車子 marker 位置，由第二個 watchPosition 統一呼叫
+  // 更新車子 marker 位置（平滑動畫插值，不瞬間跳轉）
+  let _carAnimFrame = null;
+  let _carFrom = null;
+
   window.updateCarMarker = function(lng, lat) {
     if (!userMarker) {
       userMarker = createUserDot(lng, lat).addTo(map);
-    } else {
-      userMarker.setLngLat([lng, lat]);
+      _carFrom = [lng, lat];
+      return;
     }
+    if (!_carFrom) {
+      userMarker.setLngLat([lng, lat]);
+      _carFrom = [lng, lat];
+      return;
+    }
+    const startLng = _carFrom[0], startLat = _carFrom[1];
+    const t0 = performance.now();
+    const dur = 900;
+    if (_carAnimFrame) cancelAnimationFrame(_carAnimFrame);
+    function step() {
+      const t = Math.min(1, (performance.now() - t0) / dur);
+      const e = 1 - Math.pow(1 - t, 3);
+      const curLng = startLng + (lng - startLng) * e;
+      const curLat = startLat + (lat - startLat) * e;
+      userMarker.setLngLat([curLng, curLat]);
+      if (t < 1) { _carAnimFrame = requestAnimationFrame(step); }
+      else { _carFrom = [lng, lat]; }
+    }
+    _carAnimFrame = requestAnimationFrame(step);
   };
 
   // updateCarMarker 定義完成後，若 updateUserLocation 已有定位資料則立即補顯示
