@@ -2982,7 +2982,7 @@ map.on('load', function() {
       data: { type: 'FeatureCollection', features: [] }
     });
 
-    // 藍色脈衝光暈（在車子下面）
+    // 藍色脈衝光暈（在車子下面，貼地面）
     map.addLayer({
       id: 'user-pulse',
       type: 'circle',
@@ -2993,11 +2993,13 @@ map.on('load', function() {
         'circle-opacity': 0.18,
         'circle-stroke-color': '#1E88E5',
         'circle-stroke-width': 1.5,
-        'circle-stroke-opacity': 0.35
+        'circle-stroke-opacity': 0.35,
+        'circle-pitch-alignment': 'map',
+        'circle-pitch-scale': 'map'
       }
     });
 
-    // 車子 symbol layer（GPU 原生旋轉，不用 CSS transform）
+    // 車子 symbol layer（viewport 旋轉對齊無延遲，map pitch 對齊貼地面呈現扁平感）
     map.addLayer({
       id: 'user-car',
       type: 'symbol',
@@ -3007,7 +3009,7 @@ map.on('load', function() {
         'icon-size': 1,
         'icon-rotate': 0,
         'icon-rotation-alignment': 'viewport',
-        'icon-pitch-alignment': 'viewport',
+        'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true
       }
