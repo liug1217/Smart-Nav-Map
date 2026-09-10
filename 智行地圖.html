@@ -2406,8 +2406,8 @@ if (navigator.geolocation) {
     if (!style || !style.layers) return;
     style.layers.forEach(layer => {
       // 隱藏所有 symbol 類型圖層（包含 POI marker、地名、圖示）
-      // 只保留 line（道路）、fill（區域填色）、background
-      if (layer.type === 'symbol') {
+      // 只保留 line（道路）、fill（區域填色）、background，以及車子圖層
+      if (layer.type === 'symbol' && layer.id !== 'user-car') {
         try {
           map.setLayoutProperty(layer.id, 'visibility', visibility);
         } catch(e) {}
@@ -3430,8 +3430,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     /* --- 指南針 --- */
     const compassSvg = document.getElementById('compassSvg');
     function updateCompass(){
-      const bearing = map.getBearing();
-      if(compassSvg) compassSvg.style.transform = 'rotate(' + (-bearing) + 'deg)';
+      if(compassSvg) compassSvg.style.transform = 'rotate(0deg)';
     }
     map.on('rotate', updateCompass);
     map.on('rotateend', updateCompass);
