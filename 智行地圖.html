@@ -2957,86 +2957,213 @@ if (navigator.geolocation) {
 <script>
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
 map.on('load', function() {
-  // 用原始 SVG 載入車子圖示（保留原本扁平外觀）
-  const _carSvg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
-    <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-    <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-    <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-    <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-    <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
-    <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
-    <rect x="5" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
-    <rect x="19" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
-    <rect x="5" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
-    <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
-    <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
-  </svg>`;
-  const _carImg = new Image(60, 96);
-  _carImg.onload = function() {
-    map.addImage('car-icon', _carImg, { pixelRatio: 2 });
+  // Canvas 繪製 3D 跑車圖示
+  (function() {
+    const W = 30, H = 48, S = 3;
+    const cv = document.createElement('canvas');
+    cv.width = W*S; cv.height = H*S;
+    const c = cv.getContext('2d');
+    c.scale(S, S);
 
-    // GeoJSON source：只有一個點（使用者位置）
-    map.addSource('user-pos', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    // 地面陰影
+    c.save();
+    c.translate(15, 27); c.scale(12, 5);
+    const sg = c.createRadialGradient(0,0,0,0,0,1);
+    sg.addColorStop(0,'rgba(0,0,0,0.38)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=sg; c.beginPath(); c.arc(0,0,1,0,Math.PI*2); c.fill();
+    c.restore();
 
-    // 藍色脈衝光暈（在車子下面，貼地面）
-    map.addLayer({
-      id: 'user-pulse',
-      type: 'circle',
-      source: 'user-pos',
-      paint: {
-        'circle-radius': 18,
-        'circle-color': '#1E88E5',
-        'circle-opacity': 0.18,
-        'circle-stroke-color': '#1E88E5',
-        'circle-stroke-width': 1.5,
-        'circle-stroke-opacity': 0.35,
-        'circle-pitch-alignment': 'map',
-        'circle-pitch-scale': 'map'
+    // 車身（紅色跑車，左右漸層深色）
+    const bg = c.createLinearGradient(5,0,25,0);
+    bg.addColorStop(0,'#7B0000'); bg.addColorStop(0.3,'#C62828');
+    bg.addColorStop(0.5,'#FF1744'); bg.addColorStop(0.7,'#C62828'); bg.addColorStop(1,'#7B0000');
+    c.beginPath();
+    c.moveTo(15,4); c.bezierCurveTo(20,4,22,7,22,10);
+    c.lineTo(23,25); c.lineTo(23,34);
+    c.bezierCurveTo(23,40,21.5,43,15,44.5);
+    c.bezierCurveTo(8.5,43,7,40,7,34);
+    c.lineTo(7,25); c.lineTo(8,10);
+    c.bezierCurveTo(8,7,10,4,15,4);
+    c.fillStyle=bg; c.fill();
+
+    // 引擎蓋
+    c.beginPath();
+    c.moveTo(12,5); c.lineTo(18,5); c.lineTo(19.5,12); c.lineTo(10.5,12);
+    c.fillStyle='rgba(0,0,0,0.18)'; c.fill();
+
+    // 引擎蓋中央氣道
+    c.beginPath();
+    c.moveTo(14,5.5); c.lineTo(16,5.5); c.lineTo(16.5,11.5); c.lineTo(13.5,11.5);
+    c.fillStyle='rgba(0,0,0,0.32)'; c.fill();
+
+    // 引擎蓋高光
+    c.beginPath();
+    c.moveTo(12.5,5.5); c.bezierCurveTo(14,5,15.5,5,16,5.5);
+    c.lineTo(15.5,8); c.lineTo(13,8);
+    c.fillStyle='rgba(255,255,255,0.22)'; c.fill();
+
+    // 擋風玻璃
+    const wg = c.createLinearGradient(11,13,19,21);
+    wg.addColorStop(0,'rgba(160,225,255,0.9)'); wg.addColorStop(1,'rgba(80,160,220,0.55)');
+    c.beginPath();
+    c.moveTo(11,13); c.lineTo(19,13); c.lineTo(18.5,21); c.lineTo(11.5,21);
+    c.fillStyle=wg; c.fill();
+    // 擋風玻璃反光
+    c.beginPath();
+    c.moveTo(12,13.5); c.lineTo(15.5,13.5); c.lineTo(15,16.5); c.lineTo(12,16.5);
+    c.fillStyle='rgba(255,255,255,0.45)'; c.fill();
+
+    // 車頂艙蓋
+    c.beginPath();
+    c.moveTo(11.5,21); c.lineTo(18.5,21); c.lineTo(18.5,27.5); c.bezierCurveTo(15,28.5,11.5,27.5,11.5,27.5);
+    c.fillStyle='#400000'; c.fill();
+
+    // 後擋風玻璃
+    const rwg = c.createLinearGradient(11,30,19,36);
+    rwg.addColorStop(0,'rgba(80,160,220,0.5)'); rwg.addColorStop(1,'rgba(40,100,180,0.35)');
+    c.beginPath();
+    c.moveTo(11.5,30); c.lineTo(18.5,30); c.lineTo(19.5,36); c.lineTo(10.5,36);
+    c.fillStyle=rwg; c.fill();
+
+    // 後車身
+    c.beginPath();
+    c.moveTo(10,36); c.lineTo(20,36); c.lineTo(20,40.5); c.lineTo(10,40.5);
+    c.fillStyle='rgba(0,0,0,0.2)'; c.fill();
+
+    // 擾流板（寬）
+    c.fillStyle='#111';
+    c.fillRect(5.5,40.5,19,2.5);
+    // 擾流板立柱
+    c.fillStyle='#2a2a2a';
+    c.fillRect(7.5,38,3,3); c.fillRect(19.5,38,3,3);
+
+    // 前保桿
+    c.beginPath();
+    c.moveTo(11,4.5); c.bezierCurveTo(15,3.2,19,4.5,19,4.5);
+    c.lineTo(19,5.5); c.bezierCurveTo(15,4.2,11,5.5,11,5.5);
+    c.fillStyle='#111'; c.fill();
+
+    // 前頭燈（LED 條）
+    c.fillStyle='rgba(255,240,100,0.9)';
+    c.fillRect(9,5,4,1.2);
+    c.fillRect(17,5,4,1.2);
+    // DRL 白色
+    c.fillStyle='rgba(255,255,255,0.88)';
+    c.fillRect(9,4,4,0.7);
+    c.fillRect(17,4,4,0.7);
+
+    // 後尾燈（LED 條）
+    c.fillStyle='#FF1744';
+    c.fillRect(8,41.5,5.5,1.5);
+    c.fillRect(16.5,41.5,5.5,1.5);
+    c.fillStyle='rgba(255,50,50,0.4)';
+    c.fillRect(8,43,5.5,0.5);
+    c.fillRect(16.5,43,5.5,0.5);
+
+    // 後保桿
+    c.beginPath();
+    c.moveTo(10.5,43.5); c.bezierCurveTo(15,45,19.5,43.5,19.5,43.5);
+    c.lineTo(19.5,44.5); c.bezierCurveTo(15,46,10.5,44.5,10.5,44.5);
+    c.fillStyle='#111'; c.fill();
+
+    // 車身側面高光
+    c.strokeStyle='rgba(255,255,255,0.18)'; c.lineWidth=0.5;
+    c.beginPath(); c.moveTo(9.5,10); c.lineTo(9,38); c.stroke();
+    c.beginPath(); c.moveTo(20.5,10); c.lineTo(21,38); c.stroke();
+
+    // 輪子
+    function wheel(cx,cy,ro,ri) {
+      // 外胎
+      const tg = c.createRadialGradient(cx-ro*0.3,cy-ro*0.3,0,cx,cy,ro);
+      tg.addColorStop(0,'#3a3a3a'); tg.addColorStop(1,'#0d0d0d');
+      c.beginPath(); c.ellipse(cx,cy,ro,ro,0,0,Math.PI*2);
+      c.fillStyle=tg; c.fill();
+      // 輪圈
+      const rg = c.createRadialGradient(cx-ri*0.4,cy-ri*0.4,0,cx,cy,ri);
+      rg.addColorStop(0,'#999'); rg.addColorStop(0.5,'#555'); rg.addColorStop(1,'#2a2a2a');
+      c.beginPath(); c.ellipse(cx,cy,ri,ri,0,0,Math.PI*2);
+      c.fillStyle=rg; c.fill();
+      // 5爪輪輻
+      c.strokeStyle='#aaa'; c.lineWidth=0.7;
+      for(let i=0;i<5;i++){
+        const a=(i/5)*Math.PI*2-Math.PI/2;
+        c.beginPath(); c.moveTo(cx,cy);
+        c.lineTo(cx+Math.cos(a)*ri*0.88, cy+Math.sin(a)*ri*0.88); c.stroke();
       }
+      // 中心螺帽
+      c.beginPath(); c.ellipse(cx,cy,ri*0.28,ri*0.28,0,0,Math.PI*2);
+      c.fillStyle='#bbb'; c.fill();
+      // 煞車卡鉗（紅）
+      c.fillStyle='#EF5350';
+      c.fillRect(cx-ri*0.9,cy-ri*0.4,ri*0.4,ri*0.8);
+    }
+    wheel(4.5,14.5,4.2,2.8);
+    wheel(25.5,14.5,4.2,2.8);
+    wheel(4,35,5,3.3);
+    wheel(26,35,5,3.3);
+
+    map.addImage('car-icon', { width:W*S, height:H*S, data:c.getImageData(0,0,W*S,H*S).data }, { pixelRatio:S });
+  })();
+
+  // GeoJSON source：只有一個點（使用者位置）
+  map.addSource('user-pos', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
+  // 藍色脈衝光暈（在車子下面，貼地面）
+  map.addLayer({
+    id: 'user-pulse',
+    type: 'circle',
+    source: 'user-pos',
+    paint: {
+      'circle-radius': 18,
+      'circle-color': '#1E88E5',
+      'circle-opacity': 0.18,
+      'circle-stroke-color': '#1E88E5',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-opacity': 0.35,
+      'circle-pitch-alignment': 'map',
+      'circle-pitch-scale': 'map'
+    }
+  });
+
+  // 車子 symbol layer（viewport 旋轉對齊無延遲，map pitch 對齊貼地面呈現扁平感）
+  map.addLayer({
+    id: 'user-car',
+    type: 'symbol',
+    source: 'user-pos',
+    layout: {
+      'icon-image': 'car-icon',
+      'icon-size': 1,
+      'icon-rotate': 0,
+      'icon-rotation-alignment': 'viewport',
+      'icon-pitch-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true
+    }
+  });
+
+  // 更新車子位置（每次 GPS 更新呼叫）
+  window.updateCarMarker = function(lng, lat) {
+    const heading = window.compassHeading != null ? window.compassHeading : 0;
+    map.getSource('user-pos').setData({
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
     });
+  };
 
-    // 車子 symbol layer（viewport 旋轉對齊無延遲，map pitch 對齊貼地面呈現扁平感）
-    map.addLayer({
-      id: 'user-car',
-      type: 'symbol',
-      source: 'user-pos',
-      layout: {
-        'icon-image': 'car-icon',
-        'icon-size': 1,
-        'icon-rotate': 0,
-        'icon-rotation-alignment': 'viewport',
-        'icon-pitch-alignment': 'map',
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true
-      }
-    });
-
-    // 更新車子位置（每次 GPS 更新呼叫）
-    window.updateCarMarker = function(lng, lat) {
-      const heading = window.compassHeading != null ? window.compassHeading : 0;
-      map.getSource('user-pos').setData({
-        type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
-      });
-    };
-
-    // 更新車子方向（羅盤轉動時呼叫）
-    window.updateUserMarkerHeading = function() {
-      if (window.currentLon != null && window.currentLat != null) {
-        window.updateCarMarker(window.currentLon, window.currentLat);
-      }
-    };
-
-    // 若已有定位立即顯示
+  // 更新車子方向（羅盤轉動時呼叫）
+  window.updateUserMarkerHeading = function() {
     if (window.currentLon != null && window.currentLat != null) {
       window.updateCarMarker(window.currentLon, window.currentLat);
     }
   };
-  _carImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_carSvg);
+
+  // 若已有定位立即顯示
+  if (window.currentLon != null && window.currentLat != null) {
+    window.updateCarMarker(window.currentLon, window.currentLat);
+  }
 });
 </script>
 
