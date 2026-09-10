@@ -591,6 +591,7 @@ body.navigating .coinToast{ top:155px; }
 body.navigating .rect8{ top:0; }
 body.navigating .mapClock{ top:77px; }
 body.navigating .rect6{ top:77px; }
+body.navigating .speedLimitSign{ top:90px; }
 body.navigating .weatherAlert{ top:180px; }
 body.navigating .earthquakeAlert{ top:218px; }
 
@@ -609,6 +610,9 @@ body.navigating .earthquakeAlert{ top:218px; }
   background:#FFFFFF;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   border-radius:38px;
+  border:5px solid transparent;
+  box-sizing:border-box;
+  transition:border-color 0.25s ease;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -619,6 +623,9 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   z-index:5;
 }
+.rect6.camAlert{
+  border-color:#FF1744;
+}
 .rect6 .speed-value{
   font-size:32px;
   font-weight:600;
@@ -628,11 +635,11 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:400;
 }
 
-/* ===== 速限標誌 ===== */
+/* ===== 速限標誌（移到 rect6 右邊）===== */
 .speedLimitSign{
   position:fixed;
-  right:14px;
-  bottom:452px;
+  left:92px;
+  top:95px;
   width:50px;
   height:50px;
   border:5px solid red;
@@ -2730,7 +2737,7 @@ if (navigator.geolocation) {
         }
       }
     });
-    // 更新速限標誌
+    // 更新速限標誌 + rect6 紅框
     if (_speedSignEl) {
       if (nearestLimit) {
         window.currentSpeedLimit = Number(nearestLimit);
@@ -2741,6 +2748,7 @@ if (navigator.geolocation) {
         _speedSignEl.style.display = 'none';
       }
     }
+    if (rect6El) rect6El.classList.toggle('camAlert', !!nearestLimit);
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
