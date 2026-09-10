@@ -3017,9 +3017,9 @@ map.on('load', function() {
     layout: {
       'icon-image': 'car-icon',
       'icon-size': 1,
-      'icon-rotate': 0,
-      'icon-rotation-alignment': 'viewport',
-      'icon-pitch-alignment': 'viewport',
+      'icon-rotate': ['get', 'heading'],
+      'icon-rotation-alignment': 'map',
+      'icon-pitch-alignment': 'map',
       'icon-allow-overlap': true,
       'icon-ignore-placement': true
     }
@@ -3027,9 +3027,10 @@ map.on('load', function() {
 
   // 更新車子位置（每次 GPS 更新呼叫）
   window.updateCarMarker = function(lng, lat) {
+    const heading = window.compassHeading != null ? window.compassHeading : 0;
     map.getSource('user-pos').setData({
       type: 'FeatureCollection',
-      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: {} }]
+      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
     });
   };
 
