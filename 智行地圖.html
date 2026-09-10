@@ -1274,8 +1274,6 @@ html, body {
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
 <script>
-let userMarker = null;
-
 function updateUserLocation(position) {
   window.currentLat = position.coords.latitude;
   window.currentLon = position.coords.longitude;
@@ -2453,7 +2451,6 @@ if (navigator.geolocation) {
       _smoothedHeading = (_smoothedHeading + _COMPASS_ALPHA * diff + 360) % 360;
     }
     window.compassHeading = _smoothedHeading;
-    if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
 
     // 即時更新地圖旋轉（只在跟隨模式下，duration 短讓畫面跟得上）
     if (followUser && map) {
@@ -2904,11 +2901,6 @@ if (navigator.geolocation) {
         });
       }
 
-      // 更新車子 marker 位置
-      if (typeof window.updateCarMarker === 'function') {
-        window.updateCarMarker(currentLon, currentLat);
-      }
-
       // 地圖跟隨（不強制 zoom，由使用者控制縮放層級）
       if (followUser) {
         map.easeTo({
@@ -2953,74 +2945,6 @@ if (navigator.geolocation) {
   }
 </script>
 
-<script>
-map.on('load', () => {
-
-  const style = document.createElement('style');
-  style.innerHTML = `
-  @keyframes pulse {
-    0% { transform: scale(0.8); opacity: 0.7; }
-    50% { transform: scale(1.6); opacity: 0.2; }
-    100% { transform: scale(0.8); opacity: 0.7; }
-  }
-  `;
-  document.head.appendChild(style);
-
-  function createUserDot(lng, lat) {
-    const el = document.createElement('div');
-    el.style.cssText = 'width:30px;height:48px;display:flex;align-items:center;justify-content:center;transition:transform 0.25s ease;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));';
-    const heading = window.compassHeading != null ? window.compassHeading : 0;
-    el.style.transform = `rotate(${heading}deg)`;
-    el.innerHTML = `<svg width="30" height="48" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- 車身 -->
-      <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
-      <!-- 前輪 -->
-      <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-      <!-- 後輪 -->
-      <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-      <!-- 擋風玻璃（前） -->
-      <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
-      <!-- 後車窗 -->
-      <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
-      <!-- 頭燈 -->
-      <rect x="5" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
-      <rect x="19" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
-      <!-- 尾燈 -->
-      <rect x="5" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
-      <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
-      <!-- 車頂中線 -->
-      <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
-    </svg>`;
-    return new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([lng, lat]);
-  }
-
-  // 更新車子圖示的旋轉方向（掛到 window 讓主腳本的 handleDeviceOrientation 能呼叫）
-  window.updateUserMarkerHeading = function() {
-    if (!userMarker) return;
-    const el = userMarker.getElement();
-    if (!el) return;
-    const heading = window.compassHeading != null ? window.compassHeading : 0;
-    el.style.transform = `rotate(${heading}deg)`;
-  };
-
-  // 更新車子 marker 位置（直接貼 GPS，流暢感由地圖 easeTo 提供）
-  window.updateCarMarker = function(lng, lat) {
-    if (!userMarker) {
-      userMarker = createUserDot(lng, lat).addTo(map);
-    } else {
-      userMarker.setLngLat([lng, lat]);
-    }
-  };
-
-  // updateCarMarker 定義完成後，若 updateUserLocation 已有定位資料則立即補顯示
-  if (window.currentLon && window.currentLat) {
-    window.updateCarMarker(window.currentLon, window.currentLat);
-  }
-
-});
-</script>
 <script>
 // ===== 🛣️ 道路名稱查詢節流控制 =====
 // Overpass API 是公開免費服務,太頻繁查詢容易被限流/擋掉,
