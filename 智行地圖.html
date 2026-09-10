@@ -1133,6 +1133,65 @@ html, body {
 <!-- 超速手機邊框紅色發亮 -->
 <div id="speedingGlow"></div>
 
+<!-- ===== 即時連線面板 ===== -->
+<div id="friendPanel" style="display:none;position:fixed;bottom:78px;left:50%;transform:translateX(-50%);z-index:9992;
+  background:rgba(14,16,26,0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1.5px solid rgba(255,255,255,0.13);border-radius:20px;padding:18px 16px 14px;
+  min-width:288px;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  box-shadow:0 8px 32px rgba(0,0,0,0.55);">
+  <div style="text-align:center;font-size:15px;font-weight:700;margin-bottom:14px">📡 即時連線</div>
+
+  <!-- 未連線 -->
+  <div id="fNotConn">
+    <button id="fCreateBtn" style="width:100%;padding:11px;background:#2F80FF;color:#fff;border:none;
+      border-radius:11px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px">建立新連線</button>
+    <div style="text-align:center;color:#777;font-size:12px;margin-bottom:8px">— 或輸入朋友的連線碼 —</div>
+    <div style="display:flex;gap:8px;">
+      <input id="fCodeInput" type="text" placeholder="連線碼（如 AB3X7K）" maxlength="6"
+        style="flex:1;padding:9px 12px;border-radius:9px;border:1.5px solid rgba(255,255,255,0.18);
+        background:rgba(255,255,255,0.08);color:#fff;font-size:14px;text-transform:uppercase;outline:none;">
+      <button id="fJoinBtn" style="padding:9px 16px;background:#22c55e;color:#fff;border:none;
+        border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;">加入</button>
+    </div>
+  </div>
+
+  <!-- 顯示我的連線碼（等待對方加入） -->
+  <div id="fMyCode" style="display:none;text-align:center;">
+    <div style="font-size:12px;color:#888;margin-bottom:8px">你的連線碼（傳給朋友）</div>
+    <div id="fCodeDisplay" style="font-size:34px;font-weight:900;letter-spacing:7px;color:#FFD600;
+      cursor:pointer;user-select:all;" title="點擊複製"></div>
+    <div style="font-size:11px;color:#555;margin-top:3px">點擊複製</div>
+    <div style="margin-top:10px;font-size:13px;color:#888">等待朋友輸入連線碼...</div>
+    <button id="fCancelBtn" style="margin-top:10px;padding:7px 18px;background:#555;color:#fff;border:none;
+      border-radius:8px;font-size:13px;cursor:pointer;">取消</button>
+  </div>
+
+  <!-- 已連線 -->
+  <div id="fConnected" style="display:none;text-align:center;">
+    <div style="color:#22c55e;font-size:14px;font-weight:700;margin-bottom:6px">🟢 已連線</div>
+    <div id="fDist" style="font-size:13px;color:#aaa;margin-bottom:4px">正在等待位置...</div>
+    <div id="fNavNotice" style="display:none;background:rgba(47,128,255,0.18);border-radius:10px;
+      padding:9px 10px;margin:8px 0;font-size:12px;color:#80b4ff;text-align:left;"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+      <button id="fShareNavBtn" style="padding:7px 14px;background:rgba(47,128,255,0.3);color:#80b4ff;
+        border:1px solid rgba(47,128,255,0.4);border-radius:8px;font-size:12px;cursor:pointer;">
+        分享我的導航目的地</button>
+      <button id="fDisconnBtn" style="padding:7px 14px;background:rgba(239,68,68,0.25);color:#f87171;
+        border:1px solid rgba(239,68,68,0.4);border-radius:8px;font-size:12px;cursor:pointer;">斷線</button>
+    </div>
+  </div>
+
+  <button id="fCloseBtn" style="position:absolute;top:10px;right:12px;background:none;border:none;
+    color:#555;font-size:18px;cursor:pointer;line-height:1;">✕</button>
+</div>
+
+<!-- 即時連線按鈕 -->
+<button id="friendBtn" title="即時連線" style="position:fixed;bottom:148px;right:14px;z-index:9992;
+  width:44px;height:44px;border-radius:50%;background:rgba(14,16,26,0.88);
+  border:1.5px solid rgba(255,255,255,0.2);color:#fff;font-size:20px;cursor:pointer;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 2px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;">👥</button>
+
 <!-- 速度模擬器（隱藏；在 Console 輸入 showSpeedSim() 開啟）-->
 <div id="speedingTestWidget" style="
   position:fixed;
@@ -1334,6 +1393,7 @@ html, body {
 
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <script>
 function updateUserLocation(position) {
@@ -1473,6 +1533,7 @@ if (navigator.geolocation) {
     if (rect8) rect8.style.display = 'none';
     if (searchBarWrapEl) searchBarWrapEl.style.display = '';
     togglePoiLayers(true);
+    window._navRouteGeoJSON = null;
     if (window.navRouteSource) {
       window.navRouteSource.setData({ type: 'FeatureCollection', features: [] });
     }
@@ -2118,6 +2179,7 @@ if (navigator.geolocation) {
 
   function selectDestination(lat, lon, name, addr){
     selectedDest = { lat, lon, name, addr };
+    window._navDestination = { lat, lng: lon, name: name || addr || '' };
 
     if (destMarker) destMarker.remove();
     const el = document.createElement('div');
@@ -2589,11 +2651,10 @@ if (navigator.geolocation) {
       plannedRouteCoordinates = route.geometry.coordinates;
       window.plannedRouteCoordinates = plannedRouteCoordinates;
 
+      var _nrGeo = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: route.geometry }] };
+      window._navRouteGeoJSON = _nrGeo;
       if (window.navRouteSource) {
-        window.navRouteSource.setData({
-          type: 'FeatureCollection',
-          features: [{ type: 'Feature', geometry: route.geometry }]
-        });
+        window.navRouteSource.setData(_nrGeo);
       }
 
       // 更新底部面板的時間/距離/到達時間顯示
@@ -2735,6 +2796,12 @@ if (navigator.geolocation) {
       planRouteTo(selectedDest.lat, selectedDest.lon);
     });
   }
+
+  // 供朋友連線「接受導航目的地」用
+  window.startNavigationTo = function(lat, lng, name){
+    selectDestination(lat, lng, name, '');
+    planRouteTo(lat, lng);
+  };
 
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
   window.plannedRouteCoordinates = plannedRouteCoordinates;
@@ -2949,17 +3016,11 @@ if (navigator.geolocation) {
         }
       }
 
-      if (routeSource) {
-        routeSource.setData({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: routeCoordinates
-            }
-          }]
-        });
+      var _rSrc = map.getSource('route');
+      if (_rSrc) {
+        var _rGeo = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: routeCoordinates } }] };
+        window._routeGeoJSON = _rGeo;
+        _rSrc.setData(_rGeo);
       }
 
       // 更新車子位置
@@ -3013,8 +3074,7 @@ if (navigator.geolocation) {
 
 <script>
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
-map.on('load', function() {
-  // 原始 SVG 藍色小車（viewport 旋轉對齊無延遲，map pitch 對齊貼地面呈現扁平感）
+(function(){
   const _carSvg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
     <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
@@ -3029,72 +3089,49 @@ map.on('load', function() {
     <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
     <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
   </svg>`;
-  const _carImg = new Image(60, 96);
-  _carImg.onload = function() {
-    map.addImage('car-icon', _carImg, { pixelRatio: 2 });
 
-    // GeoJSON source：只有一個點（使用者位置）
-    map.addSource('user-pos', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
-
-    // 藍色脈衝光暈（在車子下面，貼地面）
-    map.addLayer({
-      id: 'user-pulse',
-      type: 'circle',
-      source: 'user-pos',
-      paint: {
-        'circle-radius': 18,
-        'circle-color': '#1E88E5',
-        'circle-opacity': 0.18,
-        'circle-stroke-color': '#1E88E5',
-        'circle-stroke-width': 1.5,
-        'circle-stroke-opacity': 0.35,
-        'circle-pitch-alignment': 'map',
-        'circle-pitch-scale': 'map'
-      }
-    });
-
-    // 車子 symbol layer（viewport 旋轉對齊無延遲，map pitch 對齊貼地面呈現扁平感）
-    map.addLayer({
-      id: 'user-car',
-      type: 'symbol',
-      source: 'user-pos',
-      layout: {
-        'icon-image': 'car-icon',
-        'icon-size': 1,
-        'icon-rotate': 0,
-        'icon-rotation-alignment': 'viewport',
-        'icon-pitch-alignment': 'map',
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true
-      }
-    });
-
-    // 更新車子位置（每次 GPS 更新呼叫）
+  function _setupCarLayers(m) {
+    if(!m.getSource('user-pos')) {
+      m.addSource('user-pos', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    }
+    if(!m.getLayer('user-pulse')) {
+      m.addLayer({
+        id: 'user-pulse', type: 'circle', source: 'user-pos',
+        paint: { 'circle-radius': 18, 'circle-color': '#1E88E5', 'circle-opacity': 0.18,
+          'circle-stroke-color': '#1E88E5', 'circle-stroke-width': 1.5, 'circle-stroke-opacity': 0.35,
+          'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' }
+      });
+    }
+    if(!m.getLayer('user-car')) {
+      m.addLayer({
+        id: 'user-car', type: 'symbol', source: 'user-pos',
+        layout: { 'icon-image': 'car-icon', 'icon-size': 1, 'icon-rotate': 0,
+          'icon-rotation-alignment': 'viewport', 'icon-pitch-alignment': 'map',
+          'icon-allow-overlap': true, 'icon-ignore-placement': true }
+      });
+    }
     window.updateCarMarker = function(lng, lat) {
       const heading = window.compassHeading != null ? window.compassHeading : 0;
-      map.getSource('user-pos').setData({
-        type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
-      });
+      m.getSource('user-pos').setData({ type: 'FeatureCollection',
+        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }] });
     };
-
-    // 更新車子方向（羅盤轉動時呼叫）
     window.updateUserMarkerHeading = function() {
-      if (window.currentLon != null && window.currentLat != null) {
-        window.updateCarMarker(window.currentLon, window.currentLat);
-      }
+      if (window.currentLon != null && window.currentLat != null) window.updateCarMarker(window.currentLon, window.currentLat);
     };
+    if (window.currentLon != null && window.currentLat != null) window.updateCarMarker(window.currentLon, window.currentLat);
+  }
 
-    // 若已有定位立即顯示
-    if (window.currentLon != null && window.currentLat != null) {
-      window.updateCarMarker(window.currentLon, window.currentLat);
-    }
+  window._initCarMarker = function(m) {
+    const img = new Image(60, 96);
+    img.onload = function() {
+      if(!m.hasImage('car-icon')) m.addImage('car-icon', img, { pixelRatio: 2 });
+      _setupCarLayers(m);
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_carSvg);
   };
-  _carImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_carSvg);
-});
+
+  map.on('load', function() { window._initCarMarker(map); });
+})();
 </script>
 
 <script>
@@ -3639,12 +3676,24 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   function pausePlay(){ vjs.pause(); setPlaying(false); setStatus('已暫停'); }
 
-  function switchStation(delta){
+  function switchStation(delta, fromFriend){
     idx = (idx + delta + STATIONS.length) % STATIONS.length;
     updateDial();
     if(playing){ vjs.pause(); startPlay(); }
     else { setStatus('點擊收聽'); }
+    // 同步給朋友（避免遞迴：fromFriend = 對方傳來的，不再轉發）
+    if(!fromFriend && typeof window._friendSendRadio === 'function') window._friendSendRadio(idx);
   }
+
+  // 朋友切台後呼叫此函式
+  window._radioSwitchTo = function(newIdx){
+    if(newIdx < 0 || newIdx >= STATIONS.length) return;
+    var delta = ((newIdx - idx) + STATIONS.length) % STATIONS.length;
+    if(delta === 0) return;
+    // 算最短路徑（-或+）
+    var fwd = delta, bwd = STATIONS.length - delta;
+    switchStation(fwd <= bwd ? fwd : -bwd, true);
+  };
 
   if(prevBtn) prevBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(-1); });
   if(nextBtn) nextBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(1); });
@@ -3693,6 +3742,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       track.style.transition = 'transform 0.2s cubic-bezier(.4,0,.2,1)';
       track.style.transform = 'translateX(' + getOffset(idx) + 'px)';
       if(!playing) setStatus('點擊收聽');
+      // 拖拉換台後同步給朋友
+      if(typeof window._friendSendRadio === 'function') window._friendSendRadio(idx);
     }
     dial.addEventListener('mousedown',  onDown);
     dial.addEventListener('touchstart', onDown, { passive:false });
@@ -3962,12 +4013,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var merged = data.concat(thb);
     window.cctvCameras = merged; // 供 checkCctvProximity 使用
     var geojson = buildGeoJSON(merged);
+    window._cctvGeoJSON = geojson;
     if(m.loaded()){
       initLayers(m, geojson);
     } else {
       m.once('load', function(){ initLayers(m, geojson); });
     }
   }
+  window._initCctvLayers = function(){ if(window.map && window._cctvGeoJSON) initLayers(window.map, window._cctvGeoJSON); };
   tryInit();
 })();
 </script>
@@ -4050,6 +4103,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
   }
 
+  window._initSpeedLayers = initSpeedLayers;
   function trySpeedInit(){
     var m=window.map;
     var data=window.speedCameraData;
@@ -4143,6 +4197,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var _popup = null;
 
   function makeEmojiImage(m, id, emoji, size){
+    if(m.hasImage(id)) return;
     var c = document.createElement('canvas');
     c.width = c.height = size;
     var ctx = c.getContext('2d');
@@ -4154,6 +4209,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function initSignals(m){
     if(!window.SIGNAL_DATA) return;
+    if(m.getSource(SOURCE)) return;
     makeEmojiImage(m, 'signal-icon', '🚦', 48);
 
     m.addSource(SOURCE, {
@@ -4230,6 +4286,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     m.on('mouseleave','signal-single',function(){ m.getCanvas().style.cursor=''; });
   }
 
+  window._initSignals = initSignals;
   function tryInit(){
     var m = window.map;
     if(!m){ setTimeout(tryInit,300); return; }
@@ -4238,6 +4295,52 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   tryInit();
 })();
+</script>
+
+<script>
+/* ===== 地圖樣式切換後重新載入所有自訂圖層 ===== */
+window.reloadMapLayers = function() {
+  var m = window.map;
+  if (!m) return;
+
+  // route (GPS軌跡) 圖層
+  if (!m.getSource('route')) {
+    m.addSource('route', { type: 'geojson', data: window._routeGeoJSON || { type: 'FeatureCollection', features: [] } });
+    m.addLayer({ id: 'route', type: 'fill-extrusion', source: 'route',
+      paint: { 'fill-extrusion-color': '#888888', 'fill-extrusion-height': 0.1, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 } });
+    m.addLayer({ id: 'route-outline', type: 'line', source: 'route',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': 4, 'line-opacity': 1 } });
+  }
+
+  // navRoute (規劃路線) 圖層
+  if (!m.getSource('navRoute')) {
+    m.addSource('navRoute', { type: 'geojson', data: window._navRouteGeoJSON || { type: 'FeatureCollection', features: [] } });
+    m.addLayer({ id: 'navRoute-outline', type: 'line', source: 'navRoute',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#FFFFFF', 'line-width': 10, 'line-opacity': 0.9 } });
+    m.addLayer({ id: 'navRoute-line', type: 'line', source: 'navRoute',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#2F80FF', 'line-width': 6, 'line-opacity': 0.95 } });
+    window.navRouteSource = m.getSource('navRoute');
+  }
+
+  // 車子圖示（非同步載入 SVG 圖片）
+  if (typeof window._initCarMarker === 'function') window._initCarMarker(m);
+
+  // CCTV 攝影機圖層
+  if (typeof window._initCctvLayers === 'function') window._initCctvLayers();
+
+  // 測速照相圖層
+  if (typeof window._initSpeedLayers === 'function') window._initSpeedLayers(m);
+
+  // 號誌路口圖層
+  if (typeof window._initSignals === 'function') window._initSignals(m);
+
+  // 朋友位置圖層（連線時）
+  if (typeof window._resetFriendMarkerFlag === 'function') window._resetFriendMarkerFlag();
+  if (typeof window._initFriendMarker === 'function') window._initFriendMarker();
+};
 </script>
 
 <script>
@@ -4684,6 +4787,275 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var w = document.getElementById('speedingTestWidget');
     if (w) w.style.display = w.style.display === 'none' ? 'block' : 'none';
   };
+})();
+</script>
+
+<script>
+/* ===== 👥 即時連線（PeerJS WebRTC）===== */
+(function(){
+  var _peer = null, _conn = null, _sendTimer = null;
+  var _friendSvgIcon = null; // cached friend orange car image
+
+  // ── UI refs ──
+  var panel    = document.getElementById('friendPanel');
+  var btn      = document.getElementById('friendBtn');
+  var notConn  = document.getElementById('fNotConn');
+  var myCode   = document.getElementById('fMyCode');
+  var connected= document.getElementById('fConnected');
+  var codDisp  = document.getElementById('fCodeDisplay');
+  var codeInp  = document.getElementById('fCodeInput');
+  var distEl   = document.getElementById('fDist');
+  var navNotice= document.getElementById('fNavNotice');
+
+  // ── open/close panel ──
+  btn.addEventListener('click', function(){
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('fCloseBtn').addEventListener('click', function(){
+    panel.style.display = 'none';
+  });
+
+  // ── generate 6-char uppercase code ──
+  function genCode(){ return Math.random().toString(36).substr(2,6).toUpperCase(); }
+
+  // ── peer ID format ──
+  function peerId(code){ return 'snmap-' + code; }
+
+  // ── copy room code ──
+  codDisp.addEventListener('click', function(){
+    var code = codDisp.dataset.code;
+    if(!code) return;
+    navigator.clipboard.writeText(code).then(function(){
+      var was = codDisp.textContent;
+      codDisp.textContent = '已複製!';
+      setTimeout(function(){ codDisp.textContent = was; }, 1200);
+    });
+  });
+
+  // ── CREATE room (host) ──
+  document.getElementById('fCreateBtn').addEventListener('click', function(){
+    destroyPeer();
+    var code = genCode();
+    _peer = new Peer(peerId(code), { debug: 0 });
+    _peer.on('open', function(){
+      notConn.style.display = 'none';
+      myCode.style.display  = 'block';
+      codDisp.textContent   = code;
+      codDisp.dataset.code  = code;
+    });
+    _peer.on('connection', function(conn){ setupConn(conn); });
+    _peer.on('error', function(e){ alert('連線錯誤：' + e.type); destroyPeer(); resetUI(); });
+  });
+
+  document.getElementById('fCancelBtn').addEventListener('click', function(){
+    destroyPeer(); resetUI();
+  });
+
+  // ── JOIN room (guest) ──
+  document.getElementById('fJoinBtn').addEventListener('click', function(){
+    var code = codeInp.value.trim().toUpperCase();
+    if(code.length < 4){ alert('請輸入連線碼'); return; }
+    destroyPeer();
+    _peer = new Peer(undefined, { debug: 0 });
+    _peer.on('open', function(){
+      var conn = _peer.connect(peerId(code), { reliable: true, serialization: 'json' });
+      setupConn(conn);
+    });
+    _peer.on('error', function(e){ alert('連線失敗，請確認連線碼正確（' + e.type + '）'); destroyPeer(); resetUI(); });
+  });
+
+  // ── setup data channel ──
+  function setupConn(conn){
+    _conn = conn;
+    conn.on('open', function(){
+      showConnected();
+      startSending();
+      // 主動發送目前位置
+      sendPos();
+    });
+    conn.on('data', function(d){ handleData(d); });
+    conn.on('close', function(){ handleDisconn(); });
+    conn.on('error', function(){ handleDisconn(); });
+  }
+
+  // ── send GPS every 2s ──
+  function startSending(){
+    clearInterval(_sendTimer);
+    _sendTimer = setInterval(sendPos, 2000);
+  }
+
+  function sendPos(){
+    if(!_conn || !_conn.open) return;
+    if(window.currentLat == null) return;
+    send({ t:'pos', lat: window.currentLat, lng: window.currentLon, hdg: window.compassHeading||0 });
+  }
+
+  function send(obj){
+    try { if(_conn && _conn.open) _conn.send(obj); } catch(e){}
+  }
+
+  // ── handle incoming data ──
+  function handleData(d){
+    if(!d || !d.t) return;
+    if(d.t === 'pos'){
+      updateFriendMarker(d.lat, d.lng, d.hdg);
+      if(window.currentLat != null){
+        var km = haversine(window.currentLat, window.currentLon, d.lat, d.lng);
+        distEl.textContent = '距離：' + (km < 1 ? Math.round(km*1000)+' m' : km.toFixed(1)+' km');
+      }
+    } else if(d.t === 'nav'){
+      // 朋友分享導航目的地
+      navNotice.style.display = 'block';
+      navNotice.innerHTML = '📍 朋友想前往：<b>' + (d.name||d.lng+','+d.lat) + '</b><br>' +
+        '<button onclick="window._acceptFriendNav && window._acceptFriendNav(' + d.lat + ',' + d.lng + ',\''+d.name+'\')" ' +
+        'style="margin-top:6px;padding:5px 12px;background:#2F80FF;color:#fff;border:none;border-radius:7px;font-size:12px;cursor:pointer;">一起導航</button>';
+      setTimeout(function(){ navNotice.style.display='none'; }, 30000);
+    } else if(d.t === 'radio'){
+      // 跟隨對方切換電台
+      if(typeof window._radioSwitchTo === 'function') window._radioSwitchTo(d.idx);
+    }
+  }
+
+  // ── 接受朋友的導航目的地 ──
+  window._acceptFriendNav = function(lat, lng, name){
+    if(typeof window.startNavigationTo === 'function'){
+      window.startNavigationTo(lat, lng, name);
+    } else {
+      // fallback：直接飛到該點
+      if(window.map) window.map.flyTo({ center:[lng,lat], zoom:15 });
+    }
+    navNotice.style.display = 'none';
+  };
+
+  // ── UI states ──
+  function showConnected(){
+    notConn.style.display   = 'none';
+    myCode.style.display    = 'none';
+    connected.style.display = 'block';
+    panel.style.display     = 'block';
+    btn.innerHTML = '<span style="font-size:11px;line-height:1;color:#22c55e">🟢<br><span style="font-size:16px">👥</span></span>';
+    initFriendMarker();
+  }
+
+  function handleDisconn(){
+    clearInterval(_sendTimer);
+    removeFriendMarker();
+    resetUI();
+    btn.textContent = '👥';
+    var old = panel.style.display;
+    panel.style.display = 'block';
+    notConn.style.display = 'block';
+    setTimeout(function(){
+      var msg = document.createElement('div');
+      msg.style.cssText = 'color:#f87171;font-size:13px;text-align:center;margin-top:8px';
+      msg.textContent = '連線已中斷';
+      notConn.appendChild(msg);
+      setTimeout(function(){ if(msg.parentNode) msg.parentNode.removeChild(msg); }, 3000);
+    }, 50);
+  }
+
+  function resetUI(){
+    notConn.style.display   = 'block';
+    myCode.style.display    = 'none';
+    connected.style.display = 'none';
+    codeInp.value = '';
+    navNotice.style.display = 'none';
+  }
+
+  function destroyPeer(){
+    clearInterval(_sendTimer);
+    if(_peer){ try{ _peer.destroy(); }catch(e){} }
+    _peer = null; _conn = null;
+  }
+
+  // ── 朋友的橘色小車圖層 ──
+  var _friendSvg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="8" width="22" height="32" rx="6" fill="#FF6B00"/>
+    <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
+    <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
+    <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
+    <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
+    <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(255,210,160,0.65)"/>
+    <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(255,210,160,0.3)"/>
+    <rect x="5" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
+    <rect x="19" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
+    <rect x="5" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
+    <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
+    <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
+  </svg>`;
+
+  var _fLoading = false;
+  function initFriendMarker(){
+    var m = window.map;
+    if(!m || m.getSource('friend-pos') || _fLoading) return;
+    _fLoading = true;
+    var img = new Image(60, 96);
+    img.onload = function(){
+      _fLoading = false;
+      if(!m.hasImage('friend-icon')) m.addImage('friend-icon', img, { pixelRatio: 2 });
+      if(!m.getSource('friend-pos')){
+        m.addSource('friend-pos', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      }
+      if(!m.getLayer('friend-pulse')){
+        m.addLayer({ id:'friend-pulse', type:'circle', source:'friend-pos',
+          paint:{ 'circle-radius':18, 'circle-color':'#FF6B00', 'circle-opacity':0.18,
+            'circle-stroke-color':'#FF6B00', 'circle-stroke-width':1.5, 'circle-stroke-opacity':0.35,
+            'circle-pitch-alignment':'map', 'circle-pitch-scale':'map' } });
+      }
+      if(!m.getLayer('friend-car')){
+        m.addLayer({ id:'friend-car', type:'symbol', source:'friend-pos',
+          layout:{ 'icon-image':'friend-icon', 'icon-size':1, 'icon-rotate':0,
+            'icon-rotation-alignment':'viewport', 'icon-pitch-alignment':'map',
+            'icon-allow-overlap':true, 'icon-ignore-placement':true } });
+      }
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_friendSvg);
+  }
+
+  // expose for reloadMapLayers
+  window._initFriendMarker = initFriendMarker;
+  window._resetFriendMarkerFlag = function(){ _fLoading = false; };
+
+  function updateFriendMarker(lat, lng, hdg){
+    var m = window.map;
+    if(!m) return;
+    if(!m.getSource('friend-pos')){ initFriendMarker(); return; }
+    m.getSource('friend-pos').setData({ type:'FeatureCollection',
+      features:[{ type:'Feature', geometry:{ type:'Point', coordinates:[lng,lat] }, properties:{ hdg:hdg } }] });
+  }
+
+  function removeFriendMarker(){
+    var m = window.map;
+    if(m && m.getSource('friend-pos'))
+      m.getSource('friend-pos').setData({ type:'FeatureCollection', features:[] });
+  }
+
+  // ── 分享我的導航目的地給朋友 ──
+  document.getElementById('fShareNavBtn').addEventListener('click', function(){
+    if(!_conn || !_conn.open){ alert('未連線'); return; }
+    var dest = window._navDestination;
+    if(!dest){ alert('你目前沒有設定導航目的地'); return; }
+    send({ t:'nav', lat:dest.lat, lng:dest.lng, name:dest.name||'' });
+    var b = this;
+    b.textContent = '已分享 ✓';
+    setTimeout(function(){ b.textContent = '分享我的導航目的地'; }, 2000);
+  });
+
+  // ── 距離計算 ──
+  function haversine(lat1,lon1,lat2,lon2){
+    var R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+
+  // ── 電台同步 hook（供 radio script 呼叫） ──
+  window._friendSendRadio = function(idx){ send({ t:'radio', idx:idx }); };
+
+  // ── disconnect button ──
+  document.getElementById('fDisconnBtn').addEventListener('click', function(){
+    if(_conn) try{ _conn.close(); }catch(e){}
+    handleDisconn();
+  });
 })();
 </script>
 </body>
