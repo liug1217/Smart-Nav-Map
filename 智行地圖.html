@@ -1345,7 +1345,6 @@ if (navigator.geolocation) {
   let followUser = true;
   window._setFollowUser = function(v){ followUser = v; };
   map.on('dragstart', () => { followUser = false; });
-  map.on('zoomstart', (e) => { if (e.originalEvent && !isNavigating) followUser = false; });
 
   map.on('load',()=>{
     // GeolocateControl 已移除，改用自訂 watchPosition + 車子圖示
