@@ -2954,38 +2954,25 @@ if (navigator.geolocation) {
 <script>
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
 map.on('load', function() {
-  // 用 Canvas 畫車子，轉成 MapLibre 圖片資源
+  // 用原本 SVG 載入車子圖示（保持原始扁平設計）
   (function() {
-    const W = 30, H = 48, S = 3; // S=像素密度倍率（Retina）
-    const cv = document.createElement('canvas');
-    cv.width = W * S; cv.height = H * S;
-    const c = cv.getContext('2d');
-    c.scale(S, S);
-
-    function rr(x, y, w, h, r, fill) {
-      c.beginPath();
-      c.moveTo(x+r, y); c.lineTo(x+w-r, y);
-      c.arcTo(x+w,y, x+w,y+r, r); c.lineTo(x+w, y+h-r);
-      c.arcTo(x+w,y+h, x+w-r,y+h, r); c.lineTo(x+r, y+h);
-      c.arcTo(x,y+h, x,y+h-r, r); c.lineTo(x, y+r);
-      c.arcTo(x,y, x+r,y, r); c.closePath();
-      c.fillStyle = fill; c.fill();
-    }
-
-    rr(4,8,22,32,6,'#1E88E5');          // 車身
-    rr(0,10,5,10,2.5,'#1a1a1a');        // 前輪左
-    rr(25,10,5,10,2.5,'#1a1a1a');       // 前輪右
-    rr(0,28,5,10,2.5,'#1a1a1a');        // 後輪左
-    rr(25,28,5,10,2.5,'#1a1a1a');       // 後輪右
-    rr(7,12,16,10,3,'rgba(200,235,255,0.65)'); // 擋風玻璃
-    rr(7,28,16,8,2,'rgba(200,235,255,0.3)');   // 後車窗
-    rr(5,8,6,3,1.5,'#FFEE58');          // 頭燈左
-    rr(19,8,6,3,1.5,'#FFEE58');         // 頭燈右
-    rr(5,37,6,3,1.5,'#EF5350');         // 尾燈左
-    rr(19,37,6,3,1.5,'#EF5350');        // 尾燈右
-    rr(13,23,4,5,2,'rgba(255,255,255,0.18)'); // 車頂
-
-    map.addImage('car-icon', { width: W*S, height: H*S, data: c.getImageData(0,0,W*S,H*S).data }, { pixelRatio: S });
+    const svg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
+      <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
+      <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
+      <rect x="5" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
+      <rect x="19" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
+      <rect x="5" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
+      <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
+      <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
+    </svg>`;
+    const img = new Image(60, 96);
+    img.onload = function() { map.addImage('car-icon', img, { pixelRatio: 2 }); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   })();
 
   // GeoJSON source：只有一個點（使用者位置）
