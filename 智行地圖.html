@@ -34,7 +34,6 @@ html,body{
   background:#0a1628;
   width:100%;
   height:100%;
-  background:#D6E4F2;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif;
 }
 
@@ -1004,6 +1003,29 @@ html, body {
   text-align:center;
   display:none;
 }
+
+/* ===== iOS PWA safe area：將元件往下推到狀態列/瀏海以下 ===== */
+@supports (top: env(safe-area-inset-top)) {
+  .searchBarWrap       { top: env(safe-area-inset-top, 0px); }
+  .rect8               { top: calc(54px + env(safe-area-inset-top, 0px)); }
+  .rect6               { top: calc(82px + env(safe-area-inset-top, 0px)); }
+  .mapClock            { top: calc(56px + env(safe-area-inset-top, 0px)); }
+  .coinDisplay         { top: calc(96px + env(safe-area-inset-top, 0px)); }
+  .coinToast           { top: calc(133px + env(safe-area-inset-top, 0px)); }
+  .weatherAlert        { top: calc(158px + env(safe-area-inset-top, 0px)); }
+  .earthquakeAlert     { top: calc(196px + env(safe-area-inset-top, 0px)); }
+
+  body.navigating .rect8           { top: env(safe-area-inset-top, 0px); }
+  body.navigating .mapClock        { top: calc(77px + env(safe-area-inset-top, 0px)); }
+  body.navigating .rect6           { top: calc(77px + env(safe-area-inset-top, 0px)); }
+  body.navigating .speedLimitSign  { top: calc(90px + env(safe-area-inset-top, 0px)); }
+  body.navigating .coinDisplay     { top: calc(117px + env(safe-area-inset-top, 0px)); }
+  body.navigating .coinToast       { top: calc(155px + env(safe-area-inset-top, 0px)); }
+  body.navigating .weatherAlert    { top: calc(180px + env(safe-area-inset-top, 0px)); }
+  body.navigating .earthquakeAlert { top: calc(218px + env(safe-area-inset-top, 0px)); }
+
+  .rect1 { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+}
 </style>
 </head>
 <body>
@@ -1046,7 +1068,7 @@ html, body {
 <!-- 🧪 測速照相語音播報測試面板 -->
 <div id="speedCamTestPanel" style="
   position: fixed;
-  top: 80px;
+  top: calc(80px + env(safe-area-inset-top, 0px));
   right: 12px;
   z-index: 9999;
   background: rgba(0,0,0,0.75);
