@@ -1389,7 +1389,7 @@ html, body {
 
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
 
 <script>
 function updateUserLocation(position) {
@@ -4787,10 +4787,15 @@ window.reloadMapLayers = function() {
 </script>
 
 <script>
-/* ===== 👥 即時連線（PeerJS WebRTC）===== */
+/* ===== 👥 即時連線（MQTT pub/sub）===== */
 (function(){
-  var _peer = null, _conn = null, _sendTimer = null;
-  var _friendSvgIcon = null; // cached friend orange car image
+  var _client = null;
+  var _myRole = null; // 'A'(建立) or 'B'(加入)
+  var _code   = null;
+  var _sendTimer   = null;
+  var _connectedFlag = false;
+
+  var BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
 
   // ── UI refs ──
   var panel    = document.getElementById('friendPanel');
@@ -4814,8 +4819,9 @@ window.reloadMapLayers = function() {
   // ── generate 6-char uppercase code ──
   function genCode(){ return Math.random().toString(36).substr(2,6).toUpperCase(); }
 
-  // ── peer ID format ──
-  function peerId(code){ return 'snmap-' + code; }
+  // ── MQTT topics ──
+  function myTopic(){     return 'snmap/' + _code + '/' + _myRole; }
+  function friendTopic(){ return 'snmap/' + _code + '/' + (_myRole === 'A' ? 'B' : 'A'); }
 
   // ── copy room code ──
   codDisp.addEventListener('click', function(){
@@ -4828,51 +4834,75 @@ window.reloadMapLayers = function() {
     });
   });
 
-  // ── CREATE room (host) ──
-  document.getElementById('fCreateBtn').addEventListener('click', function(){
-    destroyPeer();
-    var code = genCode();
-    _peer = new Peer(peerId(code), { debug: 0 });
-    _peer.on('open', function(){
-      notConn.style.display = 'none';
-      myCode.style.display  = 'block';
-      codDisp.textContent   = code;
-      codDisp.dataset.code  = code;
+  // ── connect to MQTT broker ──
+  function connectBroker(code, role, onReady, onFail){
+    if(!window.mqtt){ onFail('mqtt程式庫載入失敗，請重新整理頁面'); return; }
+    destroyConn();
+    _code = code; _myRole = role;
+    var clientId = 'sn_' + Math.random().toString(36).substr(2,9);
+    _client = window.mqtt.connect(BROKER_URL, {
+      clientId: clientId,
+      clean: true,
+      connectTimeout: 15000,
+      keepalive: 30,
+      reconnectPeriod: 0
     });
-    _peer.on('connection', function(conn){ setupConn(conn); });
-    _peer.on('error', function(e){ alert('連線錯誤：' + e.type); destroyPeer(); resetUI(); });
+    var _connTimer = setTimeout(function(){
+      destroyConn();
+      onFail('連線逾時，請確認網路後重試');
+    }, 16000);
+    _client.on('connect', function(){
+      clearTimeout(_connTimer);
+      _client.subscribe(friendTopic(), { qos: 0 }, function(err){
+        if(err){ destroyConn(); onFail('訂閱失敗：' + err); return; }
+        onReady();
+      });
+    });
+    _client.on('message', function(topic, payload){
+      try { handleData(JSON.parse(payload.toString())); } catch(e){}
+    });
+    _client.on('error', function(err){
+      clearTimeout(_connTimer);
+      if(!_connectedFlag){ destroyConn(); onFail('連線錯誤：' + (err.message||err)); }
+      else { destroyConn(); handleDisconn(); }
+    });
+    _client.on('close', function(){
+      if(_connectedFlag){ _connectedFlag = false; handleDisconn(); }
+    });
+  }
+
+  // ── CREATE room (host, role A) ──
+  document.getElementById('fCreateBtn').addEventListener('click', function(){
+    var code = genCode();
+    connectBroker(code, 'A',
+      function(){
+        notConn.style.display = 'none';
+        myCode.style.display  = 'block';
+        codDisp.textContent   = code;
+        codDisp.dataset.code  = code;
+      },
+      function(err){ alert('建立連線失敗：\n' + err); destroyConn(); resetUI(); }
+    );
   });
 
   document.getElementById('fCancelBtn').addEventListener('click', function(){
-    destroyPeer(); resetUI();
+    destroyConn(); resetUI();
   });
 
-  // ── JOIN room (guest) ──
+  // ── JOIN room (guest, role B) ──
   document.getElementById('fJoinBtn').addEventListener('click', function(){
     var code = codeInp.value.trim().toUpperCase();
     if(code.length < 4){ alert('請輸入連線碼'); return; }
-    destroyPeer();
-    _peer = new Peer(undefined, { debug: 0 });
-    _peer.on('open', function(){
-      var conn = _peer.connect(peerId(code), { reliable: true, serialization: 'json' });
-      setupConn(conn);
-    });
-    _peer.on('error', function(e){ alert('連線失敗，請確認連線碼正確（' + e.type + '）'); destroyPeer(); resetUI(); });
+    connectBroker(code, 'B',
+      function(){
+        showConnected();
+        startSending();
+        sendMsg({ t:'hello' });
+        sendPos();
+      },
+      function(err){ alert('加入失敗：\n' + err); destroyConn(); resetUI(); }
+    );
   });
-
-  // ── setup data channel ──
-  function setupConn(conn){
-    _conn = conn;
-    conn.on('open', function(){
-      showConnected();
-      startSending();
-      // 主動發送目前位置
-      sendPos();
-    });
-    conn.on('data', function(d){ handleData(d); });
-    conn.on('close', function(){ handleDisconn(); });
-    conn.on('error', function(){ handleDisconn(); });
-  }
 
   // ── send GPS every 2s ──
   function startSending(){
@@ -4881,18 +4911,24 @@ window.reloadMapLayers = function() {
   }
 
   function sendPos(){
-    if(!_conn || !_conn.open) return;
     if(window.currentLat == null) return;
-    send({ t:'pos', lat: window.currentLat, lng: window.currentLon, hdg: window.compassHeading||0 });
+    sendMsg({ t:'pos', lat: window.currentLat, lng: window.currentLon, hdg: window.compassHeading||0 });
   }
 
-  function send(obj){
-    try { if(_conn && _conn.open) _conn.send(obj); } catch(e){}
+  function sendMsg(obj){
+    if(!_client) return;
+    try { _client.publish(myTopic(), JSON.stringify(obj), { qos: 0 }); } catch(e){}
   }
 
   // ── handle incoming data ──
   function handleData(d){
     if(!d || !d.t) return;
+    // 主機端：收到第一個訊息就顯示已連線
+    if(_myRole === 'A' && !_connectedFlag && (d.t === 'hello' || d.t === 'pos')){
+      showConnected();
+      startSending();
+      sendPos();
+    }
     if(d.t === 'pos'){
       updateFriendMarker(d.lat, d.lng, d.hdg);
       if(window.currentLat != null){
@@ -4900,14 +4936,12 @@ window.reloadMapLayers = function() {
         distEl.textContent = '距離：' + (km < 1 ? Math.round(km*1000)+' m' : km.toFixed(1)+' km');
       }
     } else if(d.t === 'nav'){
-      // 朋友分享導航目的地
       navNotice.style.display = 'block';
       navNotice.innerHTML = '📍 朋友想前往：<b>' + (d.name||d.lng+','+d.lat) + '</b><br>' +
         '<button onclick="window._acceptFriendNav && window._acceptFriendNav(' + d.lat + ',' + d.lng + ',\''+d.name+'\')" ' +
         'style="margin-top:6px;padding:5px 12px;background:#2F80FF;color:#fff;border:none;border-radius:7px;font-size:12px;cursor:pointer;">一起導航</button>';
       setTimeout(function(){ navNotice.style.display='none'; }, 30000);
     } else if(d.t === 'radio'){
-      // 跟隨對方切換電台
       if(typeof window._radioSwitchTo === 'function') window._radioSwitchTo(d.idx);
     }
   }
@@ -4917,7 +4951,6 @@ window.reloadMapLayers = function() {
     if(typeof window.startNavigationTo === 'function'){
       window.startNavigationTo(lat, lng, name);
     } else {
-      // fallback：直接飛到該點
       if(window.map) window.map.flyTo({ center:[lng,lat], zoom:15 });
     }
     navNotice.style.display = 'none';
@@ -4925,6 +4958,7 @@ window.reloadMapLayers = function() {
 
   // ── UI states ──
   function showConnected(){
+    _connectedFlag = true;
     notConn.style.display   = 'none';
     myCode.style.display    = 'none';
     connected.style.display = 'block';
@@ -4938,7 +4972,6 @@ window.reloadMapLayers = function() {
     removeFriendMarker();
     resetUI();
     btn.textContent = '👥';
-    var old = panel.style.display;
     panel.style.display = 'block';
     notConn.style.display = 'block';
     setTimeout(function(){
@@ -4956,12 +4989,13 @@ window.reloadMapLayers = function() {
     connected.style.display = 'none';
     codeInp.value = '';
     navNotice.style.display = 'none';
+    _connectedFlag = false;
   }
 
-  function destroyPeer(){
+  function destroyConn(){
     clearInterval(_sendTimer);
-    if(_peer){ try{ _peer.destroy(); }catch(e){} }
-    _peer = null; _conn = null;
+    if(_client){ try{ _client.end(true); }catch(e){} }
+    _client = null;
   }
 
   // ── 朋友的橘色小車圖層 ──
@@ -5045,12 +5079,11 @@ window.reloadMapLayers = function() {
   }
 
   // ── 電台同步 hook（供 radio script 呼叫） ──
-  window._friendSendRadio = function(idx){ send({ t:'radio', idx:idx }); };
+  window._friendSendRadio = function(idx){ sendMsg({ t:'radio', idx:idx }); };
 
   // ── disconnect button ──
   document.getElementById('fDisconnBtn').addEventListener('click', function(){
-    if(_conn) try{ _conn.close(); }catch(e){}
-    handleDisconn();
+    destroyConn(); handleDisconn();
   });
 })();
 </script>
