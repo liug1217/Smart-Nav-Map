@@ -1389,7 +1389,7 @@ html, body {
 
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
 
 <script>
 function updateUserLocation(position) {
@@ -4795,7 +4795,12 @@ window.reloadMapLayers = function() {
   var _sendTimer   = null;
   var _connectedFlag = false;
 
-  var BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+  // 備用 broker：emqx 連不上時自動換 HiveMQ
+  var BROKERS = [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt'
+  ];
+  var _brokerIdx = 0;
 
   // ── UI refs ──
   var panel    = document.getElementById('friendPanel');
@@ -4839,20 +4844,32 @@ window.reloadMapLayers = function() {
     if(!window.mqtt){ onFail('mqtt程式庫載入失敗，請重新整理頁面'); return; }
     destroyConn();
     _code = code; _myRole = role;
+    var brokerUrl = BROKERS[_brokerIdx % BROKERS.length];
     var clientId = 'sn_' + Math.random().toString(36).substr(2,9);
-    _client = window.mqtt.connect(BROKER_URL, {
+    _client = window.mqtt.connect(brokerUrl, {
       clientId: clientId,
       clean: true,
-      connectTimeout: 15000,
+      connectTimeout: 12000,
       keepalive: 30,
       reconnectPeriod: 0
     });
+    var _done = false;
     var _connTimer = setTimeout(function(){
+      if(_done) return; _done = true;
       destroyConn();
-      onFail('連線逾時，請確認網路後重試');
-    }, 16000);
+      // 逾時時自動換下一個 broker 重試一次
+      if(_brokerIdx < BROKERS.length - 1){
+        _brokerIdx++;
+        connectBroker(code, role, onReady, onFail);
+      } else {
+        _brokerIdx = 0;
+        onFail('伺服器連線逾時，請確認網路');
+      }
+    }, 13000);
     _client.on('connect', function(){
+      if(_done) return; _done = true;
       clearTimeout(_connTimer);
+      _brokerIdx = 0;
       _client.subscribe(friendTopic(), { qos: 0 }, function(err){
         if(err){ destroyConn(); onFail('訂閱失敗：' + err); return; }
         onReady();
@@ -4863,7 +4880,7 @@ window.reloadMapLayers = function() {
     });
     _client.on('error', function(err){
       clearTimeout(_connTimer);
-      if(!_connectedFlag){ destroyConn(); onFail('連線錯誤：' + (err.message||err)); }
+      if(!_connectedFlag){ if(!_done){ _done=true; destroyConn(); onFail('連線錯誤：' + (err.message||err)); } }
       else { destroyConn(); handleDisconn(); }
     });
     _client.on('close', function(){
