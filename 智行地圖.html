@@ -1582,12 +1582,12 @@ if (navigator.geolocation) {
       paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
     });
 
-    const arrowSize = 20;
+    const arrowSize = 24;
     const arrowCanvas = document.createElement('canvas');
     arrowCanvas.width = arrowSize;
     arrowCanvas.height = arrowSize;
     const arrowCtx = arrowCanvas.getContext('2d');
-    arrowCtx.fillStyle = 'rgba(255,255,255,0.9)';
+    arrowCtx.fillStyle = 'white';
     arrowCtx.beginPath();
     arrowCtx.moveTo(arrowSize, arrowSize / 2);
     arrowCtx.lineTo(0, 2);
@@ -1595,8 +1595,7 @@ if (navigator.geolocation) {
     arrowCtx.lineTo(0, arrowSize - 2);
     arrowCtx.closePath();
     arrowCtx.fill();
-    const arrowImageData = arrowCtx.getImageData(0, 0, arrowSize, arrowSize);
-    map.addImage('nav-arrow', { width: arrowSize, height: arrowSize, data: arrowImageData.data });
+    map.addImage('nav-arrow', arrowCanvas);
 
     map.addLayer({
       id: 'navRoute-arrows',
