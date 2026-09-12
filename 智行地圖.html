@@ -1587,10 +1587,13 @@ if (navigator.geolocation) {
       const _c = document.createElement('canvas');
       _c.width = 40; _c.height = 40;
       const _x = _c.getContext('2d');
-      _x.fillStyle = 'white';
+      _x.strokeStyle = 'white';
+      _x.lineWidth = 7;
+      _x.lineCap = 'round';
+      _x.lineJoin = 'round';
       _x.beginPath();
-      _x.moveTo(38, 20); _x.lineTo(4, 4); _x.lineTo(4, 36);
-      _x.closePath(); _x.fill();
+      _x.moveTo(8, 4); _x.lineTo(32, 20); _x.lineTo(8, 36);
+      _x.stroke();
       const _d = _x.getImageData(0, 0, 40, 40);
       map.addImage('nav-arrow', { width: 40, height: 40, data: new Uint8Array(_d.data.buffer) });
     });
