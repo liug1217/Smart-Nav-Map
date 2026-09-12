@@ -1571,7 +1571,7 @@ if (navigator.geolocation) {
       type: 'line',
       source: 'navRoute',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#FFFFFF', 'line-width': 15, 'line-opacity': 0.9 }
+      paint: { 'line-color': '#325cb3', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 10, 16, 15, 20, 22], 'line-opacity': 0.9 }
     });
 
     map.addLayer({
@@ -1579,7 +1579,7 @@ if (navigator.geolocation) {
       type: 'line',
       source: 'navRoute',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#2F80FF', 'line-width': 11, 'line-opacity': 0.95 }
+      paint: { 'line-color': '#4783fe', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3, 12, 7, 16, 11, 20, 16], 'line-opacity': 0.95 }
     });
 
     window.navRouteSource = map.getSource('navRoute');
