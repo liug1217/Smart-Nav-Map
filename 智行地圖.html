@@ -356,14 +356,8 @@ html,body{
 }
 .mapCtrlBtn:active{ background:rgba(230,230,230,0.95); }
 
-.compassBtn{
-  width:64px !important;
-  height:64px !important;
-  border-radius:50% !important;
-  padding:4px;
-}
 .compassBtn svg{
-  transition:transform 0.3s linear;
+  transition:transform 0.2s linear;
 }
 
 /* ===== 時鐘 ===== */
@@ -1249,34 +1243,10 @@ html, body {
 <div class="mapCtrlGroup">
   <!-- 指南針 -->
   <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向">
-    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
-      <!-- 外圈 -->
-      <circle cx="28" cy="28" r="26" stroke="#ccc" stroke-width="1.2"/>
-      <!-- 主方向刻度 -->
-      <line x1="28" y1="3" x2="28" y2="8" stroke="#E53935" stroke-width="1.8"/>
-      <line x1="53" y1="28" x2="48" y2="28" stroke="#999" stroke-width="1.2"/>
-      <line x1="28" y1="53" x2="28" y2="48" stroke="#999" stroke-width="1.2"/>
-      <line x1="3"  y1="28" x2="8"  y2="28" stroke="#999" stroke-width="1.2"/>
-      <!-- 斜向刻度（東北/東南/西南/西北）-->
-      <line x1="46.4" y1="9.6"  x2="43.0" y2="13.0" stroke="#bbb" stroke-width="1"/>
-      <line x1="46.4" y1="46.4" x2="43.0" y2="43.0" stroke="#bbb" stroke-width="1"/>
-      <line x1="9.6"  y1="46.4" x2="13.0" y2="43.0" stroke="#bbb" stroke-width="1"/>
-      <line x1="9.6"  y1="9.6"  x2="13.0" y2="13.0" stroke="#bbb" stroke-width="1"/>
-      <!-- 主方向文字 -->
-      <text x="28" y="5"  text-anchor="middle" dominant-baseline="central" font-size="8" font-weight="700" font-family="sans-serif" fill="#E53935">北</text>
-      <text x="51" y="28" text-anchor="middle" dominant-baseline="central" font-size="8" font-weight="600" font-family="sans-serif" fill="#666">東</text>
-      <text x="28" y="51" text-anchor="middle" dominant-baseline="central" font-size="8" font-weight="600" font-family="sans-serif" fill="#666">南</text>
-      <text x="5"  y="28" text-anchor="middle" dominant-baseline="central" font-size="8" font-weight="600" font-family="sans-serif" fill="#666">西</text>
-      <!-- 斜向文字（較小）-->
-      <text x="42" y="14" text-anchor="middle" dominant-baseline="central" font-size="5.5" font-family="sans-serif" fill="#aaa">東北</text>
-      <text x="42" y="42" text-anchor="middle" dominant-baseline="central" font-size="5.5" font-family="sans-serif" fill="#aaa">東南</text>
-      <text x="14" y="42" text-anchor="middle" dominant-baseline="central" font-size="5.5" font-family="sans-serif" fill="#aaa">西南</text>
-      <text x="14" y="14" text-anchor="middle" dominant-baseline="central" font-size="5.5" font-family="sans-serif" fill="#aaa">西北</text>
-      <!-- 指針（紅=北，灰=南）-->
-      <polygon points="28,11 25.5,28 28,24 30.5,28" fill="#E53935"/>
-      <polygon points="28,45 25.5,28 28,32 30.5,28" fill="#777"/>
-      <!-- 中心點 -->
-      <circle cx="28" cy="28" r="2.8" fill="#fff" stroke="#ccc" stroke-width="0.8"/>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="#ddd" stroke-width="1.5"/>
+      <polygon points="12,3 10,12 12,10 14,12" fill="#E53935"/>
+      <polygon points="12,21 10,12 12,14 14,12" fill="#555"/>
     </svg>
   </button>
   <!-- 定位 -->
@@ -3547,11 +3517,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     /* --- 指南針 --- */
     const compassSvg = document.getElementById('compassSvg');
     function updateCompass(){
-      if(compassSvg) compassSvg.style.transform = `rotate(${-map.getBearing()}deg)`;
+      if(compassSvg) compassSvg.style.transform = 'rotate(0deg)';
     }
     map.on('rotate', updateCompass);
     map.on('rotateend', updateCompass);
-    updateCompass();
 
     const compassBtn = document.getElementById('compassBtn');
     if(compassBtn) compassBtn.addEventListener('click', function(){
