@@ -2038,7 +2038,6 @@ if (navigator.geolocation) {
         const done = () => { clearTimeout(t); r(); };
         const t = setTimeout(done, 8000);
         u.onend = done; u.onerror = done;
-        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
       });
     },
@@ -2051,15 +2050,8 @@ if (navigator.geolocation) {
                '開始導航','有固定','測速照相','限速',
                '您已超速','通過測速照相']);
 
-  async function speakText(text){
-    _duckRadio();
-    try {
-      await VP.run(text);
-    } catch(e){
-      console.error('語音播報失敗:', e);
-    } finally {
-      _unduckRadio();
-    }
+  function speakText(text){
+    speakQueue([text]);
   }
 
   // 依序播放多段語音（序列化：同時只跑一個，新的等舊的跑完再播）
@@ -2091,32 +2083,7 @@ if (navigator.geolocation) {
     })();
   }
 
-  // 分段播放,段落之間用setTimeout插入真正0.25秒停頓
-  function speakSegments(segments){
-    if (!('speechSynthesis' in window)) return;
-    const list = segments.filter(s => s && s.length > 0);
-    if (!list.length) return;
-
-    _duckRadio();
-    window.speechSynthesis.cancel();
-
-    function playAt(i){
-      if (i >= list.length){ _unduckRadio(); return; }
-      const utter = _makeUtter(list[i]);
-      utter.onend = () => {
-        if (i + 1 < list.length) {
-          setTimeout(() => playAt(i + 1), 250);
-        } else {
-          _unduckRadio();
-        }
-      };
-      utter.onerror = _unduckRadio;
-      window.speechSynthesis.speak(utter);
-    }
-    playAt(0);
-  }
-
-  // ===== 🔍 搜尋地點(地理編碼,用OpenStreetMap的Nominatim服務,免費不用API金鑰)=====
+// ===== 🔍 搜尋地點(地理編碼,用OpenStreetMap的Nominatim服務,免費不用API金鑰)=====
   let destMarker = null;
   let selectedDest = null; // { lat, lon, name, addr }
 
