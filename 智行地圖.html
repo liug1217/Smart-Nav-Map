@@ -360,7 +360,7 @@ html,body{
 /* ===== 時鐘 ===== */
 .mapClock{
   position:fixed;
-  top:56px;
+  top:calc(56px + env(safe-area-inset-top));
   right:8px;
   background:rgba(0,0,0,0.45);
   backdrop-filter:blur(8px);
@@ -378,7 +378,7 @@ html,body{
 /* ===== 金幣顯示 ===== */
 .coinDisplay{
   position:fixed;
-  top:96px;
+  top:calc(96px + env(safe-area-inset-top));
   right:8px;
   background:rgba(0,0,0,0.52);
   backdrop-filter:blur(8px);
@@ -396,7 +396,7 @@ html,body{
 .coinDisplay.glow{
   box-shadow:0 0 14px 3px rgba(255,215,0,0.55),0 2px 8px rgba(0,0,0,0.3);
 }
-body.navigating .coinDisplay{ top:117px; }
+body.navigating .coinDisplay{ top:calc(117px + env(safe-area-inset-top)); }
 .coinStreak{
   font-size:11px;
   font-weight:700;
@@ -459,7 +459,7 @@ body.navigating .coinDisplay{ top:117px; }
 /* Toast 提示 */
 .coinToast{
   position:fixed;
-  top:133px;
+  top:calc(133px + env(safe-area-inset-top));
   right:8px;
   background:rgba(30,20,0,0.82);
   border:1px solid rgba(255,215,0,0.3);
@@ -474,7 +474,7 @@ body.navigating .coinDisplay{ top:117px; }
   box-shadow:0 2px 10px rgba(0,0,0,0.5);
   animation:toastIn 0.18s ease,toastOut 0.3s ease 1.2s forwards;
 }
-body.navigating .coinToast{ top:155px; }
+body.navigating .coinToast{ top:calc(155px + env(safe-area-inset-top)); }
 @keyframes toastIn{from{opacity:0;transform:translateX(8px);}to{opacity:1;transform:none;}}
 @keyframes toastOut{to{opacity:0;transform:translateX(8px);}}
 
