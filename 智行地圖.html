@@ -1582,6 +1582,35 @@ if (navigator.geolocation) {
       paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
     });
 
+    const _ac = document.createElement('canvas');
+    _ac.width = 24; _ac.height = 24;
+    const _ax = _ac.getContext('2d');
+    _ax.fillStyle = 'white';
+    _ax.beginPath();
+    _ax.moveTo(22, 12);
+    _ax.lineTo(2, 3);
+    _ax.lineTo(8, 12);
+    _ax.lineTo(2, 21);
+    _ax.closePath();
+    _ax.fill();
+    const _ad = _ax.getImageData(0, 0, 24, 24);
+    map.addImage('nav-arrow', { width: 24, height: 24, data: new Uint8Array(_ad.data.buffer) });
+
+    map.addLayer({
+      id: 'navRoute-arrows',
+      type: 'symbol',
+      source: 'navRoute',
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 100,
+        'icon-image': 'nav-arrow',
+        'icon-size': 1,
+        'icon-rotation-alignment': 'map',
+        'icon-keep-upright': false,
+        'icon-allow-overlap': true
+      }
+    });
+
     window.navRouteSource = map.getSource('navRoute');
     routeSource = map.getSource('route');
 
