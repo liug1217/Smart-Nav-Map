@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>智行地圖</title>
+<link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" type="image/png" href="icon.png">
 <meta name="apple-mobile-web-app-title" content="智行地圖">
@@ -40,6 +41,7 @@ html,body{
   position:absolute;
   left:0;
   right:0;
+  max-width:440px;
   bottom:8px;
   height:160px;
 }
@@ -49,6 +51,7 @@ html,body{
   position:fixed;
   left:8px;
   right:8px;
+  max-width:424px;
   bottom:8px;
   height:160px;
   border:0.5px solid #d9d9d9;
@@ -166,6 +169,7 @@ html,body{
 .rect8{
   position:absolute;
   width:calc(100% - 16px);
+  max-width:424px;
   height:69px;
   left:8px;
   top:54px;
@@ -210,6 +214,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
+  max-width:424px;
   top:0;
   z-index:5;
 }
@@ -279,6 +284,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
+  max-width:424px;
   bottom:180px;
   z-index:5;
   background:#FFFFFF;
@@ -1918,6 +1924,8 @@ if (navigator.geolocation) {
     base: 'voice_pack/',
     _bufs: {},  // name → AudioBuffer | null
     _ctx: null,
+    _current: null,  // Promise of in-flight speech
+    _pending: null,  // text waiting for next slot (latest wins)
 
     _getCtx() {
       if (!this._ctx) {
@@ -2047,7 +2055,24 @@ if (navigator.geolocation) {
       }
     },
 
-    async run(text) {
+    // 序列化播放：若有在播就等候，保留最新待播文字（舊的丟棄）
+    run(text) {
+      if (this._current) {
+        this._pending = text;
+        return this._current;
+      }
+      this._current = this._doRun(text).finally(() => {
+        this._current = null;
+        if (this._pending) {
+          const next = this._pending;
+          this._pending = null;
+          this.run(next);
+        }
+      });
+      return this._current;
+    },
+
+    async _doRun(text) {
       const { clips, tts } = this.parse(text);
       let clipsOk = false;
       if (clips.length > 0) {
@@ -2065,7 +2090,7 @@ if (navigator.geolocation) {
         const done = () => { clearTimeout(t); r(); };
         const t = setTimeout(done, 8000);
         u.onend = done; u.onerror = done;
-        // Chrome/Android: cancel 先清掉卡住的 queue，再 speak
+        // 只在這裡才 cancel，避免取消正在播的其他段
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
       });
@@ -3058,7 +3083,7 @@ if (navigator.geolocation) {
     }, (err) => {
       console.error('GPS error:', err);
       if (!window.simRunning) {
-        if (speedPillNum) speedPillNum.innerText = '—';
+        if (speedPillNum) speedPillNum.innerText = '--';
       }
     }, {
       enableHighAccuracy: true,
