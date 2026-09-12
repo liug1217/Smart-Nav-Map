@@ -1582,6 +1582,22 @@ if (navigator.geolocation) {
       paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
     });
 
+    const arrowSize = 20;
+    const arrowCanvas = document.createElement('canvas');
+    arrowCanvas.width = arrowSize;
+    arrowCanvas.height = arrowSize;
+    const arrowCtx = arrowCanvas.getContext('2d');
+    arrowCtx.fillStyle = 'rgba(255,255,255,0.9)';
+    arrowCtx.beginPath();
+    arrowCtx.moveTo(arrowSize, arrowSize / 2);
+    arrowCtx.lineTo(0, 2);
+    arrowCtx.lineTo(arrowSize * 0.35, arrowSize / 2);
+    arrowCtx.lineTo(0, arrowSize - 2);
+    arrowCtx.closePath();
+    arrowCtx.fill();
+    const arrowImageData = arrowCtx.getImageData(0, 0, arrowSize, arrowSize);
+    map.addImage('nav-arrow', { width: arrowSize, height: arrowSize, data: arrowImageData.data });
+
     map.addLayer({
       id: 'navRoute-arrows',
       type: 'symbol',
@@ -1589,14 +1605,10 @@ if (navigator.geolocation) {
       layout: {
         'symbol-placement': 'line',
         'symbol-spacing': 80,
-        'text-field': '▶',
-        'text-size': 14,
-        'text-rotation-alignment': 'map',
-        'text-keep-upright': false
-      },
-      paint: {
-        'text-color': '#ffffff',
-        'text-opacity': 0.9
+        'icon-image': 'nav-arrow',
+        'icon-size': 1,
+        'icon-rotation-alignment': 'map',
+        'icon-keep-upright': false
       }
     });
 
