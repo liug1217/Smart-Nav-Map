@@ -1582,20 +1582,10 @@ if (navigator.geolocation) {
       paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
     });
 
-    const _ac = document.createElement('canvas');
-    _ac.width = 40; _ac.height = 40;
-    const _ax = _ac.getContext('2d');
-    _ax.fillStyle = 'white';
-    _ax.beginPath();
-    _ax.moveTo(38, 20);
-    _ax.lineTo(2, 4);
-    _ax.lineTo(12, 20);
-    _ax.lineTo(2, 36);
-    _ax.closePath();
-    _ax.fill();
-    map.loadImage(_ac.toDataURL(), (err, img) => {
-      if (err || map.hasImage('nav-arrow')) return;
-      map.addImage('nav-arrow', img);
+    const _arrowImg = new Image(40, 40);
+    _arrowImg.onload = () => {
+      if (map.hasImage('nav-arrow')) return;
+      map.addImage('nav-arrow', _arrowImg);
       map.addLayer({
         id: 'navRoute-arrows',
         type: 'symbol',
@@ -1612,7 +1602,8 @@ if (navigator.geolocation) {
           'icon-ignore-placement': true
         }
       });
-    });
+    };
+    _arrowImg.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><polygon points="38,20 2,4 12,20 2,36" fill="white"/></svg>');
 
     window.navRouteSource = map.getSource('navRoute');
     routeSource = map.getSource('route');
