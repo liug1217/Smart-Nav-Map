@@ -331,9 +331,9 @@ html,body{
   z-index:10;
 }
 .mapCtrlBtn{
-  width:50px;
-  height:50px;
-  border-radius:25px;
+  width:59px;
+  height:59px;
+  border-radius:50%;
   border:none;
   background:rgba(255,255,255,0.92);
   backdrop-filter:blur(10px);
@@ -646,8 +646,94 @@ body.navigating .speedLimitSign{ top:207px; }
   font-weight:400;
 }
 
-/* ===== 速限標誌（隱藏，僅保留 JS 用的 currentSpeedLimit 邏輯）===== */
-.speedLimitSign{ display:none!important; }
+/* ===== 速限標誌（Figma: top:454, left:266, size:50, red border）===== */
+.speedLimitSign{
+  position:fixed;
+  width:50px;
+  height:50px;
+  left:266px;
+  top:454px;
+  background:#ffffff;
+  border:5px solid #ff0000;
+  border-radius:25px;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:6;
+  box-sizing:border-box;
+}
+.speedLimitSign .limit-num{
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  font-size:22px;
+  font-weight:400;
+  color:#000000;
+  line-height:1;
+}
+
+/* ===== 導航速度膠囊（Figma: top:549, left:120, w:105, h:43）===== */
+.navSpeedPill{
+  position:fixed;
+  left:120px;
+  top:549px;
+  width:105px;
+  height:43px;
+  background:rgba(17,35,62,0.9);
+  border-top:1px solid rgba(255,255,255,0.6);
+  border-radius:22.5px;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  display:none;
+  align-items:center;
+  z-index:5;
+  overflow:hidden;
+}
+.navSpeedPillCircle{
+  width:42px;
+  height:42px;
+  border-radius:21px;
+  background:#30D158;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-left:1px;
+}
+.navSpeedPillCircle svg{ display:block; }
+.navSpeedPillNum{
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  font-size:28px;
+  font-weight:500;
+  color:#ecfeef;
+  margin-left:6px;
+  line-height:1;
+}
+body.navigating .navSpeedPill{ display:flex; }
+
+/* ===== 紅綠燈指示（Figma: top:674, left:302, w:28, h:14）===== */
+.trafficLightBar{
+  position:fixed;
+  left:302px;
+  top:674px;
+  width:28px;
+  height:14px;
+  background:#253a63;
+  border:2px solid #d9e6fc;
+  border-radius:7px;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  z-index:5;
+  box-sizing:border-box;
+}
+.trafficLightBar .tl-dot{
+  width:6px;
+  height:6px;
+  border-radius:3px;
+  flex-shrink:0;
+}
+body.navigating .trafficLightBar{ display:flex; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -1184,9 +1270,26 @@ html, body {
   ">重置</button>
 </div>
 
-<!-- 速限標誌（隱藏，保留 id 供 JS 參考） -->
-<div class="speedLimitSign" id="speedLimitSign" style="display:none!important">
+<!-- 速限標誌（Figma: top:454, left:266, size:50, JS 控制顯示/隱藏） -->
+<div class="speedLimitSign" id="speedLimitSign">
   <div class="limit-num" id="speedLimitNum">110</div>
+</div>
+
+<!-- 導航速度膠囊（Figma: top:549, left:120, w:105, h:43） -->
+<div class="navSpeedPill" id="navSpeedPill">
+  <div class="navSpeedPillCircle">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M12 5L5 14h5v5h4v-5h5L12 5z" fill="white"/>
+    </svg>
+  </div>
+  <span class="navSpeedPillNum" id="navSpeedPillNum">0</span>
+</div>
+
+<!-- 紅綠燈指示（Figma: top:674, left:302, w:28, h:14） -->
+<div class="trafficLightBar" id="trafficLightBar">
+  <div class="tl-dot" style="background:#ff3b30;"></div>
+  <div class="tl-dot" style="background:#ffcc00;"></div>
+  <div class="tl-dot" style="background:#30d158;"></div>
 </div>
 
 
@@ -1408,6 +1511,7 @@ if (navigator.geolocation) {
 
   const infoElement = document.querySelector('.info');
   const speedPillNum = document.getElementById('rect6SpeedValue');
+  const navSpeedPillNumEl = document.getElementById('navSpeedPillNum');
   const rect6El = document.getElementById('rect6');
   
   let startTime = null;
@@ -2318,6 +2422,7 @@ if (navigator.geolocation) {
         document.body.classList.remove('navigating');
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
+        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
         togglePoiLayers(true);
         if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
@@ -2802,6 +2907,15 @@ if (navigator.geolocation) {
     });
     // 更新 currentSpeedLimit（供 updateDisplay 超速判斷用）
     window.currentSpeedLimit = nearestLimit ? Number(nearestLimit) : null;
+    // 顯示/隱藏速限標誌
+    if (_speedSignEl && _speedNumEl) {
+      if (nearestLimit) {
+        _speedNumEl.textContent = nearestLimit;
+        _speedSignEl.style.display = 'flex';
+      } else {
+        _speedSignEl.style.display = 'none';
+      }
+    }
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
@@ -2915,6 +3029,7 @@ if (navigator.geolocation) {
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
+    if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = Math.round(speed);
     if (rect6El) {
       const lim = window.currentSpeedLimit;
       const isSpeeding = !!(lim && speed > lim);
@@ -3008,6 +3123,7 @@ if (navigator.geolocation) {
       console.error('GPS error:', err);
       if (!window.simRunning) {
         if (speedPillNum) speedPillNum.innerText = '—';
+        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '—';
       }
     }, {
       enableHighAccuracy: true,
@@ -4639,6 +4755,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var glow     = document.getElementById('speedingGlow');
     if (display)  display.textContent  = Math.round(simSpeed);
     if (speedVal) speedVal.textContent = Math.round(simSpeed);
+    var navPill = document.getElementById('navSpeedPillNum');
+    if (navPill) navPill.textContent = Math.round(simSpeed);
     var over = simLimit > 0 && simSpeed > simLimit;
     if (rect6) rect6.classList.toggle('speeding', over);
     if (glow)  glow.classList.toggle('active', over);
