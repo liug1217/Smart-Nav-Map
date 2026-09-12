@@ -1369,8 +1369,8 @@ html, body {
       <div class="rect1NavRow">
         <button type="button" class="navExitBtn" id="navExitBtn">退出</button>
         <div class="rect1Center">
-          <div class="info">0小時0分鐘 0.00公里</div>
-          <div class="arrivalText" id="arrivalText">00:00到達</div>
+          <div class="info">0小時0分鐘  0公里</div>
+          <div class="arrivalText" id="arrivalText">00:00抵達</div>
         </div>
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
@@ -2724,7 +2724,7 @@ if (navigator.geolocation) {
         const eta = new Date(Date.now() + route.duration * 1000);
         const hh = String(eta.getHours()).padStart(2, '0');
         const mm = String(eta.getMinutes()).padStart(2, '0');
-        arrivalEl.innerText = hh + ':' + mm + '到達';
+        arrivalEl.innerText = hh + ':' + mm + '抵達';
       }
 
       // 初始導航才縮放顯示整條路線；重新規劃時保持目前視角，不跳走
