@@ -55,8 +55,8 @@ html,body{
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   overflow: hidden;
-  transition: height 0.38s cubic-bezier(0.32,0.72,0,1);
-  will-change: height;
+  transition: height 0.38s cubic-bezier(0.32,0.72,0,1), left 0.38s cubic-bezier(0.32,0.72,0,1), right 0.38s cubic-bezier(0.32,0.72,0,1), bottom 0.38s cubic-bezier(0.32,0.72,0,1);
+  will-change: height, left, right, bottom;
   z-index: 11;
 }
 
@@ -112,10 +112,11 @@ html,body{
 
 .rect4{
   box-sizing:border-box;
-  position:absolute;
+  position:fixed;
   left:50%;
   transform:translateX(-50%);
   bottom:178px;
+  transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
   width:auto;
   max-width:calc(100% - 16px);
   height:33px;
@@ -329,6 +330,7 @@ html,body{
   align-items:center;
   gap:8px;
   z-index:10;
+  transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
 }
 .mapCtrlBtn{
   width:59px;
@@ -770,6 +772,7 @@ body.navigating .trafficLightBar{ display:flex; }
   display:flex;
   align-items:center;
   overflow:hidden;
+  transition:opacity 0.25s ease;
 }
 
 .navInfoCardIcon{
@@ -1568,6 +1571,7 @@ if (navigator.geolocation) {
     currentStepIndex = 0;
     Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
     document.body.classList.remove('navigating');
+    _setPanelState(160, true);
     if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
     if (rect8) rect8.style.display = 'none';
     if (searchBarWrapEl) searchBarWrapEl.style.display = '';
@@ -1879,16 +1883,42 @@ if (navigator.geolocation) {
     _voiceTestBtn.addEventListener('click', () => speakText('前方200公尺，請右轉，進入忠孝東路'));
   }
 
+  // ===== 面板狀態管理（導航收合/展開）=====
+  function _setPanelState(h, animated) {
+    var r1 = document.getElementById('rect1');
+    var mc = document.querySelector('.mapCtrlGroup');
+    var r4 = document.querySelector('.rect4');
+    var rd = document.getElementById('radioCard');
+    var isNav = document.body.classList.contains('navigating');
+    var l, bot, mcBot, r4Bot, showRadio;
+    var COMPACT = 83, NORMAL = 160;
+    if (!isNav || h >= NORMAL) {
+      l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
+    } else if (h <= COMPACT) {
+      l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
+    } else {
+      var t = (h - COMPACT) / (NORMAL - COMPACT);
+      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 69; r4Bot = 109 + t * 69; showRadio = t > 0.7;
+    }
+    var ease = 'cubic-bezier(.32,.72,0,1)';
+    var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
+    var trB = animated ? ('bottom .38s '+ease) : 'none';
+    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = bot+'px'; r1.style.height = h+'px'; }
+    if (mc) { mc.style.transition = trB; mc.style.bottom = mcBot+'px'; }
+    if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
+    if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
+  }
+
   // ===== rect1 卡片展開語音設定（跟手上滑）=====
   const _rect1El = document.getElementById('rect1');
   const _rect3Handle = document.getElementById('rect3Handle');
   const _voiceDrawer = document.getElementById('voiceDrawer');
-  const RECT1_COLLAPSED = 160;
+  const RECT1_COMPACT = 83;    // 導航收合狀態（無電台卡）
+  const RECT1_COLLAPSED = 160; // 正常展開狀態（有電台卡）
   let _drawerOpen = false;
   let _expandedH = 0;
 
   function _measureExpanded() {
-    // 暫時顯示量高度
     _voiceDrawer.style.visibility = 'hidden';
     _voiceDrawer.style.display = 'block';
     const dh = _voiceDrawer.offsetHeight;
@@ -1901,30 +1931,38 @@ if (navigator.geolocation) {
     _buildVoiceList();
     _expandedH = _measureExpanded();
     _voiceDrawer.style.display = 'block';
-    _rect1El.style.transition = 'height 0.38s cubic-bezier(0.32,0.72,0,1)';
-    _rect1El.style.height = _expandedH + 'px';
+    _setPanelState(_expandedH, true);
     _drawerOpen = true;
   }
   function _closeDrawer() {
-    _rect1El.style.transition = 'height 0.38s cubic-bezier(0.32,0.72,0,1)';
-    _rect1El.style.height = RECT1_COLLAPSED + 'px';
+    _setPanelState(RECT1_COLLAPSED, true);
+    setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
+    _drawerOpen = false;
+  }
+  function _openNavPanel() {
+    _setPanelState(RECT1_COLLAPSED, true);
+    _drawerOpen = false;
+  }
+  function _closeNavPanel() {
+    _setPanelState(RECT1_COMPACT, true);
     setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
     _drawerOpen = false;
   }
 
-  // 整張卡片 + rect3 拖拉（上滑展開，下滑收合）
+  // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
     let _tsY = 0, _curH = RECT1_COLLAPSED, _moved = false, _rafId = null;
 
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
-      _curH = _drawerOpen ? _expandedH : RECT1_COLLAPSED;
+      const isNav = document.body.classList.contains('navigating');
+      _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || (isNav ? RECT1_COMPACT : RECT1_COLLAPSED));
       if (!_drawerOpen) {
         _buildVoiceList();
         _expandedH = _measureExpanded();
         _voiceDrawer.style.display = 'block';
       }
-      _rect1El.style.transition = 'none';
+      _setPanelState(_curH, false);
       _moved = false;
       if (_rafId) cancelAnimationFrame(_rafId);
     }
@@ -1932,29 +1970,49 @@ if (navigator.geolocation) {
       const dy = _tsY - e.touches[0].clientY;
       if (!_moved && Math.abs(dy) < 5) return;
       e.preventDefault();
-      const newH = Math.min(_expandedH, Math.max(RECT1_COLLAPSED, _curH + dy));
+      const isNav = document.body.classList.contains('navigating');
+      const minH = isNav ? RECT1_COMPACT : RECT1_COLLAPSED;
+      const newH = Math.min(_expandedH, Math.max(minH, _curH + dy));
       _moved = true;
       if (_rafId) cancelAnimationFrame(_rafId);
-      _rafId = requestAnimationFrame(() => { _rect1El.style.height = newH + 'px'; });
+      _rafId = requestAnimationFrame(() => {
+        _rect1El.style.height = newH + 'px';
+        _setPanelState(newH, false);
+      });
+    }
+    function _snapPanel(dy) {
+      const isNav = document.body.classList.contains('navigating');
+      const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
+      if (isNav) {
+        if (dy > 40) {
+          curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
+        } else {
+          _drawerOpen ? _closeDrawer() : _closeNavPanel();
+        }
+      } else {
+        dy > 40 ? _openDrawer() : _closeDrawer();
+      }
     }
     function _onDragEnd(e) {
       if (_rafId) cancelAnimationFrame(_rafId);
       const dy = _tsY - e.changedTouches[0].clientY;
       if (!_moved || Math.abs(dy) < 8) {
-        // 輕點卡片背景切換（排除按鈕/輸入框及其子元素）
         if (!e.target.closest('button, input, select, a, label')) {
-          _drawerOpen ? _closeDrawer() : _openDrawer();
+          const isNav = document.body.classList.contains('navigating');
+          const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
+          if (_drawerOpen) { _closeDrawer(); }
+          else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
+          else { _openDrawer(); }
         }
         return;
       }
-      dy > 40 ? _openDrawer() : _closeDrawer();
+      _snapPanel(dy);
     }
 
     _rect1El.addEventListener('touchstart', _onDragStart, { passive: true });
     _rect1El.addEventListener('touchmove', _onDragMove, { passive: false });
     _rect1El.addEventListener('touchend', _onDragEnd, { passive: true });
 
-    // rect3 明確加 drag（stopPropagation 避免雙重觸發）；輕點切換
     if (_rect3Handle) {
       _rect3Handle.addEventListener('touchstart', e => { e.stopPropagation(); _onDragStart(e); }, { passive: true });
       _rect3Handle.addEventListener('touchmove', e => { e.stopPropagation(); _onDragMove(e); }, { passive: false });
@@ -1962,8 +2020,15 @@ if (navigator.geolocation) {
         e.stopPropagation();
         if (_rafId) cancelAnimationFrame(_rafId);
         const dy = _tsY - e.changedTouches[0].clientY;
-        if (!_moved || Math.abs(dy) < 8) { _drawerOpen ? _closeDrawer() : _openDrawer(); return; }
-        dy > 40 ? _openDrawer() : _closeDrawer();
+        if (!_moved || Math.abs(dy) < 8) {
+          const isNav = document.body.classList.contains('navigating');
+          const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
+          if (_drawerOpen) { _closeDrawer(); }
+          else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
+          else { _openDrawer(); }
+          return;
+        }
+        _snapPanel(dy);
       }, { passive: true });
     }
   }
@@ -2389,6 +2454,7 @@ if (navigator.geolocation) {
     if (currentStepIndex >= navSteps.length) {
       isNavigating = false;
       document.body.classList.remove('navigating');
+      _setPanelState(160, true);
       return;
     }
     const step = navSteps[currentStepIndex];
@@ -2421,6 +2487,7 @@ if (navigator.geolocation) {
       if (currentStepIndex >= navSteps.length) {
         isNavigating = false;
         document.body.classList.remove('navigating');
+        _setPanelState(160, true);
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
         if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '0';
@@ -2753,6 +2820,7 @@ if (navigator.geolocation) {
       if (typeof window._coinFirstNav === 'function') window._coinFirstNav();
       if (typeof window._hintCoinNav === 'function') setTimeout(window._hintCoinNav, 1500);
       document.body.classList.add('navigating');
+      _setPanelState(83, true);
       if (searchBarWrapEl) searchBarWrapEl.style.display = 'none';
       if (rect8) rect8.style.display = 'flex';
       if (rect6El) rect6El.style.display = 'flex';
