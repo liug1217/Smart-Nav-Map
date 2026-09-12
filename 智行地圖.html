@@ -7,9 +7,6 @@
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" type="image/png" href="icon.png">
 <meta name="apple-mobile-web-app-title" content="智行地圖">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="manifest.json">
 <style>
 /* ===== OpenStreetMap Layer ===== */
 #map{
@@ -47,7 +44,7 @@ html,body{
 
 .rect1{
   box-sizing:border-box;
-  position:absolute;
+  position:fixed;
   left:8px;
   right:8px;
   bottom:8px;
@@ -359,7 +356,7 @@ html,body{
 
 /* ===== 時鐘 ===== */
 .mapClock{
-  position:absolute;
+  position:fixed;
   top:56px;
   right:8px;
   background:rgba(0,0,0,0.45);
@@ -377,7 +374,7 @@ html,body{
 
 /* ===== 金幣顯示 ===== */
 .coinDisplay{
-  position:absolute;
+  position:fixed;
   top:96px;
   right:8px;
   background:rgba(0,0,0,0.52);
@@ -458,7 +455,7 @@ body.navigating .coinDisplay{ top:117px; }
 }
 /* Toast 提示 */
 .coinToast{
-  position:absolute;
+  position:fixed;
   top:133px;
   right:8px;
   background:rgba(30,20,0,0.82);
@@ -1055,7 +1052,7 @@ html, body {
   font-family: -apple-system, sans-serif;
   font-size: 12px;
   width: 160px;
-  display: block;
+  display: none;
 ">
   <div style="font-weight:700; margin-bottom:6px;">🔊 測速語音測試</div>
   <div id="speedCamTestInfo" style="color:#ccc; margin-bottom:6px; line-height:1.4;">載入中...</div>
@@ -1189,7 +1186,7 @@ html, body {
 </div>
 
 
-<!-- 速度模擬器 -->
+<!-- 速度模擬器（隱藏；在 Console 輸入 showSpeedSim() 開啟）-->
 <div id="speedingTestWidget" style="
   position:fixed;
   left:8px;
@@ -1201,7 +1198,7 @@ html, body {
   width:172px;
   box-shadow:0 4px 20px rgba(0,0,0,0.45);
   font-family:-apple-system,sans-serif;
-  display:block;
+  display:none;
 ">
   <div style="color:#fff;font-weight:700;font-size:13px;margin-bottom:8px;text-align:center;">🚦 速度模擬器</div>
 
