@@ -2005,8 +2005,6 @@ if (navigator.geolocation) {
         const done = () => { clearTimeout(t); r(); };
         const t = setTimeout(done, 8000);
         u.onend = done; u.onerror = done;
-        // Chrome/Android: cancel 先清掉卡住的 queue，再 speak
-        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
       });
     },
@@ -2030,18 +2028,33 @@ if (navigator.geolocation) {
     }
   }
 
-  // 依序播放多段語音（每段用 VP.run，所以各段都能用錄音包）
-  async function speakQueue(items){
-    _duckRadio();
-    try {
-      for (const item of items) {
-        if (item) await VP.run(item);
-      }
-    } catch(e){
-      console.error('語音播報失敗:', e);
-    } finally {
-      _unduckRadio();
+  // 依序播放多段語音（序列化：同時只跑一個，新的等舊的跑完再播）
+  let _sqBusy = false;
+  let _sqPending = null;
+
+  function speakQueue(items){
+    if (_sqBusy) {
+      _sqPending = items; // 最新的覆蓋舊的，舊的直接丟棄
+      return;
     }
+    _sqBusy = true;
+    _duckRadio();
+    window.speechSynthesis.cancel(); // 清掉任何卡住的 TTS queue
+    (async () => {
+      try {
+        for (const item of items) {
+          if (item) await VP.run(item);
+        }
+      } finally {
+        _sqBusy = false;
+        _unduckRadio();
+        if (_sqPending) {
+          const next = _sqPending;
+          _sqPending = null;
+          speakQueue(next);
+        }
+      }
+    })();
   }
 
   // 分段播放,段落之間用setTimeout插入真正0.25秒停頓
