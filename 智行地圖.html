@@ -1593,24 +1593,25 @@ if (navigator.geolocation) {
     _ax.lineTo(2, 36);
     _ax.closePath();
     _ax.fill();
-    const _ad = _ax.getImageData(0, 0, 40, 40);
-    map.addImage('nav-arrow', { width: 40, height: 40, data: new Uint8Array(_ad.data.buffer) });
-
-    map.addLayer({
-      id: 'navRoute-arrows',
-      type: 'symbol',
-      source: 'navRoute',
-      layout: {
-        'symbol-placement': 'line',
-        'symbol-spacing': 100,
-        'icon-image': 'nav-arrow',
-        'icon-size': 0.7,
-        'icon-rotation-alignment': 'map',
-        'icon-pitch-alignment': 'map',
-        'icon-keep-upright': false,
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true
-      }
+    map.loadImage(_ac.toDataURL(), (err, img) => {
+      if (err || map.hasImage('nav-arrow')) return;
+      map.addImage('nav-arrow', img);
+      map.addLayer({
+        id: 'navRoute-arrows',
+        type: 'symbol',
+        source: 'navRoute',
+        layout: {
+          'symbol-placement': 'line',
+          'symbol-spacing': 100,
+          'icon-image': 'nav-arrow',
+          'icon-size': 0.7,
+          'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map',
+          'icon-keep-upright': false,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
+      });
     });
 
     window.navRouteSource = map.getSource('navRoute');
