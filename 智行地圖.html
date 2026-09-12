@@ -6,42 +6,32 @@
 <title>智行地圖</title>
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" type="image/png" href="icon.png">
-<link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="智行地圖">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a1628">
 <style>
 /* ===== OpenStreetMap Layer ===== */
-html,body{
-  background:#0a1628;
-  width:100vw;
-  height:100lvh;
-  margin:0;
-  overflow:hidden;
-}
-body{
-  touch-action:none;
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif;
-}
-
 #map{
-  width:100vw;
-  height:100lvh;
-  display:block;
   position:fixed;
   top:0;
   left:0;
   background:#0a1628;
+  width:100%;
+  height:100%;
   z-index:0;
-}
+} 
 
 /* UI must be above map */
 .rect2,.bottomBar,.rect4{
   z-index:2;
+}
+
+html,body{
+  margin:0;
+  padding:0;
+  background:#0a1628;
+  width:100%;
+  height:100%;
+  background:#D6E4F2;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif;
 }
 
 .bottomBar{
@@ -1010,23 +1000,6 @@ html, body {
   text-align:center;
   display:none;
 }
-
-/* ===== iOS PWA safe area（放最後確保覆寫） ===== */
-.rect8          { top: calc(54px  + env(safe-area-inset-top, 0px)); }
-.mapClock       { top: calc(56px  + env(safe-area-inset-top, 0px)); }
-.rect6          { top: calc(82px  + env(safe-area-inset-top, 0px)); }
-.coinDisplay    { top: calc(96px  + env(safe-area-inset-top, 0px)); }
-.coinToast      { top: calc(133px + env(safe-area-inset-top, 0px)); }
-.weatherAlert   { top: calc(158px + env(safe-area-inset-top, 0px)); }
-.earthquakeAlert{ top: calc(196px + env(safe-area-inset-top, 0px)); }
-
-body.navigating .rect8          { top: env(safe-area-inset-top, 0px); }
-body.navigating .mapClock       { top: calc(77px  + env(safe-area-inset-top, 0px)); }
-body.navigating .rect6          { top: calc(77px  + env(safe-area-inset-top, 0px)); }
-body.navigating .coinDisplay    { top: calc(117px + env(safe-area-inset-top, 0px)); }
-body.navigating .coinToast      { top: calc(155px + env(safe-area-inset-top, 0px)); }
-body.navigating .weatherAlert   { top: calc(180px + env(safe-area-inset-top, 0px)); }
-body.navigating .earthquakeAlert{ top: calc(218px + env(safe-area-inset-top, 0px)); }
 </style>
 </head>
 <body>
@@ -5129,23 +5102,6 @@ window.reloadMapLayers = function() {
   document.getElementById('fDisconnBtn').addEventListener('click', function(){
     destroyConn(); handleDisconn();
   });
-})();
-</script>
-
-<!-- solotilt 同款：隱形 probe 讓 JS 讀到 env(safe-area-inset-bottom) 像素值 -->
-<div class="safe-area-probe" aria-hidden="true" style="padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;position:fixed;width:0;height:0;"></div>
-
-<script>
-(function(){
-  var probe = document.querySelector('.safe-area-probe');
-  function updateBottomInset(){
-    var safeBottom = probe ? (parseFloat(getComputedStyle(probe).paddingBottom) || 0) : 0;
-    var extra = Math.max(0, document.documentElement.clientHeight - (window.visualViewport ? window.visualViewport.height : window.innerHeight));
-    document.documentElement.style.setProperty('--bottom-inset', (safeBottom + extra) + 'px');
-  }
-  window.addEventListener('resize', updateBottomInset);
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', updateBottomInset);
-  updateBottomInset();
 })();
 </script>
 </body>
