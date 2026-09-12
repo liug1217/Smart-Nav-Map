@@ -2005,6 +2005,7 @@ if (navigator.geolocation) {
         const done = () => { clearTimeout(t); r(); };
         const t = setTimeout(done, 8000);
         u.onend = done; u.onerror = done;
+        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
       });
     },
