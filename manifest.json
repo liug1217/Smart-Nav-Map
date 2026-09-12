@@ -1,0 +1,22 @@
+{
+  "name": "智行地圖",
+  "short_name": "智行地圖",
+  "description": "智慧導航 · 即時路況",
+  "start_url": "/Smart-Nav-Map/%E6%99%BA%E8%A1%8C%E5%9C%B0%E5%9C%96.html",
+  "scope": "/Smart-Nav-Map/",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#0a1628",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
