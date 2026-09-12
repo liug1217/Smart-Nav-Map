@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "/Smart-Nav-Map/智行地圖.html",
   "name": "智行地圖",
   "short_name": "智行地圖",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/Smart-Nav-Map/智行地圖.html",
+  "scope": "/Smart-Nav-Map/",
   "display": "fullscreen",
   "background_color": "#000000",
   "theme_color": "#000000",
