@@ -2720,8 +2720,12 @@ if (navigator.geolocation) {
     if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
 
     // 即時更新地圖旋轉（只在跟隨模式下，duration 短讓畫面跟得上）
+    // center 同步帶入避免打斷 GPS easeTo 後中心偏移
     if (followUser && map) {
-      map.easeTo({ bearing: _smoothedHeading, duration: 150, easing: t => t });
+      const _lat = window.currentLat, _lon = window.currentLon;
+      const _opts = { bearing: _smoothedHeading, duration: 150, easing: t => t };
+      if (_lat != null && _lon != null) _opts.center = [_lon, _lat];
+      map.easeTo(_opts);
     }
   }
 
