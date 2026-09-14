@@ -3191,8 +3191,8 @@ if (navigator.geolocation) {
     }, (err) => {
       console.error('GPS error:', err);
       if (!window.simRunning) {
-        if (speedPillNum) speedPillNum.innerText = '—';
-        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '—';
+        if (speedPillNum) speedPillNum.innerText = '--';
+        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '--';
       }
     }, {
       enableHighAccuracy: true,
