@@ -74,7 +74,7 @@ html,body{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:0 29px;
+  padding:0 15px;
   flex-shrink:0;
 }
 .rect1Center{
@@ -751,7 +751,7 @@ body.navigating .trafficLightBar{ display:flex; }
 
 .navExitBtn,.navOverviewBtn{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-weight:500;
+  font-weight:510;
   font-size:13px;
   color:#000000;
   background:none;
@@ -1907,10 +1907,13 @@ if (navigator.geolocation) {
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
     var trB = animated ? ('bottom .38s '+ease) : 'none';
+    var trPad = animated ? ('padding .38s '+ease) : 'none';
     if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
     if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
     if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
+    var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
+    if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
 
   // ===== rect1 卡片展開語音設定（跟手上滑）=====
