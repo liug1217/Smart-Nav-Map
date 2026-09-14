@@ -720,24 +720,15 @@ body.navigating .navSpeedPill{ display:flex; }
   top:674px;
   width:28px;
   height:14px;
-  background:#253a63;
-  border:2px solid #d9e6fc;
+  background:#253A63;
+  border:2px solid #D9E6FC;
   border-radius:7px;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   display:none;
-  align-items:center;
-  justify-content:center;
-  gap:1px;
   z-index:5;
   box-sizing:border-box;
 }
-.trafficLightBar .tl-dot{
-  width:6px;
-  height:6px;
-  border-radius:3px;
-  flex-shrink:0;
-}
-body.navigating .trafficLightBar{ display:flex; }
+body.navigating .trafficLightBar{ display:block; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -1295,11 +1286,28 @@ html, body {
 </div>
 
 <!-- 紅綠燈指示條 -->
-<div class="trafficLightBar" id="trafficLightBar">
-  <div class="tl-dot" style="background:#ff3b30;"></div>
-  <div class="tl-dot" style="background:#ffcc00;"></div>
-  <div class="tl-dot" style="background:#30d158;"></div>
-</div>
+<canvas class="trafficLightBar" id="trafficLightBar"></canvas>
+<script>
+(function(){
+  var cv = document.getElementById('trafficLightBar');
+  if (!cv) return;
+  var dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(28 * dpr);
+  cv.height = Math.round(14 * dpr);
+  var ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  var dots = [{x:7,c:'#EA5044'},{x:14,c:'#D9BE1A'},{x:21,c:'#23A72F'}];
+  dots.forEach(function(d){
+    ctx.save();
+    ctx.shadowOffsetY=4; ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.arc(d.x, 7, 3, 0, Math.PI*2);
+    ctx.fillStyle=d.c;
+    ctx.fill();
+    ctx.restore();
+  });
+})();
+</script>
 
 
 <div class="cctvOverlay" id="cctvOverlay">
