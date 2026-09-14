@@ -4358,19 +4358,25 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var SOURCE = 'signals';
   var _popup = null;
 
-  function makeEmojiImage(m, id, emoji, size){
+  function makeSignalImage(m, id){
+    var W=56, H=28;
     var c = document.createElement('canvas');
-    c.width = c.height = size;
+    c.width=W; c.height=H;
     var ctx = c.getContext('2d');
-    ctx.font = Math.floor(size*0.78)+'px serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, size/2, size/2);
-    m.addImage(id, ctx.getImageData(0,0,size,size));
+    ctx.beginPath(); ctx.roundRect(0,0,W,H,14);
+    ctx.fillStyle='#253A63'; ctx.fill();
+    ctx.beginPath(); ctx.roundRect(2,2,W-4,H-4,12);
+    ctx.strokeStyle='#D9E6FC'; ctx.lineWidth=4; ctx.stroke();
+    [{x:14,c:'#EA5044'},{x:28,c:'#D9BE1A'},{x:42,c:'#23A72F'}].forEach(function(d){
+      ctx.beginPath(); ctx.arc(d.x,14,6,0,Math.PI*2);
+      ctx.fillStyle=d.c; ctx.fill();
+    });
+    m.addImage(id, ctx.getImageData(0,0,W,H));
   }
 
   function initSignals(m){
     if(!window.SIGNAL_DATA) return;
-    makeEmojiImage(m, 'signal-icon', '🚦', 48);
+    makeSignalImage(m, 'signal-icon');
 
     m.addSource(SOURCE, {
       type: 'geojson',
@@ -4407,7 +4413,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       paint: {'text-color':'#fff'}
     });
 
-    // 單一號誌 emoji（canvas 圖片）
+    // 單一號誌（canvas 圖片）
     m.addLayer({
       id: 'signal-single',
       type: 'symbol',
@@ -4415,7 +4421,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       filter: ['!',['has','point_count']],
       layout: {
         'icon-image': 'signal-icon',
-        'icon-size': 0.6,
+        'icon-size': 0.5,
         'icon-allow-overlap': false
       }
     });
