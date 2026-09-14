@@ -720,13 +720,8 @@ body.navigating .navSpeedPill{ display:flex; }
   top:674px;
   width:28px;
   height:14px;
-  background:#253A63;
-  border:2px solid #D9E6FC;
-  border-radius:7px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
   display:none;
   z-index:5;
-  box-sizing:border-box;
 }
 body.navigating .trafficLightBar{ display:block; }
 
@@ -1286,27 +1281,47 @@ html, body {
 </div>
 
 <!-- 紅綠燈指示條 -->
-<canvas class="trafficLightBar" id="trafficLightBar"></canvas>
+<canvas class="trafficLightBar" id="trafficLightBar" width="56" height="28"></canvas>
 <script>
-(function(){
+function _drawTLBar(){
   var cv = document.getElementById('trafficLightBar');
-  if (!cv) return;
-  var dpr = window.devicePixelRatio || 1;
-  cv.width = Math.round(28 * dpr);
-  cv.height = Math.round(14 * dpr);
+  if(!cv) return;
+  var dpr = window.devicePixelRatio||1;
+  var W=28, H=14;
+  cv.width = W*dpr; cv.height = H*dpr;
+  cv.style.width = W+'px'; cv.style.height = H+'px';
   var ctx = cv.getContext('2d');
   ctx.scale(dpr, dpr);
-  var dots = [{x:7,c:'#EA5044'},{x:14,c:'#D9BE1A'},{x:21,c:'#23A72F'}];
-  dots.forEach(function(d){
+  /* 背景 */
+  ctx.save();
+  ctx.shadowOffsetY=4; ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,.25)';
+  var r=7;
+  ctx.beginPath();
+  ctx.moveTo(r,0); ctx.lineTo(W-r,0); ctx.quadraticCurveTo(W,0,W,r);
+  ctx.lineTo(W,H-r); ctx.quadraticCurveTo(W,H,W-r,H);
+  ctx.lineTo(r,H); ctx.quadraticCurveTo(0,H,0,H-r);
+  ctx.lineTo(0,r); ctx.quadraticCurveTo(0,0,r,0); ctx.closePath();
+  ctx.fillStyle='#253A63'; ctx.fill();
+  ctx.restore();
+  /* 邊框 */
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(r,1); ctx.lineTo(W-r,1); ctx.quadraticCurveTo(W-1,1,W-1,r);
+  ctx.lineTo(W-1,H-r); ctx.quadraticCurveTo(W-1,H-1,W-r,H-1);
+  ctx.lineTo(r,H-1); ctx.quadraticCurveTo(1,H-1,1,H-r);
+  ctx.lineTo(1,r); ctx.quadraticCurveTo(1,1,r,1); ctx.closePath();
+  ctx.strokeStyle='#D9E6FC'; ctx.lineWidth=2; ctx.stroke();
+  ctx.restore();
+  /* 三顆燈 */
+  [{x:7,c:'#EA5044'},{x:14,c:'#D9BE1A'},{x:21,c:'#23A72F'}].forEach(function(d){
     ctx.save();
     ctx.shadowOffsetY=4; ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,.25)';
-    ctx.beginPath();
-    ctx.arc(d.x, 7, 3, 0, Math.PI*2);
-    ctx.fillStyle=d.c;
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(d.x,7,3,0,Math.PI*2);
+    ctx.fillStyle=d.c; ctx.fill();
     ctx.restore();
   });
-})();
+}
+_drawTLBar();
 </script>
 
 
