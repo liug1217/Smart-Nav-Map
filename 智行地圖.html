@@ -24,6 +24,7 @@
   z-index:2;
 }
 
+:root{ --sab: env(safe-area-inset-bottom, 0px); }
 html,body{
   margin:0;
   padding:0;
@@ -37,7 +38,7 @@ html,body{
   position:absolute;
   left:0;
   right:0;
-  bottom:8px;
+  bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   height:160px;
 }
 
@@ -46,7 +47,7 @@ html,body{
   position:fixed;
   left:16px;
   right:16px;
-  bottom:16px;
+  bottom:calc(16px + env(safe-area-inset-bottom, 0px));
   height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -277,7 +278,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
-  bottom:180px;
+  bottom:calc(180px + env(safe-area-inset-bottom, 0px));
   z-index:5;
   background:#FFFFFF;
   border-radius:14px;
@@ -1894,6 +1895,7 @@ if (navigator.geolocation) {
     var isNav = document.body.classList.contains('navigating');
     var l, bot, mcBot, r4Bot, showRadio;
     var COMPACT = 83, NORMAL = 160;
+    var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
     if (h >= NORMAL) {
       l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
     } else if (h <= COMPACT) {
@@ -1905,8 +1907,8 @@ if (navigator.geolocation) {
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
     var trB = animated ? ('bottom .38s '+ease) : 'none';
-    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = bot+'px'; r1.style.height = h+'px'; }
-    if (mc) { mc.style.transition = trB; mc.style.bottom = mcBot+'px'; }
+    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
+    if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
     if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
   }
