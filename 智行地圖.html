@@ -326,7 +326,7 @@ html,body{
 .mapCtrlGroup{
   position:fixed;
   right:12px;
-  bottom:116px;
+  bottom:185px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -654,68 +654,7 @@ body.navigating .earthquakeAlert{ top:218px; }
 }
 
 
-/* ===== 導航速度膠囊（導航中顯示）===== */
-.navSpeedPill{
-  position:fixed;
-  left:120px;
-  top:549px;
-  width:105px;
-  height:43px;
-  background:rgba(17,35,62,0.9);
-  border-top:1px solid rgba(255,255,255,1);
-  border-radius:22.5px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  z-index:5;
-  overflow:hidden;
-}
-.navSpeedPillCircle{
-  width:42px;
-  height:42px;
-  border-radius:21px;
-  background:#30D158;
-  flex-shrink:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-left:1px;
-}
-.navSpeedPillNum{
-  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:35px;
-  font-weight:500;
-  color:#ecfeef;
-  margin-left:6px;
-  line-height:1;
-}
-body.navigating .navSpeedPill{ display:flex; }
 
-/* ===== 紅綠燈指示條（導航中顯示）===== */
-.trafficLightBar{
-  position:fixed;
-  left:302px;
-  top:674px;
-  width:28px;
-  height:14px;
-  background:#253a63;
-  border:2px solid #d9e6fc;
-  border-radius:7px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  gap:1px;
-  z-index:5;
-  box-sizing:border-box;
-}
-.trafficLightBar .tl-dot{
-  width:6px;
-  height:6px;
-  border-radius:3px;
-  flex-shrink:0;
-}
-body.navigating .trafficLightBar{ display:flex; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -1258,22 +1197,6 @@ html, body {
 </div>
 
 
-<!-- 導航速度膠囊 -->
-<div class="navSpeedPill" id="navSpeedPill">
-  <div class="navSpeedPillCircle">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M12 5L5 14h5v5h4v-5h5L12 5z" fill="white"/>
-    </svg>
-  </div>
-  <span class="navSpeedPillNum" id="navSpeedPillNum">0</span>
-</div>
-
-<!-- 紅綠燈指示條 -->
-<div class="trafficLightBar" id="trafficLightBar">
-  <div class="tl-dot" style="background:#ff3b30;"></div>
-  <div class="tl-dot" style="background:#ffcc00;"></div>
-  <div class="tl-dot" style="background:#30d158;"></div>
-</div>
 
 
 <div class="cctvOverlay" id="cctvOverlay">
@@ -1335,6 +1258,8 @@ html, body {
   </button>
   <!-- 地圖風格 -->
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
+  <!-- AI 助理 -->
+  <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;">AI</button>
 </div>
 
 <div class="bottomBar">
@@ -1494,7 +1419,6 @@ if (navigator.geolocation) {
 
   const infoElement = document.querySelector('.info');
   const speedPillNum = document.getElementById('rect6SpeedValue');
-  const navSpeedPillNumEl = document.getElementById('navSpeedPillNum');
   const rect6El = document.getElementById('rect6');
   
   let startTime = null;
@@ -2377,6 +2301,28 @@ if (navigator.geolocation) {
     if (mod === 'uturn') return '↩';
     return '↑';
   }
+  function svgForManeuver(maneuver){
+    const S=(d)=>`<svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const up   = S('<line x1="16" y1="27" x2="16" y2="7"/><polyline points="9,14 16,7 23,14"/>');
+    const right= S('<path d="M10,27 L10,15 Q10,7 17,7 L24,7" fill="none"/><polyline points="17,3 24,7 17,11"/>');
+    const left = S('<path d="M22,27 L22,15 Q22,7 15,7 L8,7" fill="none"/><polyline points="15,3 8,7 15,11"/>');
+    const sR   = S('<polyline points="10,27 10,7 24,7"/><polyline points="17,2 24,7 17,12"/>');
+    const sL   = S('<polyline points="22,27 22,7 8,7"/><polyline points="15,2 8,7 15,12"/>');
+    const uturn= S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,20" fill="none"/><polyline points="17,15 23,20 17,25"/>');
+    const round= S('<path d="M23,16 A7,7 0 1,1 16,9" fill="none"/><polyline points="14,5 16,9 20,9"/>');
+    const dest = S('<circle cx="16" cy="11" r="5"/><line x1="16" y1="16" x2="16" y2="27"/>');
+    if (maneuver.type==='arrive') return dest;
+    if (maneuver.type==='roundabout'||maneuver.type==='rotary') return round;
+    if (maneuver.type==='on ramp') return up;
+    if (maneuver.type==='off ramp') return (maneuver.modifier||'').includes('left')?left:right;
+    const mod=maneuver.modifier||'';
+    if (mod.includes('sharp left')) return sL;
+    if (mod.includes('sharp right')) return sR;
+    if (mod.includes('left')) return left;
+    if (mod.includes('right')) return right;
+    if (mod==='uturn') return uturn;
+    return up;
+  }
 
   // 更新Rectangle 8畫面顯示(圖示+距離+轉彎指示文字)
   function updateRect8Display(distanceMeters){
@@ -2386,7 +2332,7 @@ if (navigator.geolocation) {
     const text = maneuverToChinese(step.maneuver);
     const roadName = step.name ? ('進入' + step.name) : '';
     if (rect8Instruction) rect8Instruction.innerText = text + (roadName ? roadName : '');
-    if (rect8Icon) rect8Icon.innerText = iconForManeuver(step.maneuver);
+    if (rect8Icon) rect8Icon.innerHTML = svgForManeuver(step.maneuver);
     let distText = '';
     if (rect8Distance) {
       if (distanceMeters == null) {
@@ -2464,7 +2410,6 @@ if (navigator.geolocation) {
         _setPanelState(160, true);
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
-        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
         togglePoiLayers(true);
         if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
@@ -2584,7 +2529,7 @@ if (navigator.geolocation) {
 
     if (rect8) {
       rect8Instruction.innerText = '重新規劃路線中...';
-      rect8Icon.innerText = '🔄';
+      rect8Icon.innerHTML = svgForManeuver({type:'roundabout'});
       rect8Distance.innerText = '';
     }
 
@@ -3061,7 +3006,6 @@ if (navigator.geolocation) {
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
-    if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = Math.round(speed);
     if (rect6El) {
       const lim = window.currentSpeedLimit;
       const isSpeeding = !!(lim && speed > lim);
@@ -3155,7 +3099,6 @@ if (navigator.geolocation) {
       console.error('GPS error:', err);
       if (!window.simRunning) {
         if (speedPillNum) speedPillNum.innerText = '--';
-        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '--';
       }
     }, {
       enableHighAccuracy: true,
@@ -4135,12 +4078,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影）
+    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影、底部三角指針）
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
-      var sz=50, pad=8;
-      var W=sz+pad*2, H=sz+pad*2+8;
+      var sz=50, pad=8, tip=10;
+      var W=sz+pad*2, H=sz+pad*2+8+tip;
       var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
       var cx=cv.getContext('2d');
       var r=sz/2, ox=W/2, oy=pad+r;
@@ -4158,6 +4101,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       cx.font='400 '+fs+'px -apple-system,"SF Pro",Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
       cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy);
+      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+      // 底部三角指針
+      cx.fillStyle='#FFFFFF';
+      cx.beginPath();
+      cx.moveTo(ox-8,pad+sz); cx.lineTo(ox+8,pad+sz); cx.lineTo(ox,pad+sz+tip); cx.closePath();
+      cx.fill();
       m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
     });
 
@@ -4787,8 +4736,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var glow     = document.getElementById('speedingGlow');
     if (display)  display.textContent  = Math.round(simSpeed);
     if (speedVal) speedVal.textContent = Math.round(simSpeed);
-    var navPill = document.getElementById('navSpeedPillNum');
-    if (navPill) navPill.textContent = Math.round(simSpeed);
     var over = simLimit > 0 && simSpeed > simLimit;
     if (rect6) rect6.classList.toggle('speeding', over);
     if (glow)  glow.classList.toggle('active', over);
