@@ -653,28 +653,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:400;
 }
 
-/* ===== 速限標誌 ===== */
-.speedLimitSign{
-  position:fixed;
-  left:266px;
-  top:454px;
-  width:50px;
-  height:50px;
-  background:#ffffff;
-  border:5px solid #ff0000;
-  border-radius:25px;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:6;
-  box-sizing:border-box;
-}
-.speedLimitSign .limit-num{
-  font-size:22px;
-  font-weight:400;
-  color:#000000;
-  line-height:1;
-}
 
 /* ===== 導航速度膠囊（導航中顯示）===== */
 .navSpeedPill{
@@ -1279,10 +1257,6 @@ html, body {
   ">重置</button>
 </div>
 
-<!-- 速限標誌（JS 控制顯示）-->
-<div class="speedLimitSign" id="speedLimitSign">
-  <div class="limit-num" id="speedLimitNum">110</div>
-</div>
 
 <!-- 導航速度膠囊 -->
 <div class="navSpeedPill" id="navSpeedPill">
@@ -2921,8 +2895,6 @@ if (navigator.geolocation) {
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
   window.plannedRouteCoordinates = plannedRouteCoordinates;
 
-  const _speedSignEl = document.getElementById('speedLimitSign');
-  const _speedNumEl = document.getElementById('speedLimitNum');
   function checkSpeedCameraVoice(lat, lon, currentSpeedKmh){
     const data = window.speedCameraData;
     if (!data || !data.features) return;
@@ -2976,15 +2948,6 @@ if (navigator.geolocation) {
     });
     // 更新 currentSpeedLimit（供 updateDisplay 超速判斷用）
     window.currentSpeedLimit = nearestLimit ? Number(nearestLimit) : null;
-    // 速限標誌顯示
-    if (_speedSignEl && _speedNumEl) {
-      if (nearestLimit) {
-        _speedNumEl.textContent = nearestLimit;
-        _speedSignEl.style.display = 'flex';
-      } else {
-        _speedSignEl.style.display = 'none';
-      }
-    }
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
