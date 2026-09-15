@@ -3746,6 +3746,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     }
   }
   if(_radioInitOverlay){
+    _radioInitOverlay.addEventListener('touchstart', function(e){ e.stopPropagation(); }, { passive: true });
+    _radioInitOverlay.addEventListener('touchend', function(e){ e.stopPropagation(); });
     _radioInitOverlay.addEventListener('click', function(e){ e.stopPropagation(); startPlay(); });
   }
 
