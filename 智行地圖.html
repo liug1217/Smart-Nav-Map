@@ -4172,30 +4172,30 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（底部加三角指針）
+    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影）
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
-      var sz=60, tip=10, totalH=sz+tip, r=sz/2, border=5;
-      var cv=document.createElement('canvas'); cv.width=sz; cv.height=totalH;
+      var sz=50, pad=8;
+      var W=sz+pad*2, H=sz+pad*2+8;
+      var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
       var cx=cv.getContext('2d');
-      // 白底圓
-      cx.beginPath(); cx.arc(r,r,r-1,0,Math.PI*2);
+      var r=sz/2, ox=W/2, oy=pad+r;
+      // 陰影 + 白底圓
+      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
+      cx.beginPath(); cx.arc(ox,oy,r,0,Math.PI*2);
       cx.fillStyle='#FFFFFF'; cx.fill();
-      // 紅框
-      cx.beginPath(); cx.arc(r,r,r-border/2,0,Math.PI*2);
-      cx.strokeStyle='#FF0000'; cx.lineWidth=border; cx.stroke();
-      // 速限文字
+      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+      // 紅框 5px
+      cx.beginPath(); cx.arc(ox,oy,r-2.5,0,Math.PI*2);
+      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
+      // 速限文字 + 文字陰影
+      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
       var fs=lim>=100?20:22;
-      cx.font='bold '+fs+'px Arial,sans-serif';
+      cx.font='400 '+fs+'px -apple-system,"SF Pro",Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillStyle='#000000'; cx.fillText(String(lim),r,r+1);
-      // 底部三角指針
-      cx.fillStyle='#FFFFFF';
-      cx.beginPath();
-      cx.moveTo(r-8,sz); cx.lineTo(r+8,sz); cx.lineTo(r,sz+tip); cx.closePath();
-      cx.fill();
-      m.addImage(key,{width:sz,height:totalH,data:cx.getImageData(0,0,sz,totalH).data});
+      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy);
+      m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
     });
 
     m.addSource('speed-cam',{type:'geojson',data:data,cluster:true,clusterMaxZoom:13,clusterRadius:50});
