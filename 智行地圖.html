@@ -720,10 +720,24 @@ body.navigating .navSpeedPill{ display:flex; }
   top:674px;
   width:28px;
   height:14px;
+  background:#253a63;
+  border:2px solid #d9e6fc;
+  border-radius:7px;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
   display:none;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
   z-index:5;
+  box-sizing:border-box;
 }
-body.navigating .trafficLightBar{ display:block; }
+.trafficLightBar .tl-dot{
+  width:6px;
+  height:6px;
+  border-radius:3px;
+  flex-shrink:0;
+}
+body.navigating .trafficLightBar{ display:flex; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -1281,48 +1295,11 @@ html, body {
 </div>
 
 <!-- 紅綠燈指示條 -->
-<canvas class="trafficLightBar" id="trafficLightBar" width="56" height="28"></canvas>
-<script>
-function _drawTLBar(){
-  var cv = document.getElementById('trafficLightBar');
-  if(!cv) return;
-  var dpr = window.devicePixelRatio||1;
-  var W=28, H=14;
-  cv.width = W*dpr; cv.height = H*dpr;
-  cv.style.width = W+'px'; cv.style.height = H+'px';
-  var ctx = cv.getContext('2d');
-  ctx.scale(dpr, dpr);
-  /* 背景 */
-  ctx.save();
-  ctx.shadowOffsetY=4; ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,.25)';
-  var r=7;
-  ctx.beginPath();
-  ctx.moveTo(r,0); ctx.lineTo(W-r,0); ctx.quadraticCurveTo(W,0,W,r);
-  ctx.lineTo(W,H-r); ctx.quadraticCurveTo(W,H,W-r,H);
-  ctx.lineTo(r,H); ctx.quadraticCurveTo(0,H,0,H-r);
-  ctx.lineTo(0,r); ctx.quadraticCurveTo(0,0,r,0); ctx.closePath();
-  ctx.fillStyle='#253A63'; ctx.fill();
-  ctx.restore();
-  /* 邊框 */
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(r,1); ctx.lineTo(W-r,1); ctx.quadraticCurveTo(W-1,1,W-1,r);
-  ctx.lineTo(W-1,H-r); ctx.quadraticCurveTo(W-1,H-1,W-r,H-1);
-  ctx.lineTo(r,H-1); ctx.quadraticCurveTo(1,H-1,1,H-r);
-  ctx.lineTo(1,r); ctx.quadraticCurveTo(1,1,r,1); ctx.closePath();
-  ctx.strokeStyle='#D9E6FC'; ctx.lineWidth=2; ctx.stroke();
-  ctx.restore();
-  /* 三顆燈 */
-  [{x:7,c:'#EA5044'},{x:14,c:'#D9BE1A'},{x:21,c:'#23A72F'}].forEach(function(d){
-    ctx.save();
-    ctx.shadowOffsetY=4; ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,.25)';
-    ctx.beginPath(); ctx.arc(d.x,7,3,0,Math.PI*2);
-    ctx.fillStyle=d.c; ctx.fill();
-    ctx.restore();
-  });
-}
-_drawTLBar();
-</script>
+<div class="trafficLightBar" id="trafficLightBar">
+  <div class="tl-dot" style="background:#ff3b30;"></div>
+  <div class="tl-dot" style="background:#ffcc00;"></div>
+  <div class="tl-dot" style="background:#30d158;"></div>
+</div>
 
 
 <div class="cctvOverlay" id="cctvOverlay">
@@ -4362,25 +4339,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var SOURCE = 'signals';
   var _popup = null;
 
-  function makeSignalImage(m, id){
-    var W=56, H=28;
+  function makeEmojiImage(m, id, emoji, size){
     var c = document.createElement('canvas');
-    c.width=W; c.height=H;
+    c.width = c.height = size;
     var ctx = c.getContext('2d');
-    ctx.beginPath(); ctx.roundRect(0,0,W,H,14);
-    ctx.fillStyle='#253A63'; ctx.fill();
-    ctx.beginPath(); ctx.roundRect(2,2,W-4,H-4,12);
-    ctx.strokeStyle='#D9E6FC'; ctx.lineWidth=4; ctx.stroke();
-    [{x:14,c:'#EA5044'},{x:28,c:'#D9BE1A'},{x:42,c:'#23A72F'}].forEach(function(d){
-      ctx.beginPath(); ctx.arc(d.x,14,6,0,Math.PI*2);
-      ctx.fillStyle=d.c; ctx.fill();
-    });
-    m.addImage(id, ctx.getImageData(0,0,W,H));
+    ctx.font = Math.floor(size*0.78)+'px serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, size/2, size/2);
+    m.addImage(id, ctx.getImageData(0,0,size,size));
   }
 
   function initSignals(m){
     if(!window.SIGNAL_DATA) return;
-    makeSignalImage(m, 'signal-icon');
+    makeEmojiImage(m, 'signal-icon', '🚦', 48);
 
     m.addSource(SOURCE, {
       type: 'geojson',
@@ -4425,7 +4396,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       filter: ['!',['has','point_count']],
       layout: {
         'icon-image': 'signal-icon',
-        'icon-size': 0.5,
+        'icon-size': 0.6,
         'icon-allow-overlap': false
       }
     });
