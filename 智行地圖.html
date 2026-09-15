@@ -87,27 +87,6 @@ html,body{
 #radioCard{
   margin:19px 21px 0;
   flex-shrink:0;
-  position:relative;
-}
-#radioInitialOverlay{
-  position:absolute;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:30px;
-  background:#fff;
-  font-size:15px;
-  font-weight:500;
-  color:#000;
-  gap:6px;
-  cursor:pointer;
-  transition:opacity 0.25s;
-  z-index:1;
-}
-#radioInitialOverlay.hidden{
-  opacity:0;
-  pointer-events:none;
 }
 
 
@@ -1304,10 +1283,6 @@ html, body {
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
       <div class="navInfoCard" id="radioCard">
-      <div id="radioInitialOverlay">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2L14 8L3 14V2Z" fill="#000"/></svg>
-        開始播放
-      </div>
       <div class="navInfoCardIcon" id="radioIcon"></div>
       <div class="navInfoCardMeta">
         <div class="navInfoCardText" id="radioName">全國治安交通網</div>
@@ -3756,15 +3731,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     navigator.mediaSession.setActionHandler('stop',  function(){ if(!window._ttsActive) pausePlay(); });
   }
 
-  var _radioInitOverlay = document.getElementById('radioInitialOverlay');
-  if(_radioInitOverlay){
-    _radioInitOverlay.addEventListener('touchstart', function(e){ e.stopPropagation(); }, { passive: true });
-    _radioInitOverlay.addEventListener('touchend', function(e){ e.stopPropagation(); });
-    _radioInitOverlay.addEventListener('click', function(e){ e.stopPropagation(); startPlay(); });
-  }
-
   function startPlay(){
-    if(_radioInitOverlay) _radioInitOverlay.classList.add('hidden');
     setStatus('連線中…');
     updateMediaSession();
     vjs.src([{ src: BASE + STATIONS[idx].code + '/playlist.m3u8', type:'application/x-mpegURL' }]);
