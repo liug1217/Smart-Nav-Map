@@ -1834,27 +1834,20 @@ if (navigator.geolocation) {
     return RECT1_COLLAPSED + dh + 8;
   }
 
-  function _openDrawer() {
+  function _openNavPanel() {
     _buildVoiceList();
     _expandedH = _measureExpanded();
     _voiceDrawer.style.display = 'block';
     _setPanelState(_expandedH, true);
     _drawerOpen = true;
   }
-  function _closeDrawer() {
-    _setPanelState(RECT1_COLLAPSED, true);
-    setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
-    _drawerOpen = false;
-  }
-  function _openNavPanel() {
-    _setPanelState(RECT1_COLLAPSED, true);
-    _drawerOpen = false;
-  }
   function _closeNavPanel() {
     _setPanelState(RECT1_COMPACT, true);
     setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
     _drawerOpen = false;
   }
+  const _openDrawer = _openNavPanel;
+  const _closeDrawer = _closeNavPanel;
 
   // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
@@ -1885,22 +1878,15 @@ if (navigator.geolocation) {
       });
     }
     function _snapPanel(dy) {
-      const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
-      if (dy > 40) {
-        curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
-      } else {
-        _drawerOpen ? _closeDrawer() : _closeNavPanel();
-      }
+      if (dy > 40) _openNavPanel();
+      else _closeNavPanel();
     }
     function _onDragEnd(e) {
       if (_rafId) cancelAnimationFrame(_rafId);
       const dy = _tsY - e.changedTouches[0].clientY;
       if (!_moved || Math.abs(dy) < 8) {
         if (!e.target.closest('button, input, select, a, label')) {
-          const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
-          if (_drawerOpen) { _closeDrawer(); }
-          else if (curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
-          else { _openDrawer(); }
+          _drawerOpen ? _closeNavPanel() : _openNavPanel();
         }
         return;
       }
@@ -1921,9 +1907,7 @@ if (navigator.geolocation) {
         if (!_moved || Math.abs(dy) < 8) {
           const isNav = document.body.classList.contains('navigating');
           const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
-          if (_drawerOpen) { _closeDrawer(); }
-          else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
-          else { _openDrawer(); }
+          _drawerOpen ? _closeNavPanel() : _openNavPanel();
           return;
         }
         _snapPanel(dy);
