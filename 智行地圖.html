@@ -88,26 +88,7 @@ html,body{
   margin:19px 21px 0;
   flex-shrink:0;
 }
-#radioInitialOverlay{
-  position:absolute;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:30px;
-  background:#fff;
-  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:15px;
-  font-weight:500;
-  color:#000000;
-  cursor:pointer;
-  gap:6px;
-  transition:opacity 0.25s;
-}
-#radioInitialOverlay.hidden{
-  opacity:0;
-  pointer-events:none;
-}
+
 
 .rect3{
   position:absolute;
@@ -716,7 +697,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   opacity:0;
   pointer-events:none;
   transition:opacity 0.25s ease;
-  position:relative;
 }
 
 .navInfoCardIcon{
@@ -1303,10 +1283,6 @@ html, body {
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
       <div class="navInfoCard" id="radioCard">
-      <div id="radioInitialOverlay">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 3L15 9L4 15V3Z" fill="#000000"/></svg>
-        開始播放
-      </div>
       <div class="navInfoCardIcon" id="radioIcon"></div>
       <div class="navInfoCardMeta">
         <div class="navInfoCardText" id="radioName">全國治安交通網</div>
@@ -3739,20 +3715,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     navigator.mediaSession.setActionHandler('stop',  function(){ if(!window._ttsActive) pausePlay(); });
   }
 
-  var _radioInitOverlay = document.getElementById('radioInitialOverlay');
-  function _dismissInitOverlay(){
-    if(_radioInitOverlay && !_radioInitOverlay.classList.contains('hidden')){
-      _radioInitOverlay.classList.add('hidden');
-    }
-  }
-  if(_radioInitOverlay){
-    _radioInitOverlay.addEventListener('touchstart', function(e){ e.stopPropagation(); }, { passive: true });
-    _radioInitOverlay.addEventListener('touchend', function(e){ e.stopPropagation(); });
-    _radioInitOverlay.addEventListener('click', function(e){ e.stopPropagation(); startPlay(); });
-  }
-
   function startPlay(){
-    _dismissInitOverlay();
     setStatus('連線中…');
     updateMediaSession();
     vjs.src([{ src: BASE + STATIONS[idx].code + '/playlist.m3u8', type:'application/x-mpegURL' }]);
