@@ -2259,8 +2259,16 @@ if (navigator.geolocation) {
   // 導航狀態機：'idle'|'planning'|'navigating'|'rerouting'|'arriving'|'completed'
   let _navState = 'idle';
   window._getNavState = () => _navState;
-  // 距離播報門檻（公尺，由高到低）
+  // 完整門檻表（供狀態追蹤用，由高到低）
   const NAV_THRESHOLDS = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100];
+
+  // 依車速選出「本次要播報的門檻」：最多 3 次，仿高德 / Google 作法
+  function getActiveThresholds(speedKmh) {
+    if (speedKmh >= 80) return [1000, 500, 100]; // 高速：1公里、500m、100m
+    if (speedKmh >= 60) return [700, 300, 100];  // 快速道路
+    if (speedKmh >= 40) return [500, 200, 100];  // 一般市區
+    return [300, 100];                            // 慢速/巷弄
+  }
 
   const rect8 = document.getElementById('rect8');
   const rect8Icon = document.getElementById('rect8Icon');
@@ -2498,9 +2506,11 @@ if (navigator.geolocation) {
     } else if (!isDepart) {
       const curState = navStepVoiceState[currentStepIndex] || 'idle';
       const curIdx = curState === 'idle' ? -1 : NAV_THRESHOLDS.indexOf(parseInt(curState.slice(1)));
+      const activeSet = new Set(getActiveThresholds(window.currentSpeedKmh || 50));
 
       for (let i = 0; i < NAV_THRESHOLDS.length; i++) {
         const th = NAV_THRESHOLDS[i];
+        if (!activeSet.has(th)) continue; // 不在本速度的播報清單內，跳過
         if (meters > th) continue;
         if (i <= curIdx) continue;
         navStepVoiceState[currentStepIndex] = 'w' + th;
