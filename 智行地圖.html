@@ -2307,12 +2307,22 @@ if (navigator.geolocation) {
     return '繼續前進';
   }
 
+  // 把動態門檻取整到導航 App 慣用的整數距離
+  function roundToNatural(m) {
+    if (m >= 1000) return Math.round(m / 500) * 500; // → 1000, 1500, 2000…
+    if (m >= 200)  return Math.round(m / 100) * 100; // → 200, 300, 400, 500…
+    return Math.round(m / 50) * 50;                  // → 50, 100
+  }
+
   // 依門檻與步驟產生符合規格的語音字串
   function buildNavVoice(step, threshold) {
     const m = step.maneuver;
     if (m.type === 'depart') return null;
     if (m.type === 'arrive') return '您已抵達目的地。';
-    const d = threshold >= 1000 ? '1 公里' : threshold + ' 公尺';
+    const r = roundToNatural(threshold);
+    const d = r >= 1000
+      ? (r / 1000 % 1 === 0 ? (r / 1000) : (r / 1000).toFixed(1)) + ' 公里'
+      : r + ' 公尺';
     if (m.type === 'roundabout' || m.type === 'rotary') {
       const exitNum = m.exit ? ('進入圓環後，從第' + m.exit + '個出口離開。') : '';
       return d + '後進入圓環。' + exitNum;
