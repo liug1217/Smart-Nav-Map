@@ -4965,6 +4965,99 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   };
 })();
 </script>
+
+<!-- ===== WASD 鍵盤駕駛測試 ===== -->
+<div id="kbHud" style="
+  display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.72);backdrop-filter:blur(12px);
+  color:#fff;font-family:'SF Pro Display',Arial,sans-serif;font-size:13px;font-weight:500;
+  padding:7px 16px;border-radius:20px;z-index:9999;
+  pointer-events:none;white-space:nowrap;
+  border:0.5px solid rgba(255,255,255,0.2);
+">⌨️ W油門 S煞車 A左 D右 &nbsp;|&nbsp; <span id="kbSpeedDisplay">0</span> km/h</div>
+
+<script>
+(function(){
+  var active = {};
+  var speed = 0;          // m/s
+  var bearing = 0;        // degrees
+  var lng = null, lat = null;
+  var lastT = null;
+  var hud = document.getElementById('kbHud');
+  var kbSpeedEl = document.getElementById('kbSpeedDisplay');
+
+  var ACCEL   = 5;    // m/s²
+  var BRAKE   = 10;   // m/s²
+  var FRICTION = 1.5; // m/s² natural deceleration
+  var TURN    = 70;   // deg/s
+  var MAX_SPD = 40;   // m/s ≈ 144 km/h
+
+  function isActive(){ return active.w||active.s||active.a||active.d||speed>0.05; }
+
+  function init(){
+    var t = window._vehicleTarget;
+    if(t){ lng=t.lng; lat=t.lat; bearing=t.bearing||0; return; }
+    if(window.currentLon!=null){ lng=window.currentLon; lat=window.currentLat; bearing=0; }
+  }
+
+  function tick(now){
+    requestAnimationFrame(tick);
+    if(!isActive()){ lastT=null; if(hud)hud.style.display='none'; return; }
+    if(hud)hud.style.display='block';
+
+    if(lastT===null){ lastT=now; return; }
+    var dt = Math.min((now-lastT)/1000, 0.1);
+    lastT=now;
+
+    // 初始化座標
+    if(lng===null) init();
+    if(lng===null) return;
+
+    // 轉向（只有在移動中才需要調向）
+    if(active.a) bearing=(bearing-TURN*dt+360)%360;
+    if(active.d) bearing=(bearing+TURN*dt)%360;
+
+    // 油門/煞車/摩擦
+    if(active.w)      speed=Math.min(speed+ACCEL*dt, MAX_SPD);
+    else if(active.s) speed=Math.max(speed-BRAKE*dt, 0);
+    else              speed=Math.max(speed-FRICTION*dt, 0);
+
+    if(speed<0.01) return;
+
+    // 移動
+    var rad = bearing*Math.PI/180;
+    var cosLat = Math.cos(lat*Math.PI/180);
+    var dist = speed*dt;                         // meters
+    lat += (dist*Math.cos(rad))/111320;
+    lng += (dist*Math.sin(rad))/(111320*cosLat);
+
+    // 寫入車輛目標（rAF插值迴圈會接手平滑移動）
+    window._vehicleTarget = {lng:lng, lat:lat, bearing:bearing};
+    window.currentLon = lng;
+    window.currentLat = lat;
+
+    // HUD 速度
+    var kmh = Math.round(speed*3.6);
+    if(kbSpeedEl) kbSpeedEl.textContent = kmh;
+    // 同步主速度顯示
+    var sv = document.getElementById('rect6SpeedValue');
+    if(sv) sv.textContent = kmh;
+  }
+
+  document.addEventListener('keydown', function(e){
+    var k=e.key.toLowerCase();
+    if(['w','a','s','d'].includes(k)){
+      e.preventDefault();
+      if(!active[k]){ active[k]=true; if(lng===null) init(); }
+    }
+  });
+  document.addEventListener('keyup', function(e){
+    active[e.key.toLowerCase()]=false;
+  });
+
+  requestAnimationFrame(tick);
+})();
+</script>
 </body>
 </html>
   
