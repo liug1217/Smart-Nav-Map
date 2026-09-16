@@ -1006,83 +1006,6 @@ html, body {
   display:none;
 }
 
-/* ===== iOS 26 Liquid Glass Tab Bar ===== */
-.liqTabBar{
-  position:fixed;
-  left:25px;
-  right:25px;
-  bottom:calc(234px + env(safe-area-inset-bottom,0px));
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  z-index:10;
-  pointer-events:none;
-}
-.liqTabPill{
-  display:flex;
-  align-items:center;
-  padding:2px;
-  height:54px;
-  width:236px;
-  background:rgba(255,255,255,0.55);
-  backdrop-filter:blur(24px) saturate(180%);
-  -webkit-backdrop-filter:blur(24px) saturate(180%);
-  border:0.5px solid rgba(255,255,255,0.75);
-  border-radius:27px;
-  box-shadow:
-    0 2px 12px rgba(0,0,0,0.12),
-    0 1px 3px rgba(0,0,0,0.06),
-    inset 0 1px 0 rgba(255,255,255,0.9);
-  pointer-events:all;
-}
-.liqTab{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  height:50px;
-  border-radius:25px;
-  cursor:pointer;
-  gap:2px;
-  color:#3C3C43;
-  transition:background 0.2s, box-shadow 0.2s;
-  user-select:none;
-  -webkit-tap-highlight-color:transparent;
-}
-.liqTab.active{
-  background:rgba(255,255,255,0.85);
-  color:#007AFF;
-  box-shadow:0 1px 4px rgba(0,0,0,0.1), inset 0 0.5px 0 rgba(255,255,255,1);
-}
-.liqTab svg{ flex-shrink:0; }
-.liqTabLabel{
-  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:10px;
-  font-weight:500;
-  line-height:1;
-}
-.liqSideBtn{
-  width:54px;
-  height:54px;
-  background:rgba(255,255,255,0.55);
-  backdrop-filter:blur(24px) saturate(180%);
-  -webkit-backdrop-filter:blur(24px) saturate(180%);
-  border:0.5px solid rgba(255,255,255,0.75);
-  border-radius:27px;
-  box-shadow:
-    0 2px 12px rgba(0,0,0,0.12),
-    0 1px 3px rgba(0,0,0,0.06),
-    inset 0 1px 0 rgba(255,255,255,0.9);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  pointer-events:all;
-  flex-shrink:0;
-  color:#3C3C43;
-  -webkit-tap-highlight-color:transparent;
-}
 </style>
 </head>
 <body>
@@ -1347,36 +1270,6 @@ html, body {
     </div>
   </div>
 </div>
-<!-- iOS 26 Liquid Glass Tab Bar -->
-<div class="liqTabBar" id="liqTabBar">
-  <div class="liqTabPill">
-    <!-- Tab 1: 地圖 -->
-    <div class="liqTab active" id="liqTab1" onclick="liqSwitch(1)">
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M1.5 5.5L8 3l6 3 6.5-3v13L14 16.5l-6-3-6.5 2.5V5.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="currentColor" fill-opacity="0.1"/>
-        <line x1="8" y1="3" x2="8" y2="16.5" stroke="currentColor" stroke-width="1.3"/>
-        <line x1="14" y1="6" x2="14" y2="19.5" stroke="currentColor" stroke-width="1.3"/>
-      </svg>
-      <span class="liqTabLabel">地圖</span>
-    </div>
-    <!-- Tab 2: 搜尋 -->
-    <div class="liqTab" id="liqTab2" onclick="liqSwitch(2)">
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M15 15L19.5 19.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      <span class="liqTabLabel">搜尋</span>
-    </div>
-  </div>
-  <!-- 右側：CCTV -->
-  <div class="liqSideBtn" id="liqCctvBtn">
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="6" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/>
-      <path d="M15 9.5l5.5-2.5v8L15 12.5V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-    </svg>
-  </div>
-</div>
-
 <div class="rect1" id="rect1">
     <div class="rect3" id="rect3Handle"></div>
     <div class="rect1Body">
@@ -1573,13 +1466,6 @@ if (navigator.geolocation) {
     });
     searchResultsList.style.display = 'block';
   }
-
-  // ===== Liquid Glass Tab Bar =====
-  window.liqSwitch = function(n) {
-    document.querySelectorAll('.liqTab').forEach((t, i) => {
-      t.classList.toggle('active', i + 1 === n);
-    });
-  };
 
   // ===== 退出導航（不需重新載入頁面）=====
   function stopNavigation() {
