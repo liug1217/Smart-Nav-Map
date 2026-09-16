@@ -2249,6 +2249,7 @@ if (navigator.geolocation) {
   let navSteps = [];
   let currentStepIndex = 0;
   const navStepVoiceState = {}; // key: 步驟索引, value: idle/w1000/w900/.../w100
+  let _lastNavAnnounceMs = 0;   // 上次轉彎播報的時間戳（毫秒），用於最小間隔保護
   // 導航狀態機：'idle'|'planning'|'navigating'|'rerouting'|'arriving'|'completed'
   let _navState = 'idle';
   window._getNavState = () => _navState;
@@ -2512,16 +2513,23 @@ if (navigator.geolocation) {
         })();
       }
     } else if (!isDepart) {
+      // 最小間隔保護：兩次轉彎播報至少間隔 8 秒，避免唸完馬上接下一句
+      if (Date.now() - _lastNavAnnounceMs < 8000) return;
+
       const curState = navStepVoiceState[currentStepIndex] || 'idle';
       const lastDist = curState === 'idle' ? Infinity : parseInt(curState.slice(1));
       const active = getActiveThresholds(window.currentSpeedKmh || 50); // [遠→近]
+      const nearTh = active[active.length - 1];
+      const speedMs = Math.max((window.currentSpeedKmh || 50) / 3.6, 1);
 
       for (const th of active) {
         if (meters > th) continue;     // 還沒到這個距離
         if (th >= lastDist) continue;  // 已播報過此距離以上的提示
+        // 仿 OsmAnd：中/遠段播報若距轉彎剩不到 15 秒，跳過（讓 near 來念）
+        if (th > nearTh && meters / speedMs < 15) continue;
         navStepVoiceState[currentStepIndex] = 'w' + th;
         const voiceText = buildNavVoice(step, th);
-        if (voiceText) speakText(voiceText);
+        if (voiceText) { speakText(voiceText); _lastNavAnnounceMs = Date.now(); }
         break;
       }
     }
