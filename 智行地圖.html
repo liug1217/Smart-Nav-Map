@@ -2259,15 +2259,20 @@ if (navigator.geolocation) {
   // 導航狀態機：'idle'|'planning'|'navigating'|'rerouting'|'arriving'|'completed'
   let _navState = 'idle';
   window._getNavState = () => _navState;
-  // 完整門檻表（供狀態追蹤用，由高到低）
-  const NAV_THRESHOLDS = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100];
-
-  // 依車速選出「本次要播報的門檻」：最多 3 次，仿高德 / Google 作法
+  // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
+  // 回傳陣列由遠到近，最多 3 個值
   function getActiveThresholds(speedKmh) {
-    if (speedKmh >= 80) return [1000, 500, 100]; // 高速：1公里、500m、100m
-    if (speedKmh >= 60) return [700, 300, 100];  // 快速道路
-    if (speedKmh >= 40) return [500, 200, 100];  // 一般市區
-    return [300, 100];                            // 慢速/巷弄
+    const ms = Math.max(1, speedKmh / 3.6);
+    const far  = Math.min(2000, Math.max(400, Math.round(ms * 115 / 50) * 50));
+    const mid  = Math.min(600,  Math.max(150, Math.round(ms * 22  / 25) * 25));
+    const near = Math.min(120,  Math.max(60,  Math.round(ms * 6.7 / 10) * 10));
+    // 去重並過濾太接近的值（差距 < 50m 不重複播報）
+    const raw = [far, mid, near];
+    const out = [raw[0]];
+    for (let i = 1; i < raw.length; i++) {
+      if (raw[i] < out[out.length - 1] - 49) out.push(raw[i]);
+    }
+    return out;
   }
 
   const rect8 = document.getElementById('rect8');
@@ -2505,14 +2510,12 @@ if (navigator.geolocation) {
       }
     } else if (!isDepart) {
       const curState = navStepVoiceState[currentStepIndex] || 'idle';
-      const curIdx = curState === 'idle' ? -1 : NAV_THRESHOLDS.indexOf(parseInt(curState.slice(1)));
-      const activeSet = new Set(getActiveThresholds(window.currentSpeedKmh || 50));
+      const lastDist = curState === 'idle' ? Infinity : parseInt(curState.slice(1));
+      const active = getActiveThresholds(window.currentSpeedKmh || 50); // [遠→近]
 
-      for (let i = 0; i < NAV_THRESHOLDS.length; i++) {
-        const th = NAV_THRESHOLDS[i];
-        if (!activeSet.has(th)) continue; // 不在本速度的播報清單內，跳過
-        if (meters > th) continue;
-        if (i <= curIdx) continue;
+      for (const th of active) {
+        if (meters > th) continue;     // 還沒到這個距離
+        if (th >= lastDist) continue;  // 已播報過此距離以上的提示
         navStepVoiceState[currentStepIndex] = 'w' + th;
         const voiceText = buildNavVoice(step, th);
         if (voiceText) speakText(voiceText);
@@ -2814,24 +2817,17 @@ if (navigator.geolocation) {
         const firstRoadPart = firstStep.name ? ('進入' + firstStep.name) : '';
         const prevStep = navSteps[firstTurnIndex - 1];
         const firstStepDistanceMeters = prevStep ? prevStep.distance : null;
-        // 標記已通過的門檻：依出發距離預先標記更高的門檻，避免在近距離出發時播報遠距離提示
+        // 以出發距離作為「上次播報」基準，自動跳過比出發點更遠的門檻
         currentStepIndex = firstTurnIndex;
-        (function(){
-          const initDist = firstStepDistanceMeters || 1200;
-          let preMarkIdx = -1;
-          for (let _i = 0; _i < NAV_THRESHOLDS.length; _i++) {
-            if (NAV_THRESHOLDS[_i] > initDist) preMarkIdx = _i;
-            else break;
-          }
-          navStepVoiceState[firstTurnIndex] = preMarkIdx >= 0 ? ('w' + NAV_THRESHOLDS[preMarkIdx]) : 'idle';
-        })();
+        navStepVoiceState[firstTurnIndex] = 'w' + (firstStepDistanceMeters || 1200);
         updateRect8Display(firstStepDistanceMeters);
 
         if (fromPosition) {
           // 重新規劃：只播報下一個轉彎指示
           if (firstStepDistanceMeters != null) {
             const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            const nearTh = NAV_THRESHOLDS.find(th => th <= initMeters) || NAV_THRESHOLDS[NAV_THRESHOLDS.length - 1];
+            const initActive = getActiveThresholds(window.currentSpeedKmh || 50);
+            const nearTh = initActive.find(th => th <= initMeters) || initActive[initActive.length - 1];
             const initVoice = buildNavVoice(firstStep, nearTh);
             if (initVoice) speakText(initVoice);
           }
@@ -2848,7 +2844,8 @@ if (navigator.geolocation) {
           const items = ['開始導航', '全程' + distKmInt + '公里', durText, etaText];
           if (firstStepDistanceMeters != null) {
             const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            const nearTh = NAV_THRESHOLDS.find(th => th <= initMeters) || NAV_THRESHOLDS[NAV_THRESHOLDS.length - 1];
+            const initActive2 = getActiveThresholds(window.currentSpeedKmh || 50);
+            const nearTh = initActive2.find(th => th <= initMeters) || initActive2[initActive2.length - 1];
             const initVoice = buildNavVoice(firstStep, nearTh);
             if (initVoice) items.push(initVoice);
           } else if (firstText) {
