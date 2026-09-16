@@ -2955,6 +2955,13 @@ if (navigator.geolocation) {
   window.testSpeedCameraVoice = function(lat, lon, speedKmh){
     checkSpeedCameraVoice(lat, lon, speedKmh || 0);
   };
+  // 供鍵盤測試模式呼叫，完全模擬真實 GPS 更新流程
+  window._navPositionUpdate = function(lat, lng, speedKmh){
+    checkTurnByTurn(lat, lng);
+    checkSpeedCameraVoice(lat, lng, speedKmh || 0);
+    if(typeof updateDisplay === 'function') updateDisplay(speedKmh || 0, 0);
+    if(typeof requestRoadNameUpdate === 'function') requestRoadNameUpdate(lng, lat);
+  };
   // 重置所有測速照相的播報狀態,方便重複測試同一支
   window.resetSpeedCameraVoiceState = function(){
     Object.keys(speedCameraVoiceState).forEach(k => delete speedCameraVoiceState[k]);
@@ -5036,12 +5043,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     window.currentLon = lng;
     window.currentLat = lat;
 
-    // HUD 速度
     var kmh = Math.round(speed*3.6);
+    window.currentSpeedKmh = kmh;
+
+    // HUD 速度
     if(kbSpeedEl) kbSpeedEl.textContent = kmh;
-    // 同步主速度顯示
-    var sv = document.getElementById('rect6SpeedValue');
-    if(sv) sv.textContent = kmh;
+
+    // ===== 觸發與真實 GPS 完全相同的導航邏輯 =====
+    if(typeof window._navPositionUpdate === 'function') window._navPositionUpdate(lat, lng, kmh);
   }
 
   document.addEventListener('keydown', function(e){
