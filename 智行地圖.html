@@ -1020,13 +1020,6 @@ html, body {
 
 <div id="map"></div>
 
-<!-- 長按地圖底部選單 -->
-<div id="longpressSheet" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:rgba(30,30,35,0.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:18px 18px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -4px 24px rgba(0,0,0,0.4);">
-  <div style="width:36px;height:4px;background:rgba(255,255,255,0.25);border-radius:2px;margin:0 auto 16px;"></div>
-  <div id="longpressCoordLabel" style="color:rgba(255,255,255,0.5);font-size:12px;text-align:center;margin-bottom:16px;font-family:system-ui,sans-serif;"></div>
-  <button id="longpressNavBtn" style="width:100%;padding:14px;background:#2F80FF;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;font-family:system-ui,sans-serif;cursor:pointer;margin-bottom:10px;" onclick="window._longpressConfirmNav()">導航到這裡</button>
-  <button style="width:100%;padding:14px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.8);border:none;border-radius:12px;font-size:16px;font-family:system-ui,sans-serif;cursor:pointer;" onclick="document.getElementById('longpressSheet').style.display='none'">取消</button>
-</div>
 
 <!-- 🌩️ 天氣特報橫幅(目前所在縣市有特報時顯示) -->
 <div class="weatherAlert" id="weatherAlert"></div>
@@ -3778,68 +3771,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script>
-// ===== 長按地圖顯示導航選單 =====
-(function() {
-  var _lpTimer = null;
-  var _lpStartX = 0, _lpStartY = 0;
-  var _lpLngLat = null;
-  const LONG_PRESS_MS = 500;
-  const MOVE_CANCEL_PX = 10;
-
-  function _showSheet(lngLat) {
-    _lpLngLat = lngLat;
-    const sheet = document.getElementById('longpressSheet');
-    const label = document.getElementById('longpressCoordLabel');
-    if (label) label.textContent = lngLat.lat.toFixed(5) + ', ' + lngLat.lng.toFixed(5);
-    if (sheet) sheet.style.display = 'block';
-  }
-
-  window._longpressConfirmNav = function() {
-    const sheet = document.getElementById('longpressSheet');
-    if (sheet) sheet.style.display = 'none';
-    if (!_lpLngLat) return;
-    if (typeof window.selectDestination === 'function') {
-      window.selectDestination(_lpLngLat.lat, _lpLngLat.lng, '長按選點', '');
-    }
-  };
-
-  map.on('load', function() {
-    var canvas = map.getCanvas();
-
-    canvas.addEventListener('touchstart', function(e) {
-      if (e.touches.length !== 1) return;
-      _lpStartX = e.touches[0].clientX;
-      _lpStartY = e.touches[0].clientY;
-      var touch = e.touches[0];
-      _lpTimer = setTimeout(function() {
-        var pt = map.unproject([touch.clientX, touch.clientY]);
-        _showSheet(pt);
-      }, LONG_PRESS_MS);
-    }, { passive: true });
-
-    canvas.addEventListener('touchmove', function(e) {
-      if (!_lpTimer) return;
-      var dx = e.touches[0].clientX - _lpStartX;
-      var dy = e.touches[0].clientY - _lpStartY;
-      if (Math.sqrt(dx*dx + dy*dy) > MOVE_CANCEL_PX) {
-        clearTimeout(_lpTimer);
-        _lpTimer = null;
-      }
-    }, { passive: true });
-
-    canvas.addEventListener('touchend', function() {
-      clearTimeout(_lpTimer);
-      _lpTimer = null;
-    }, { passive: true });
-
-    canvas.addEventListener('touchcancel', function() {
-      clearTimeout(_lpTimer);
-      _lpTimer = null;
-    }, { passive: true });
-  });
-})();
-</script>
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
@@ -5000,11 +4931,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var hud = document.getElementById('kbHud');
   var kbSpeedEl = document.getElementById('kbSpeedDisplay');
 
-  var ACCEL   = 5;    // m/s²
-  var BRAKE   = 10;   // m/s²
-  var FRICTION = 1.5; // m/s² natural deceleration
-  var TURN    = 70;   // deg/s
-  var MAX_SPD = 40;   // m/s ≈ 144 km/h
+  var ACCEL   = 2;    // m/s²
+  var BRAKE   = 6;    // m/s²
+  var FRICTION = 2;   // m/s² natural deceleration
+  var TURN    = 60;   // deg/s
+  var MAX_SPD = 14;   // m/s ≈ 50 km/h
 
   function isActive(){ return active.w||active.s||active.a||active.d||speed>0.05; }
 
