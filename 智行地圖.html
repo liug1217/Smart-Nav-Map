@@ -64,7 +64,7 @@ html,body{
 /* rect1 flex 內部排版 */
 .rect1Body{
   box-sizing:border-box;
-  height:160px;
+  height:auto;
   padding:18px 0 6px;
   display:flex;
   flex-direction:column;
@@ -1288,7 +1288,10 @@ html, body {
         </div>
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
-      <div class="navInfoCard" id="radioCard">
+    </div><!-- /rect1Body -->
+    <!-- 語音設定：在導航下方，overflow:hidden 收起時自動隱藏 -->
+    <div id="voiceDrawer" style="padding:4px 20px 14px;margin-top:2px;display:none;">
+      <div class="navInfoCard" id="radioCard" style="margin:0 0 12px;opacity:1;pointer-events:auto;">
       <button class="radioStartBtn" id="radioStartBtn">
         <svg width="13" height="15" viewBox="0 0 13 15" fill="none"><path d="M1.5 1.5L11.5 7.5L1.5 13.5V1.5Z" fill="#000"/></svg>
         開始播放
@@ -1332,9 +1335,6 @@ html, body {
         </div>
       </div>
     </div>
-    </div><!-- /rect1Body -->
-    <!-- 語音設定：在導航下方，overflow:hidden 收起時自動隱藏 -->
-    <div id="voiceDrawer" style="padding:4px 20px 14px;margin-top:2px;display:none;">
       <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🔊 導航語音</div>
       <div id="voiceList" style="display:flex;flex-direction:column;gap:6px;max-height:35vh;overflow-y:auto;"></div>
       <div style="margin-top:12px;font-size:12px;color:#666;">語速
@@ -1805,18 +1805,15 @@ if (navigator.geolocation) {
     var r1 = document.getElementById('rect1');
     var mc = document.querySelector('.mapCtrlGroup');
     var r4 = document.querySelector('.rect4');
-    var rd = document.getElementById('radioCard');
     var isNav = document.body.classList.contains('navigating');
-    var l, bot, mcBot, r4Bot, showRadio;
-    var COMPACT = 83, NORMAL = 160;
+    var l, bot, mcBot, r4Bot;
+    var COMPACT = 83;
     var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
-    if (h >= NORMAL) {
-      l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
-    } else if (h <= COMPACT) {
-      l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
+    if (h <= COMPACT) {
+      l = 16; bot = 16; mcBot = 116; r4Bot = 109;
     } else {
-      var t = (h - COMPACT) / (NORMAL - COMPACT);
-      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 69; r4Bot = 109 + t * 69; showRadio = t > 0.7;
+      var t = Math.min(1, (h - COMPACT) / 80);
+      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 69; r4Bot = 109 + t * 69;
     }
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
@@ -1825,7 +1822,6 @@ if (navigator.geolocation) {
     if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
     if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
-    if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? 'auto' : 'none'; }
     var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
     if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
@@ -1845,7 +1841,8 @@ if (navigator.geolocation) {
     const dh = _voiceDrawer.offsetHeight;
     _voiceDrawer.style.display = 'none';
     _voiceDrawer.style.visibility = '';
-    return RECT1_COLLAPSED + dh + 8;
+    const bh = _rect1El.querySelector('.rect1Body').offsetHeight;
+    return bh + dh + 8;
   }
 
   function _openNavPanel() {
@@ -1904,7 +1901,7 @@ if (navigator.geolocation) {
     function _snapPanel(dy) {
       const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
       if (dy > 40) {
-        curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
+        _openDrawer();
       } else {
         _drawerOpen ? _closeDrawer() : _closeNavPanel();
       }
@@ -1916,7 +1913,7 @@ if (navigator.geolocation) {
       if (!_moved || Math.abs(dy) < 8) {
         const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
         if (_drawerOpen) { _closeDrawer(); }
-        else if (curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
+        else if (curH <= RECT1_COMPACT + 10) { _openDrawer(); }
         return;
       }
       _snapPanel(dy);
@@ -1936,7 +1933,7 @@ if (navigator.geolocation) {
         const dy = _tsY - e.changedTouches[0].clientY;
         if (!_moved || Math.abs(dy) < 8) {
           const isNav = document.body.classList.contains('navigating');
-          const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
+          const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
           if (_drawerOpen) { _closeDrawer(); }
           else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
           else { _openDrawer(); }
