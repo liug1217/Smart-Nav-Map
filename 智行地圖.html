@@ -1299,6 +1299,7 @@ html, body {
           <div class="navInfoCardText" id="radioName">全國治安交通網</div>
           <div class="navInfoCardFreqRow">
             <div class="navInfoCardFreq" id="radioFreq">104.9 MHz</div>
+            <div id="radioStatus" class="navInfoCardStatus" style="margin-left:6px;color:#888;flex-shrink:0;"></div>
             <div class="radioWaveform" id="radioWaveform">
               <span></span><span></span><span></span><span></span><span></span>
             </div>
@@ -2132,6 +2133,27 @@ if (navigator.geolocation) {
     speakQueue([text]);
   }
 
+  // 測速照相通過提示音（Web Audio，雙音短促，不走語音佇列）
+  function playSpeedCameraPassBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      function tone(freq, start, dur) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0, start);
+        g.gain.linearRampToValueAtTime(0.35, start + 0.01);
+        g.gain.linearRampToValueAtTime(0, start + dur);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(start); o.stop(start + dur + 0.01);
+      }
+      tone(880, ctx.currentTime,        0.12);
+      tone(1100, ctx.currentTime + 0.16, 0.12);
+      setTimeout(function(){ ctx.close(); }, 600);
+    } catch(e) { /* 瀏覽器不支援則靜音 */ }
+  }
+
   // 依序播放多段語音（序列化：同時只跑一個，新的等舊的跑完再播）
   let _sqBusy = false;
   let _sqPending = null;
@@ -2269,9 +2291,9 @@ if (navigator.geolocation) {
   // 回傳陣列由遠到近，最多 3 個值
   function getActiveThresholds(speedKmh) {
     const ms = Math.max(1, speedKmh / 3.6);
-    const far  = Math.min(2000, Math.max(400, Math.round(ms * 115 / 50) * 50));
-    const mid  = Math.min(600,  Math.max(150, Math.round(ms * 22  / 25) * 25));
-    const near = Math.min(120,  Math.max(60,  Math.round(ms * 6.7 / 10) * 10));
+    const far  = Math.min(3500, Math.max(400, Math.round(ms * 115 / 50) * 50));
+    const mid  = Math.min(700,  Math.max(150, Math.round(ms * 22  / 25) * 25));
+    const near = Math.min(200,  Math.max(60,  Math.round(ms * 6.7 / 10) * 10));
     // 去重並過濾太接近的值（差距 < 50m 不重複播報）
     const raw = [far, mid, near];
     const out = [raw[0]];
@@ -2328,7 +2350,7 @@ if (navigator.geolocation) {
   }
 
   // 依門檻與步驟產生符合規格的語音字串
-  function buildNavVoice(step, threshold) {
+  function buildNavVoice(step, threshold, isPrepare) {
     const m = step.maneuver;
     if (m.type === 'depart') return null;
     if (m.type === 'arrive') return '您已抵達目的地。';
@@ -2336,29 +2358,71 @@ if (navigator.geolocation) {
     const d = r >= 1000
       ? (r / 1000 % 1 === 0 ? (r / 1000) : (r / 1000).toFixed(1)) + ' 公里'
       : r + ' 公尺';
+    const sn = step.name || null;
+    const into = sn ? ('進入' + sn) : '';
     if (m.type === 'roundabout' || m.type === 'rotary') {
       const exitNum = m.exit ? ('進入圓環後，從第' + m.exit + '個出口離開。') : '';
-      return d + '後進入圓環。' + exitNum;
+      return isPrepare ? ('前方' + d + '準備進入圓環。' + exitNum) : (d + '後進入圓環。' + exitNum);
     }
-    if (m.type === 'merge') return d + '後匯入主線。';
+    if (m.type === 'merge') return isPrepare ? ('前方' + d + '準備匯入主線。') : (d + '後匯入主線。');
     if (m.type === 'off ramp') {
-      const name = step.name || null;
-      return name ? (d + '後，請靠右下交流道，' + name + '。') : (d + '後，請靠右下交流道。');
+      return isPrepare
+        ? ('前方' + d + '準備靠右下交流道' + (sn ? '，' + sn : '') + '。')
+        : (d + '後請靠右下交流道' + (sn ? '，' + sn : '') + '。');
     }
     if (m.type === 'on ramp') {
-      return d + '後' + ((m.modifier && m.modifier.includes('left')) ? '請靠左' : '請靠右') + '上匝道。';
+      const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
+      return isPrepare ? ('前方' + d + '準備' + side + '上匝道。') : (d + '後請' + side + '上匝道。');
     }
     if (m.type === 'fork') {
-      return (m.modifier && m.modifier.includes('left')) ? (d + '後請靠左行駛。') : (d + '後請靠右行駛。');
+      const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
+      return isPrepare ? ('前方' + d + '準備' + side + '行駛。') : (d + '後請' + side + '行駛。');
     }
     const mod = m.modifier || '';
-    if (mod === 'left'  || mod === 'sharp left')  return d + '後請左轉。';
-    if (mod === 'right' || mod === 'sharp right') return d + '後請右轉。';
-    if (mod === 'slight left')  return d + '後向左前方行駛。';
-    if (mod === 'slight right') return d + '後向右前方行駛。';
+    if (mod === 'left' || mod === 'sharp left') {
+      return isPrepare ? ('前方' + d + '準備左轉' + (into ? into : '') + '。') : (d + '後請左轉' + (into ? into : '') + '。');
+    }
+    if (mod === 'right' || mod === 'sharp right') {
+      return isPrepare ? ('前方' + d + '準備右轉' + (into ? into : '') + '。') : (d + '後請右轉' + (into ? into : '') + '。');
+    }
+    if (mod === 'slight left') {
+      return isPrepare ? ('前方' + d + '準備靠左' + (into ? into : '') + '。') : (d + '後請靠左' + (into ? into : (sn ? '' : '行駛')) + '。');
+    }
+    if (mod === 'slight right') {
+      return isPrepare ? ('前方' + d + '準備靠右' + (into ? into : '') + '。') : (d + '後請靠右' + (into ? into : (sn ? '' : '行駛')) + '。');
+    }
     if (mod === 'uturn') return d + '後迴轉。';
     if (mod === 'straight' || m.type === 'continue' || m.type === 'new name') return d + '後直行。';
     return d + '後' + maneuverToChinese(m) + '。';
+  }
+
+  function buildImmediateNavVoice(step) {
+    const m = step.maneuver;
+    if (m.type === 'depart') return null;
+    if (m.type === 'arrive') return '您已抵達目的地。';
+    const sn = step.name || null;
+    const into = sn ? ('進入' + sn) : '';
+    if (m.type === 'roundabout' || m.type === 'rotary') {
+      return m.exit ? ('請進入圓環，從第' + m.exit + '個出口離開。') : '請進入圓環。';
+    }
+    if (m.type === 'merge') return '請匯入主線。';
+    if (m.type === 'off ramp') {
+      return sn ? ('請靠右下交流道，' + sn + '。') : '請靠右下交流道。';
+    }
+    if (m.type === 'on ramp') {
+      return (m.modifier && m.modifier.includes('left')) ? '請靠左上匝道。' : '請靠右上匝道。';
+    }
+    if (m.type === 'fork') {
+      return (m.modifier && m.modifier.includes('left')) ? '請靠左行駛。' : '請靠右行駛。';
+    }
+    const mod = m.modifier || '';
+    if (mod === 'left'  || mod === 'sharp left')  return '請左轉' + into + '。';
+    if (mod === 'right' || mod === 'sharp right') return '請右轉' + into + '。';
+    if (mod === 'slight left')  return sn ? ('請靠左' + into + '。') : '請靠左行駛。';
+    if (mod === 'slight right') return sn ? ('請靠右' + into + '。') : '請靠右行駛。';
+    if (mod === 'uturn') return '請迴轉。';
+    if (mod === 'straight' || m.type === 'continue' || m.type === 'new name') return null;
+    return '請' + maneuverToChinese(m) + '。';
   }
 
   // 轉彎方向對應的箭頭圖示
@@ -2470,9 +2534,9 @@ if (navigator.geolocation) {
 
     if (meters <= 15) {
       const already = navStepVoiceState[currentStepIndex];
-      if (!isDepart && already !== 'w100') {
-        const v = buildNavVoice(step, 100);
-        if (v) speakText(v);
+      if (!isDepart && already !== 'immediate') {
+        const v = buildImmediateNavVoice(step);
+        if (v) { speakText(v); navStepVoiceState[currentStepIndex] = 'immediate'; }
       }
       currentStepIndex++;
       if (window._navStats) window._navStats.turns++;
@@ -2534,13 +2598,15 @@ if (navigator.geolocation) {
       const nearTh = active[active.length - 1];
       const speedMs = Math.max((window.currentSpeedKmh || 50) / 3.6, 1);
 
-      for (const th of active) {
+      for (let _i = 0; _i < active.length; _i++) {
+        const th = active[_i];
         if (meters > th) continue;     // 還沒到這個距離
         if (th >= lastDist) continue;  // 已播報過此距離以上的提示
         // 仿 OsmAnd：中/遠段播報若距轉彎剩不到 15 秒，跳過（讓 near 來念）
         if (th > nearTh && meters / speedMs < 15) continue;
         navStepVoiceState[currentStepIndex] = 'w' + th;
-        const voiceText = buildNavVoice(step, th);
+        const isPrepare = (_i === 0 && active.length > 1);
+        const voiceText = buildNavVoice(step, th, isPrepare);
         if (voiceText) { speakText(voiceText); _lastNavAnnounceMs = Date.now(); }
         break;
       }
@@ -2955,7 +3021,7 @@ if (navigator.geolocation) {
           if (window._navStats) window._navStats.cleanCams++;
           localStorage.setItem('sn_cam_clean', (parseInt(localStorage.getItem('sn_cam_clean')||'0')+1));
         }
-        speakText('通過測速照相。');
+        playSpeedCameraPassBeep();
         speedCameraVoiceState[idx] = 'passed';
       } else {
         const camCurIdx = state === 'idle' ? -1 : CAM_THRESHOLDS.indexOf(parseInt(state.slice(1)));
@@ -3810,14 +3876,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
   var STATIONS = [
     { code:'mp3:PBS', name:'全國治安交通網', freq:'104.9' },
-    { code:'TPS',     name:'台北廣播電台',   freq:'94.3'  },
-    { code:'TCS',     name:'台中廣播電台',   freq:'94.5'  },
-    { code:'KSS',     name:'高雄廣播電台',   freq:'93.1'  },
-    { code:'ELS',     name:'宜蘭廣播電台',   freq:'101.3' },
-    { code:'HLS',     name:'花蓮廣播電台',   freq:'94.3'  },
-    { code:'TTS',     name:'台東廣播電台',   freq:'94.3'  },
-    { code:'SCS',     name:'新竹廣播電台',   freq:'94.9'  },
-    { code:'TNS',     name:'台南廣播電台',   freq:'94.7'  },
+    { code:'TPS',     name:'臺北分臺',   freq:'94.3'  },
+    { code:'TCS',     name:'臺中分臺',   freq:'94.5'  },
+    { code:'KSS',     name:'高雄分臺',   freq:'93.1'  },
+    { code:'ELS',     name:'宜蘭分臺',   freq:'101.3' },
+    { code:'HLS',     name:'花蓮分臺',   freq:'94.3'  },
+    { code:'TTS',     name:'臺東分臺',   freq:'94.3'  },
+    { code:'SCS',     name:'新竹分臺',   freq:'94.9'  },
+    { code:'TNS',     name:'臺南分臺',   freq:'94.7'  },
   ];
   var TICK_W = 60;
   var idx = 0;
@@ -3879,19 +3945,47 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     navigator.mediaSession.setActionHandler('stop',  function(){ if(!window._ttsActive) pausePlay(); });
   }
 
+  var _reconnectTimer = null;
+  var _reconnectCount = 0;
+  var _userPaused = false;
+
+  function _cancelReconnect(){
+    if(_reconnectTimer){ clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+  }
+  function _scheduleReconnect(){
+    if(_userPaused) return;
+    _reconnectCount++;
+    if(_reconnectCount > 3){ setStatus('連線失敗，點擊重試'); return; }
+    var delay = [1000, 2000, 4000][_reconnectCount - 1] || 4000;
+    setStatus('重連中…');
+    _reconnectTimer = setTimeout(function(){
+      _reconnectTimer = null;
+      if(!_userPaused) startPlay();
+    }, delay);
+  }
+
   function startPlay(){
+    _userPaused = false;
+    _cancelReconnect();
+    _reconnectCount = 0;
     setStatus('連線中…');
     updateMediaSession();
     vjs.src([{ src: BASE + STATIONS[idx].code + '/playlist.m3u8', type:'application/x-mpegURL' }]);
     vjs.play().catch(function(){ setPlaying(false); setStatus('點擊收聽'); });
   }
-  function pausePlay(){ vjs.pause(); setPlaying(false); setStatus('已暫停'); }
+  function pausePlay(){
+    _userPaused = true;
+    _cancelReconnect();
+    vjs.pause(); setPlaying(false); setStatus('已暫停');
+  }
 
   function switchStation(delta){
+    _cancelReconnect();
+    _reconnectCount = 0;
     idx = (idx + delta + STATIONS.length) % STATIONS.length;
     updateDial();
     if(playing){ vjs.pause(); startPlay(); }
-    else { setStatus('點擊收聽'); }
+    else { _userPaused = false; setStatus('點擊收聽'); }
   }
 
   var radioStartBtn = document.getElementById('radioStartBtn');
@@ -3962,7 +4056,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   vjs.on('playing', function(){ setPlaying(true); setStatus('直播中'); });
   vjs.on('waiting', function(){ if(playing && !window._ttsActive) setStatus('緩衝中…'); });
-  vjs.on('error',   function(){ setPlaying(false); setStatus('點擊重試'); });
+  vjs.on('error',   function(){ setPlaying(false); if(!_userPaused){ _scheduleReconnect(); } else { setStatus('點擊重試'); } });
   vjs.on('pause',   function(){ if(window._ttsActive) return; if(playing){ setPlaying(false); setStatus('已暫停'); } });
   window.addEventListener('pagehide', function(){ if(playing) pausePlay(); });
 
