@@ -1878,9 +1878,7 @@ if (navigator.geolocation) {
       const dy = _tsY - e.touches[0].clientY;
       if (!_moved && Math.abs(dy) < 5) return;
       e.preventDefault();
-      const isNav = document.body.classList.contains('navigating');
-      const minH = isNav ? RECT1_COMPACT : RECT1_COLLAPSED;
-      const newH = Math.min(_expandedH, Math.max(minH, _curH + dy));
+      const newH = Math.min(_expandedH, Math.max(RECT1_COMPACT, _curH + dy));
       _moved = true;
       if (_rafId) cancelAnimationFrame(_rafId);
       _rafId = requestAnimationFrame(() => {
@@ -1891,14 +1889,14 @@ if (navigator.geolocation) {
     function _snapPanel(dy) {
       const isNav = document.body.classList.contains('navigating');
       const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
-      if (isNav) {
-        if (dy > 40) {
+      if (dy > 40) {
+        if (isNav) {
           curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
         } else {
-          _drawerOpen ? _closeDrawer() : _closeNavPanel();
+          _openDrawer();
         }
       } else {
-        dy > 40 ? _openDrawer() : _closeDrawer();
+        _drawerOpen ? _closeDrawer() : _closeNavPanel();
       }
     }
     function _onDragEnd(e) {
