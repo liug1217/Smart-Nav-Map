@@ -1906,7 +1906,6 @@ if (navigator.geolocation) {
         const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
         if (_drawerOpen) { _closeDrawer(); }
         else if (curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
-        else { _openDrawer(); }
         return;
       }
       _snapPanel(dy);
