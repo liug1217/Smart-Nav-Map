@@ -24,7 +24,6 @@
   z-index:2;
 }
 
-:root{ --sab: env(safe-area-inset-bottom, 0px); }
 html,body{
   margin:0;
   padding:0;
@@ -38,17 +37,17 @@ html,body{
   position:absolute;
   left:0;
   right:0;
-  bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  bottom:8px;
   height:160px;
 }
 
 .rect1{
   box-sizing:border-box;
   position:fixed;
-  left:16px;
-  right:16px;
-  bottom:calc(16px + env(safe-area-inset-bottom, 0px));
-  height:83px;
+  left:8px;
+  right:8px;
+  bottom:8px;
+  height:160px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   border-radius:40px;
@@ -65,7 +64,7 @@ html,body{
 .rect1Body{
   box-sizing:border-box;
   height:160px;
-  padding:18px 0 6px;
+  padding:18px 4px 6px;
   display:flex;
   flex-direction:column;
   flex-shrink:0;
@@ -74,7 +73,7 @@ html,body{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:0 15px;
+  padding:0 11px;
   flex-shrink:0;
 }
 .rect1Center{
@@ -85,7 +84,7 @@ html,body{
   justify-content:center;
 }
 #radioCard{
-  margin:19px 21px 0;
+  margin:4px 17px 0;
   flex-shrink:0;
 }
 
@@ -106,7 +105,6 @@ html,body{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
   font-size:20px;
-  line-height:1.2;
   color:#000000;
   white-space:nowrap;
   text-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -117,7 +115,7 @@ html,body{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  bottom:109px;
+  bottom:178px;
   transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
   width:auto;
   max-width:calc(100% - 16px);
@@ -279,7 +277,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
-  bottom:calc(180px + env(safe-area-inset-bottom, 0px));
+  bottom:180px;
   z-index:5;
   background:#FFFFFF;
   border-radius:14px;
@@ -326,7 +324,7 @@ html,body{
 .mapCtrlGroup{
   position:fixed;
   right:12px;
-  bottom:116px;
+  bottom:185px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -653,8 +651,91 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:400;
 }
 
+/* ===== 速限標誌 ===== */
+.speedLimitSign{
+  position:fixed;
+  left:266px;
+  top:454px;
+  width:50px;
+  height:50px;
+  background:#ffffff;
+  border:5px solid #ff0000;
+  border-radius:25px;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:6;
+  box-sizing:border-box;
+}
+.speedLimitSign .limit-num{
+  font-size:22px;
+  font-weight:400;
+  color:#000000;
+  line-height:1;
+}
 
+/* ===== 導航速度膠囊（導航中顯示）===== */
+.navSpeedPill{
+  position:fixed;
+  left:120px;
+  top:549px;
+  width:105px;
+  height:43px;
+  background:rgba(17,35,62,0.9);
+  border-top:1px solid rgba(255,255,255,1);
+  border-radius:22.5px;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  display:none;
+  align-items:center;
+  z-index:5;
+  overflow:hidden;
+}
+.navSpeedPillCircle{
+  width:42px;
+  height:42px;
+  border-radius:21px;
+  background:#30D158;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-left:1px;
+}
+.navSpeedPillNum{
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  font-size:35px;
+  font-weight:500;
+  color:#ecfeef;
+  margin-left:6px;
+  line-height:1;
+}
+body.navigating .navSpeedPill{ display:flex; }
 
+/* ===== 紅綠燈指示條（導航中顯示）===== */
+.trafficLightBar{
+  position:fixed;
+  left:302px;
+  top:674px;
+  width:28px;
+  height:14px;
+  background:#253a63;
+  border:2px solid #d9e6fc;
+  border-radius:7px;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  z-index:5;
+  box-sizing:border-box;
+}
+.trafficLightBar .tl-dot{
+  width:6px;
+  height:6px;
+  border-radius:3px;
+  flex-shrink:0;
+}
+body.navigating .trafficLightBar{ display:flex; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -662,7 +743,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
   font-size:20px;
-  line-height:1.2;
   color:#404345;
   white-space:nowrap;
   text-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -670,8 +750,7 @@ body.navigating .earthquakeAlert{ top:218px; }
 
 .navExitBtn,.navOverviewBtn{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-weight:510;
-  line-height:16px;
+  font-weight:500;
   font-size:13px;
   color:#000000;
   background:none;
@@ -693,8 +772,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   display:flex;
   align-items:center;
   overflow:hidden;
-  opacity:0;
-  pointer-events:none;
   transition:opacity 0.25s ease;
 }
 
@@ -719,6 +796,7 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:500;
   font-size:14px;
   color:#000000;
+  text-shadow:0 4px 4px rgba(0,0,0,0.25);
   line-height:1;
   white-space:nowrap;
   overflow:hidden;
@@ -1196,7 +1274,27 @@ html, body {
   ">重置</button>
 </div>
 
+<!-- 速限標誌（JS 控制顯示）-->
+<div class="speedLimitSign" id="speedLimitSign">
+  <div class="limit-num" id="speedLimitNum">110</div>
+</div>
 
+<!-- 導航速度膠囊 -->
+<div class="navSpeedPill" id="navSpeedPill">
+  <div class="navSpeedPillCircle">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M12 5L5 14h5v5h4v-5h5L12 5z" fill="white"/>
+    </svg>
+  </div>
+  <span class="navSpeedPillNum" id="navSpeedPillNum">0</span>
+</div>
+
+<!-- 紅綠燈指示條 -->
+<div class="trafficLightBar" id="trafficLightBar">
+  <div class="tl-dot" style="background:#ff3b30;"></div>
+  <div class="tl-dot" style="background:#ffcc00;"></div>
+  <div class="tl-dot" style="background:#30d158;"></div>
+</div>
 
 
 <div class="cctvOverlay" id="cctvOverlay">
@@ -1258,8 +1356,6 @@ html, body {
   </button>
   <!-- 地圖風格 -->
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
-  <!-- AI 助理 -->
-  <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
 </div>
 
 <div class="bottomBar">
@@ -1322,7 +1418,7 @@ html, body {
     </div>
     </div><!-- /rect1Body -->
     <!-- 語音設定：在導航下方，overflow:hidden 收起時自動隱藏 -->
-    <div id="voiceDrawer" style="padding:4px 20px 14px;margin-top:2px;display:none;">
+    <div id="voiceDrawer" style="padding:4px 20px 14px;border-top:0.5px solid #eee;margin-top:2px;display:none;">
       <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🔊 導航語音</div>
       <div id="voiceList" style="display:flex;flex-direction:column;gap:6px;max-height:35vh;overflow-y:auto;"></div>
       <div style="margin-top:12px;font-size:12px;color:#666;">語速
@@ -1419,6 +1515,7 @@ if (navigator.geolocation) {
 
   const infoElement = document.querySelector('.info');
   const speedPillNum = document.getElementById('rect6SpeedValue');
+  const navSpeedPillNumEl = document.getElementById('navSpeedPillNum');
   const rect6El = document.getElementById('rect6');
   
   let startTime = null;
@@ -1795,8 +1892,7 @@ if (navigator.geolocation) {
     var isNav = document.body.classList.contains('navigating');
     var l, bot, mcBot, r4Bot, showRadio;
     var COMPACT = 83, NORMAL = 160;
-    var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
-    if (h >= NORMAL) {
+    if (!isNav || h >= NORMAL) {
       l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
     } else if (h <= COMPACT) {
       l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
@@ -1807,13 +1903,10 @@ if (navigator.geolocation) {
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
     var trB = animated ? ('bottom .38s '+ease) : 'none';
-    var trPad = animated ? ('padding .38s '+ease) : 'none';
-    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
-    if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
+    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = bot+'px'; r1.style.height = h+'px'; }
+    if (mc) { mc.style.transition = trB; mc.style.bottom = mcBot+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
     if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
-    var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
-    if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
 
   // ===== rect1 卡片展開語音設定（跟手上滑）=====
@@ -1858,11 +1951,12 @@ if (navigator.geolocation) {
 
   // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
-    let _tsY = 0, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
+    let _tsY = 0, _curH = RECT1_COLLAPSED, _moved = false, _rafId = null;
 
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
-      _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || RECT1_COMPACT);
+      const isNav = document.body.classList.contains('navigating');
+      _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || (isNav ? RECT1_COMPACT : RECT1_COLLAPSED));
       if (!_drawerOpen) {
         _buildVoiceList();
         _expandedH = _measureExpanded();
@@ -1876,7 +1970,9 @@ if (navigator.geolocation) {
       const dy = _tsY - e.touches[0].clientY;
       if (!_moved && Math.abs(dy) < 5) return;
       e.preventDefault();
-      const newH = Math.min(_expandedH, Math.max(RECT1_COMPACT, _curH + dy));
+      const isNav = document.body.classList.contains('navigating');
+      const minH = isNav ? RECT1_COMPACT : RECT1_COLLAPSED;
+      const newH = Math.min(_expandedH, Math.max(minH, _curH + dy));
       _moved = true;
       if (_rafId) cancelAnimationFrame(_rafId);
       _rafId = requestAnimationFrame(() => {
@@ -1885,11 +1981,16 @@ if (navigator.geolocation) {
       });
     }
     function _snapPanel(dy) {
-      const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
-      if (dy > 40) {
-        curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
+      const isNav = document.body.classList.contains('navigating');
+      const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
+      if (isNav) {
+        if (dy > 40) {
+          curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
+        } else {
+          _drawerOpen ? _closeDrawer() : _closeNavPanel();
+        }
       } else {
-        _drawerOpen ? _closeDrawer() : _closeNavPanel();
+        dy > 40 ? _openDrawer() : _closeDrawer();
       }
     }
     function _onDragEnd(e) {
@@ -1897,9 +1998,10 @@ if (navigator.geolocation) {
       const dy = _tsY - e.changedTouches[0].clientY;
       if (!_moved || Math.abs(dy) < 8) {
         if (!e.target.closest('button, input, select, a, label')) {
-          const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
+          const isNav = document.body.classList.contains('navigating');
+          const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
           if (_drawerOpen) { _closeDrawer(); }
-          else if (curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
+          else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
           else { _openDrawer(); }
         }
         return;
@@ -2301,28 +2403,6 @@ if (navigator.geolocation) {
     if (mod === 'uturn') return '↩';
     return '↑';
   }
-  function svgForManeuver(maneuver){
-    const S=(d)=>`<svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-    const up   = S('<line x1="16" y1="27" x2="16" y2="7"/><polyline points="9,14 16,7 23,14"/>');
-    const right= S('<path d="M10,27 L10,15 Q10,7 17,7 L24,7" fill="none"/><polyline points="17,3 24,7 17,11"/>');
-    const left = S('<path d="M22,27 L22,15 Q22,7 15,7 L8,7" fill="none"/><polyline points="15,3 8,7 15,11"/>');
-    const sR   = S('<polyline points="10,27 10,7 24,7"/><polyline points="17,2 24,7 17,12"/>');
-    const sL   = S('<polyline points="22,27 22,7 8,7"/><polyline points="15,2 8,7 15,12"/>');
-    const uturn= S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,20" fill="none"/><polyline points="17,15 23,20 17,25"/>');
-    const round= S('<path d="M23,16 A7,7 0 1,1 16,9" fill="none"/><polyline points="14,5 16,9 20,9"/>');
-    const dest = S('<circle cx="16" cy="11" r="5"/><line x1="16" y1="16" x2="16" y2="27"/>');
-    if (maneuver.type==='arrive') return dest;
-    if (maneuver.type==='roundabout'||maneuver.type==='rotary') return round;
-    if (maneuver.type==='on ramp') return up;
-    if (maneuver.type==='off ramp') return (maneuver.modifier||'').includes('left')?left:right;
-    const mod=maneuver.modifier||'';
-    if (mod.includes('sharp left')) return sL;
-    if (mod.includes('sharp right')) return sR;
-    if (mod.includes('left')) return left;
-    if (mod.includes('right')) return right;
-    if (mod==='uturn') return uturn;
-    return up;
-  }
 
   // 更新Rectangle 8畫面顯示(圖示+距離+轉彎指示文字)
   function updateRect8Display(distanceMeters){
@@ -2332,7 +2412,7 @@ if (navigator.geolocation) {
     const text = maneuverToChinese(step.maneuver);
     const roadName = step.name ? ('進入' + step.name) : '';
     if (rect8Instruction) rect8Instruction.innerText = text + (roadName ? roadName : '');
-    if (rect8Icon) rect8Icon.innerHTML = svgForManeuver(step.maneuver);
+    if (rect8Icon) rect8Icon.innerText = iconForManeuver(step.maneuver);
     let distText = '';
     if (rect8Distance) {
       if (distanceMeters == null) {
@@ -2410,6 +2490,7 @@ if (navigator.geolocation) {
         _setPanelState(160, true);
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
+        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
         togglePoiLayers(true);
         if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
@@ -2529,7 +2610,7 @@ if (navigator.geolocation) {
 
     if (rect8) {
       rect8Instruction.innerText = '重新規劃路線中...';
-      rect8Icon.innerHTML = svgForManeuver({type:'roundabout'});
+      rect8Icon.innerText = '🔄';
       rect8Distance.innerText = '';
     }
 
@@ -2840,6 +2921,8 @@ if (navigator.geolocation) {
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
   window.plannedRouteCoordinates = plannedRouteCoordinates;
 
+  const _speedSignEl = document.getElementById('speedLimitSign');
+  const _speedNumEl = document.getElementById('speedLimitNum');
   function checkSpeedCameraVoice(lat, lon, currentSpeedKmh){
     const data = window.speedCameraData;
     if (!data || !data.features) return;
@@ -2893,6 +2976,15 @@ if (navigator.geolocation) {
     });
     // 更新 currentSpeedLimit（供 updateDisplay 超速判斷用）
     window.currentSpeedLimit = nearestLimit ? Number(nearestLimit) : null;
+    // 速限標誌顯示
+    if (_speedSignEl && _speedNumEl) {
+      if (nearestLimit) {
+        _speedNumEl.textContent = nearestLimit;
+        _speedSignEl.style.display = 'flex';
+      } else {
+        _speedSignEl.style.display = 'none';
+      }
+    }
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
@@ -3006,6 +3098,7 @@ if (navigator.geolocation) {
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
+    if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = Math.round(speed);
     if (rect6El) {
       const lim = window.currentSpeedLimit;
       const isSpeeding = !!(lim && speed > lim);
@@ -3098,7 +3191,8 @@ if (navigator.geolocation) {
     }, (err) => {
       console.error('GPS error:', err);
       if (!window.simRunning) {
-        if (speedPillNum) speedPillNum.innerText = '--';
+        if (speedPillNum) speedPillNum.innerText = '—';
+        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '—';
       }
     }, {
       enableHighAccuracy: true,
@@ -4078,36 +4172,30 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影、底部三角指針）
+    // 為每個速限值畫紅框白底圓形圖示（底部加三角指針）
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
-      var sz=50, pad=8, tip=10;
-      var W=sz+pad*2, H=sz+pad*2+8+tip;
-      var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+      var sz=60, tip=10, totalH=sz+tip, r=sz/2, border=5;
+      var cv=document.createElement('canvas'); cv.width=sz; cv.height=totalH;
       var cx=cv.getContext('2d');
-      var r=sz/2, ox=W/2, oy=pad+r;
-      // 陰影 + 白底圓
-      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
-      cx.beginPath(); cx.arc(ox,oy,r,0,Math.PI*2);
+      // 白底圓
+      cx.beginPath(); cx.arc(r,r,r-1,0,Math.PI*2);
       cx.fillStyle='#FFFFFF'; cx.fill();
-      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
-      // 紅框 5px
-      cx.beginPath(); cx.arc(ox,oy,r-2.5,0,Math.PI*2);
-      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
-      // 速限文字 + 文字陰影
-      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
+      // 紅框
+      cx.beginPath(); cx.arc(r,r,r-border/2,0,Math.PI*2);
+      cx.strokeStyle='#FF0000'; cx.lineWidth=border; cx.stroke();
+      // 速限文字
       var fs=lim>=100?20:22;
-      cx.font='400 '+fs+'px -apple-system,"SF Pro",Arial,sans-serif';
+      cx.font='bold '+fs+'px Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy);
-      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+      cx.fillStyle='#000000'; cx.fillText(String(lim),r,r+1);
       // 底部三角指針
       cx.fillStyle='#FFFFFF';
       cx.beginPath();
-      cx.moveTo(ox-8,pad+sz); cx.lineTo(ox+8,pad+sz); cx.lineTo(ox,pad+sz+tip); cx.closePath();
+      cx.moveTo(r-8,sz); cx.lineTo(r+8,sz); cx.lineTo(r,sz+tip); cx.closePath();
       cx.fill();
-      m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
+      m.addImage(key,{width:sz,height:totalH,data:cx.getImageData(0,0,sz,totalH).data});
     });
 
     m.addSource('speed-cam',{type:'geojson',data:data,cluster:true,clusterMaxZoom:13,clusterRadius:50});
@@ -4736,6 +4824,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var glow     = document.getElementById('speedingGlow');
     if (display)  display.textContent  = Math.round(simSpeed);
     if (speedVal) speedVal.textContent = Math.round(simSpeed);
+    var navPill = document.getElementById('navSpeedPillNum');
+    if (navPill) navPill.textContent = Math.round(simSpeed);
     var over = simLimit > 0 && simSpeed > simLimit;
     if (rect6) rect6.classList.toggle('speeding', over);
     if (glow)  glow.classList.toggle('active', over);
