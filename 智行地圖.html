@@ -88,7 +88,6 @@ html,body{
   margin:19px 21px 0;
   flex-shrink:0;
 }
-
 .rect3{
   position:absolute;
   width:56px;
@@ -97,8 +96,7 @@ html,body{
   left:50%;
   top:6px;
   transform:translateX(-50%);
-  background:#555555;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  background:rgba(60,60,67,0.3);
   border-radius:2.5px;
 }
 
@@ -1006,6 +1004,7 @@ html, body {
   text-align:center;
   display:none;
 }
+
 </style>
 </head>
 <body>
@@ -1019,6 +1018,7 @@ html, body {
 </div>
 
 <div id="map"></div>
+
 
 <!-- 🌩️ 天氣特報橫幅(目前所在縣市有特報時顯示) -->
 <div class="weatherAlert" id="weatherAlert"></div>
@@ -3241,29 +3241,93 @@ map.on('load', function() {
       }
     });
 
-    // 更新車子位置（每次 GPS 更新呼叫）
-    window.updateCarMarker = function(lng, lat) {
-      const heading = window.compassHeading != null ? window.compassHeading : 0;
+    // 原始繪製函式（由 rAF 插值迴圈呼叫）
+    window._updateCarMarkerRaw = function(lng, lat, bearing) {
       map.getSource('user-pos').setData({
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
+        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: bearing } }]
       });
     };
 
-    // 更新車子方向（羅盤轉動時呼叫）
+    // 兼容舊呼叫：直接寫入 target，由 rAF 接手
+    window.updateCarMarker = function(lng, lat) {
+      window._vehicleTarget = {
+        lng: lng, lat: lat,
+        bearing: window.compassHeading != null ? window.compassHeading : 0,
+        timestamp: Date.now()
+      };
+    };
+
+    // 羅盤轉動時更新 target bearing
     window.updateUserMarkerHeading = function() {
       if (window.currentLon != null && window.currentLat != null) {
-        window.updateCarMarker(window.currentLon, window.currentLat);
+        if (window._vehicleTarget) {
+          window._vehicleTarget.bearing = window.compassHeading != null ? window.compassHeading : 0;
+        } else {
+          window._vehicleTarget = {
+            lng: window.currentLon, lat: window.currentLat,
+            bearing: window.compassHeading != null ? window.compassHeading : 0,
+            timestamp: Date.now()
+          };
+        }
       }
     };
 
     // 若已有定位立即顯示
     if (window.currentLon != null && window.currentLat != null) {
-      window.updateCarMarker(window.currentLon, window.currentLat);
+      window._updateCarMarkerRaw(window.currentLon, window.currentLat,
+        window.compassHeading != null ? window.compassHeading : 0);
     }
   };
   _carImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_carSvg);
 });
+</script>
+
+<script>
+// ===== 🚗 平滑車輛插值 rAF 迴圈 =====
+(function() {
+  // 目前插值後的顯示位置
+  let _dispLng = null, _dispLat = null, _dispBearing = 0;
+
+  function _lerpAngle(a, b, t) {
+    // 取最短角差（bearing 繞回處理）
+    let diff = ((b - a) % 360 + 540) % 360 - 180;
+    return a + diff * t;
+  }
+
+  function _rafLoop() {
+    requestAnimationFrame(_rafLoop);
+    const tgt = window._vehicleTarget;
+    if (!tgt) return;
+
+    if (_dispLng === null) {
+      _dispLng = tgt.lng;
+      _dispLat = tgt.lat;
+      _dispBearing = tgt.bearing;
+    } else {
+      const alpha = 0.15; // 插值係數：0 = 不動，1 = 瞬間到位
+      _dispLng = _dispLng + (_dispLng !== tgt.lng ? (tgt.lng - _dispLng) * alpha : 0);
+      _dispLat = _dispLat + (_dispLat !== tgt.lat ? (tgt.lat - _dispLat) * alpha : 0);
+      _dispBearing = _lerpAngle(_dispBearing, tgt.bearing, alpha);
+    }
+
+    if (typeof window._updateCarMarkerRaw === 'function') {
+      window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
+    }
+
+    // 地圖鏡頭跟隨
+    if (window._cameraFollow && typeof map !== 'undefined') {
+      map.easeTo({
+        center: [_dispLng, _dispLat],
+        bearing: _dispBearing,
+        duration: 0,
+        padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
+      });
+    }
+  }
+
+  _rafLoop();
+})();
 </script>
 
 <script>
@@ -3677,6 +3741,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if(window.currentLat !== undefined && window.currentLon !== undefined){
         map.easeTo({ center:[window.currentLon, window.currentLat], zoom:17, duration:600 });
         if(window._setFollowUser) window._setFollowUser(true);
+        window._cameraFollow = true;
       } else {
         navigator.geolocation.getCurrentPosition(function(pos){
           map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:17, duration:600 });
@@ -3723,9 +3788,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
+
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
@@ -4861,6 +4927,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   };
 })();
 </script>
+
 <!-- ===== WASD 鍵盤駕駛測試 ===== -->
 <div id="kbHud" style="
   display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
