@@ -1814,7 +1814,7 @@ if (navigator.geolocation) {
     if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
     if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
-    if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
+    if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? 'auto' : 'none'; }
     var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
     if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
@@ -3792,7 +3792,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
