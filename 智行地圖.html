@@ -48,7 +48,7 @@ html,body{
   left:16px;
   right:16px;
   bottom:calc(16px + 0px);
-  height:160px;
+  height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   border-radius:40px;
@@ -117,7 +117,7 @@ html,body{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  bottom:178px;
+  bottom:109px;
   transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
   width:auto;
   max-width:calc(100% - 16px);
@@ -326,7 +326,7 @@ html,body{
 .mapCtrlGroup{
   position:fixed;
   right:12px;
-  bottom:185px;
+  bottom:116px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -1933,7 +1933,6 @@ if (navigator.geolocation) {
       }, { passive: true });
     }
   }
-  _setPanelState(RECT1_COLLAPSED, false);
 
   // ===== iOS audio unlock：第一次使用者互動時解鎖 VP 的 AudioContext =====
   (function() {
@@ -3793,7 +3792,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
