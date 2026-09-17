@@ -88,7 +88,27 @@ html,body{
   margin:19px 21px 0;
   flex-shrink:0;
 }
-
+#radioInitialOverlay{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:40px;
+  background:transparent;
+  border:none;
+  font-size:15px;
+  font-weight:500;
+  color:#2F80FF;
+  cursor:pointer;
+  gap:6px;
+  z-index:3;
+  transition:opacity 0.2s;
+}
+#radioInitialOverlay.hidden{
+  opacity:0;
+  pointer-events:none;
+}
 
 .rect3{
   position:absolute;
@@ -1273,6 +1293,10 @@ html, body {
 </div>
 <div class="rect1" id="rect1">
     <div class="rect3" id="rect3Handle"></div>
+    <button id="radioInitialOverlay">
+      <svg width="16" height="18" viewBox="0 0 16 18" fill="none"><path d="M2 1.5L14.5 9L2 16.5V1.5Z" fill="#2F80FF"/></svg>
+      開始播放
+    </button>
     <div class="rect1Body">
       <div class="rect1NavRow">
         <button type="button" class="navExitBtn" id="navExitBtn">退出</button>
@@ -3868,6 +3892,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
 
   function startPlay(){
+    var ov = document.getElementById('radioInitialOverlay');
+    if (ov) ov.classList.add('hidden');
+    if (typeof _openNavPanel === 'function') _openNavPanel();
     setStatus('連線中…');
     updateMediaSession();
     vjs.src([{ src: BASE + STATIONS[idx].code + '/playlist.m3u8', type:'application/x-mpegURL' }]);
@@ -3885,6 +3912,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   if(prevBtn) prevBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(-1); });
   if(nextBtn) nextBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(1); });
   if(playBtn) playBtn.addEventListener('click', function(e){ e.stopPropagation(); playing ? pausePlay() : startPlay(); });
+  var initOv = document.getElementById('radioInitialOverlay');
+  if(initOv) initOv.addEventListener('click', function(e){ e.stopPropagation(); startPlay(); });
 
   /* 拖曳刻度盤換台：手指跟著動，放開才 snap */
   if(dial){
