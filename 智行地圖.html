@@ -48,7 +48,7 @@ html,body{
   left:16px;
   right:16px;
   bottom:calc(16px + 0px);
-  height:160px;
+  height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   border-radius:40px;
@@ -852,28 +852,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   margin-right:10px;
   flex-shrink:0;
 }
-.radioStartBtn{
-  width:100%;
-  height:100%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  background:transparent;
-  border:none;
-  color:#000;
-  font-size:15px;
-  font-weight:500;
-  cursor:pointer;
-  padding:0 16px;
-  -webkit-tap-highlight-color:transparent;
-}
-.radioFullUI{
-  width:100%;
-  height:100%;
-  display:flex;
-  align-items:center;
-}
 .navInfoCardArrow{
   width:30px;
   height:30px;
@@ -1305,15 +1283,6 @@ html, body {
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
       <div class="navInfoCard" id="radioCard">
-      <!-- 初始狀態：開始播放按鈕 -->
-      <button class="radioStartBtn" id="radioStartBtn">
-        <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-          <path d="M1.5 1.5L12.5 8L1.5 14.5V1.5Z" fill="#000"/>
-        </svg>
-        開始播放
-      </button>
-      <!-- 播放中：完整電台控制 -->
-      <div class="radioFullUI" id="radioFullUI" style="display:none;">
       <div class="navInfoCardIcon" id="radioIcon"></div>
       <div class="navInfoCardMeta">
         <div class="navInfoCardText" id="radioName">全國治安交通網</div>
@@ -1324,6 +1293,7 @@ html, body {
           </div>
         </div>
       </div>
+      <!-- FM 刻度盤：隱藏但保留 JS 功能 -->
       <div class="fmDial" id="fmDial" style="display:none;flex:0;width:0;overflow:hidden;">
         <div class="fmNeedle" style="display:none;"></div>
         <div class="fmTrack" id="fmTrack"></div>
@@ -1350,7 +1320,6 @@ html, body {
           </svg>
         </button>
       </div>
-      </div><!-- /radioFullUI -->
     </div>
     </div><!-- /rect1Body -->
     <!-- 語音設定：在導航下方，overflow:hidden 收起時自動隱藏 -->
@@ -1873,8 +1842,7 @@ if (navigator.geolocation) {
     _drawerOpen = false;
   }
   function _closeNavPanel() {
-    var isNav = document.body.classList.contains('navigating');
-    _setPanelState(isNav ? RECT1_COMPACT : RECT1_COLLAPSED, true);
+    _setPanelState(RECT1_COMPACT, true);
     setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
     _drawerOpen = false;
   }
@@ -1893,7 +1861,7 @@ if (navigator.geolocation) {
 
   // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
-    let _tsY = 0, _curH = RECT1_COLLAPSED, _moved = false, _rafId = null;
+    let _tsY = 0, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
 
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
@@ -3824,7 +3792,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
@@ -3913,15 +3881,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(playing){ vjs.pause(); startPlay(); }
     else { setStatus('點擊收聽'); }
   }
-
-  var startBtn2 = document.getElementById('radioStartBtn');
-  var fullUI    = document.getElementById('radioFullUI');
-  if(startBtn2) startBtn2.addEventListener('click', function(e){
-    e.stopPropagation();
-    startBtn2.style.display = 'none';
-    if(fullUI) fullUI.style.display = 'flex';
-    startPlay();
-  });
 
   if(prevBtn) prevBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(-1); });
   if(nextBtn) nextBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(1); });
