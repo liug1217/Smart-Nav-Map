@@ -24,6 +24,7 @@
   z-index:2;
 }
 
+:root{ --sab: 0px; }
 html,body{
   margin:0;
   padding:0;
@@ -37,17 +38,17 @@ html,body{
   position:absolute;
   left:0;
   right:0;
-  bottom:8px;
+  bottom:calc(8px + 0px);
   height:160px;
 }
 
 .rect1{
   box-sizing:border-box;
   position:fixed;
-  left:8px;
-  right:8px;
-  bottom:8px;
-  height:160px;
+  left:16px;
+  right:16px;
+  bottom:calc(16px + 0px);
+  height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   border-radius:40px;
@@ -64,7 +65,7 @@ html,body{
 .rect1Body{
   box-sizing:border-box;
   height:160px;
-  padding:18px 4px 6px;
+  padding:18px 0 6px;
   display:flex;
   flex-direction:column;
   flex-shrink:0;
@@ -73,7 +74,7 @@ html,body{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:0 11px;
+  padding:0 15px;
   flex-shrink:0;
 }
 .rect1Center{
@@ -84,9 +85,10 @@ html,body{
   justify-content:center;
 }
 #radioCard{
-  margin:4px 17px 0;
+  margin:19px 21px 0;
   flex-shrink:0;
 }
+
 
 .rect3{
   position:absolute;
@@ -96,8 +98,7 @@ html,body{
   left:50%;
   top:6px;
   transform:translateX(-50%);
-  background:#555555;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  background:rgba(60,60,67,0.3);
   border-radius:2.5px;
 }
 
@@ -105,6 +106,7 @@ html,body{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
   font-size:20px;
+  line-height:1.2;
   color:#000000;
   white-space:nowrap;
   text-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -115,7 +117,7 @@ html,body{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  bottom:178px;
+  bottom:109px;
   transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
   width:auto;
   max-width:calc(100% - 16px);
@@ -277,7 +279,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
-  bottom:180px;
+  bottom:calc(180px + 0px);
   z-index:5;
   background:#FFFFFF;
   border-radius:14px;
@@ -324,7 +326,7 @@ html,body{
 .mapCtrlGroup{
   position:fixed;
   right:12px;
-  bottom:185px;
+  bottom:116px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -651,91 +653,8 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:400;
 }
 
-/* ===== 速限標誌 ===== */
-.speedLimitSign{
-  position:fixed;
-  left:266px;
-  top:454px;
-  width:50px;
-  height:50px;
-  background:#ffffff;
-  border:5px solid #ff0000;
-  border-radius:25px;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:6;
-  box-sizing:border-box;
-}
-.speedLimitSign .limit-num{
-  font-size:22px;
-  font-weight:400;
-  color:#000000;
-  line-height:1;
-}
 
-/* ===== 導航速度膠囊（導航中顯示）===== */
-.navSpeedPill{
-  position:fixed;
-  left:120px;
-  top:549px;
-  width:105px;
-  height:43px;
-  background:rgba(17,35,62,0.9);
-  border-top:1px solid rgba(255,255,255,1);
-  border-radius:22.5px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  z-index:5;
-  overflow:hidden;
-}
-.navSpeedPillCircle{
-  width:42px;
-  height:42px;
-  border-radius:21px;
-  background:#30D158;
-  flex-shrink:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-left:1px;
-}
-.navSpeedPillNum{
-  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:35px;
-  font-weight:500;
-  color:#ecfeef;
-  margin-left:6px;
-  line-height:1;
-}
-body.navigating .navSpeedPill{ display:flex; }
 
-/* ===== 紅綠燈指示條（導航中顯示）===== */
-.trafficLightBar{
-  position:fixed;
-  left:302px;
-  top:674px;
-  width:28px;
-  height:14px;
-  background:#253a63;
-  border:2px solid #d9e6fc;
-  border-radius:7px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  gap:1px;
-  z-index:5;
-  box-sizing:border-box;
-}
-.trafficLightBar .tl-dot{
-  width:6px;
-  height:6px;
-  border-radius:3px;
-  flex-shrink:0;
-}
-body.navigating .trafficLightBar{ display:flex; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -743,14 +662,15 @@ body.navigating .trafficLightBar{ display:flex; }
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
   font-size:20px;
+  line-height:1.2;
   color:#404345;
   white-space:nowrap;
-  text-shadow:0 4px 4px rgba(0,0,0,0.25);
 }
 
 .navExitBtn,.navOverviewBtn{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-weight:500;
+  font-weight:510;
+  line-height:16px;
   font-size:13px;
   color:#000000;
   background:none;
@@ -772,6 +692,8 @@ body.navigating .trafficLightBar{ display:flex; }
   display:flex;
   align-items:center;
   overflow:hidden;
+  opacity:0;
+  pointer-events:none;
   transition:opacity 0.25s ease;
 }
 
@@ -796,7 +718,6 @@ body.navigating .trafficLightBar{ display:flex; }
   font-weight:500;
   font-size:14px;
   color:#000000;
-  text-shadow:0 4px 4px rgba(0,0,0,0.25);
   line-height:1;
   white-space:nowrap;
   overflow:hidden;
@@ -1084,6 +1005,7 @@ html, body {
   text-align:center;
   display:none;
 }
+
 </style>
 </head>
 <body>
@@ -1097,6 +1019,7 @@ html, body {
 </div>
 
 <div id="map"></div>
+
 
 <!-- 🌩️ 天氣特報橫幅(目前所在縣市有特報時顯示) -->
 <div class="weatherAlert" id="weatherAlert"></div>
@@ -1274,27 +1197,7 @@ html, body {
   ">重置</button>
 </div>
 
-<!-- 速限標誌（JS 控制顯示）-->
-<div class="speedLimitSign" id="speedLimitSign">
-  <div class="limit-num" id="speedLimitNum">110</div>
-</div>
 
-<!-- 導航速度膠囊 -->
-<div class="navSpeedPill" id="navSpeedPill">
-  <div class="navSpeedPillCircle">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M12 5L5 14h5v5h4v-5h5L12 5z" fill="white"/>
-    </svg>
-  </div>
-  <span class="navSpeedPillNum" id="navSpeedPillNum">0</span>
-</div>
-
-<!-- 紅綠燈指示條 -->
-<div class="trafficLightBar" id="trafficLightBar">
-  <div class="tl-dot" style="background:#ff3b30;"></div>
-  <div class="tl-dot" style="background:#ffcc00;"></div>
-  <div class="tl-dot" style="background:#30d158;"></div>
-</div>
 
 
 <div class="cctvOverlay" id="cctvOverlay">
@@ -1356,6 +1259,8 @@ html, body {
   </button>
   <!-- 地圖風格 -->
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
+  <!-- AI 助理 -->
+  <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
 </div>
 
 <div class="bottomBar">
@@ -1418,7 +1323,7 @@ html, body {
     </div>
     </div><!-- /rect1Body -->
     <!-- 語音設定：在導航下方，overflow:hidden 收起時自動隱藏 -->
-    <div id="voiceDrawer" style="padding:4px 20px 14px;border-top:0.5px solid #eee;margin-top:2px;display:none;">
+    <div id="voiceDrawer" style="padding:4px 20px 14px;margin-top:2px;display:none;">
       <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🔊 導航語音</div>
       <div id="voiceList" style="display:flex;flex-direction:column;gap:6px;max-height:35vh;overflow-y:auto;"></div>
       <div style="margin-top:12px;font-size:12px;color:#666;">語速
@@ -3337,29 +3242,93 @@ map.on('load', function() {
       }
     });
 
-    // 更新車子位置（每次 GPS 更新呼叫）
-    window.updateCarMarker = function(lng, lat) {
-      const heading = window.compassHeading != null ? window.compassHeading : 0;
+    // 原始繪製函式（由 rAF 插值迴圈呼叫）
+    window._updateCarMarkerRaw = function(lng, lat, bearing) {
       map.getSource('user-pos').setData({
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
+        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: bearing } }]
       });
     };
 
-    // 更新車子方向（羅盤轉動時呼叫）
+    // 兼容舊呼叫：直接寫入 target，由 rAF 接手
+    window.updateCarMarker = function(lng, lat) {
+      window._vehicleTarget = {
+        lng: lng, lat: lat,
+        bearing: window.compassHeading != null ? window.compassHeading : 0,
+        timestamp: Date.now()
+      };
+    };
+
+    // 羅盤轉動時更新 target bearing
     window.updateUserMarkerHeading = function() {
       if (window.currentLon != null && window.currentLat != null) {
-        window.updateCarMarker(window.currentLon, window.currentLat);
+        if (window._vehicleTarget) {
+          window._vehicleTarget.bearing = window.compassHeading != null ? window.compassHeading : 0;
+        } else {
+          window._vehicleTarget = {
+            lng: window.currentLon, lat: window.currentLat,
+            bearing: window.compassHeading != null ? window.compassHeading : 0,
+            timestamp: Date.now()
+          };
+        }
       }
     };
 
     // 若已有定位立即顯示
     if (window.currentLon != null && window.currentLat != null) {
-      window.updateCarMarker(window.currentLon, window.currentLat);
+      window._updateCarMarkerRaw(window.currentLon, window.currentLat,
+        window.compassHeading != null ? window.compassHeading : 0);
     }
   };
   _carImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_carSvg);
 });
+</script>
+
+<script>
+// ===== 🚗 平滑車輛插值 rAF 迴圈 =====
+(function() {
+  // 目前插值後的顯示位置
+  let _dispLng = null, _dispLat = null, _dispBearing = 0;
+
+  function _lerpAngle(a, b, t) {
+    // 取最短角差（bearing 繞回處理）
+    let diff = ((b - a) % 360 + 540) % 360 - 180;
+    return a + diff * t;
+  }
+
+  function _rafLoop() {
+    requestAnimationFrame(_rafLoop);
+    const tgt = window._vehicleTarget;
+    if (!tgt) return;
+
+    if (_dispLng === null) {
+      _dispLng = tgt.lng;
+      _dispLat = tgt.lat;
+      _dispBearing = tgt.bearing;
+    } else {
+      const alpha = 0.15; // 插值係數：0 = 不動，1 = 瞬間到位
+      _dispLng = _dispLng + (_dispLng !== tgt.lng ? (tgt.lng - _dispLng) * alpha : 0);
+      _dispLat = _dispLat + (_dispLat !== tgt.lat ? (tgt.lat - _dispLat) * alpha : 0);
+      _dispBearing = _lerpAngle(_dispBearing, tgt.bearing, alpha);
+    }
+
+    if (typeof window._updateCarMarkerRaw === 'function') {
+      window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
+    }
+
+    // 地圖鏡頭跟隨
+    if (window._cameraFollow && typeof map !== 'undefined') {
+      map.easeTo({
+        center: [_dispLng, _dispLat],
+        bearing: _dispBearing,
+        duration: 0,
+        padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
+      });
+    }
+  }
+
+  _rafLoop();
+})();
 </script>
 
 <script>
@@ -3773,6 +3742,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if(window.currentLat !== undefined && window.currentLon !== undefined){
         map.easeTo({ center:[window.currentLon, window.currentLat], zoom:17, duration:600 });
         if(window._setFollowUser) window._setFollowUser(true);
+        window._cameraFollow = true;
       } else {
         navigator.geolocation.getCurrentPosition(function(pos){
           map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:17, duration:600 });
@@ -3818,6 +3788,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   init();
 })();
 </script>
+
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
@@ -4244,30 +4215,36 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（底部加三角指針）
+    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影、底部三角指針）
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
-      var sz=60, tip=10, totalH=sz+tip, r=sz/2, border=5;
-      var cv=document.createElement('canvas'); cv.width=sz; cv.height=totalH;
+      var sz=50, pad=8, tip=10;
+      var W=sz+pad*2, H=sz+pad*2+8+tip;
+      var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
       var cx=cv.getContext('2d');
-      // 白底圓
-      cx.beginPath(); cx.arc(r,r,r-1,0,Math.PI*2);
+      var r=sz/2, ox=W/2, oy=pad+r;
+      // 陰影 + 白底圓
+      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
+      cx.beginPath(); cx.arc(ox,oy,r,0,Math.PI*2);
       cx.fillStyle='#FFFFFF'; cx.fill();
-      // 紅框
-      cx.beginPath(); cx.arc(r,r,r-border/2,0,Math.PI*2);
-      cx.strokeStyle='#FF0000'; cx.lineWidth=border; cx.stroke();
-      // 速限文字
+      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+      // 紅框 5px
+      cx.beginPath(); cx.arc(ox,oy,r-2.5,0,Math.PI*2);
+      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
+      // 速限文字 + 文字陰影
+      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
       var fs=lim>=100?20:22;
-      cx.font='bold '+fs+'px Arial,sans-serif';
+      cx.font='400 '+fs+'px -apple-system,"SF Pro",Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillStyle='#000000'; cx.fillText(String(lim),r,r+1);
+      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy);
+      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
       // 底部三角指針
       cx.fillStyle='#FFFFFF';
       cx.beginPath();
-      cx.moveTo(r-8,sz); cx.lineTo(r+8,sz); cx.lineTo(r,sz+tip); cx.closePath();
+      cx.moveTo(ox-8,pad+sz); cx.lineTo(ox+8,pad+sz); cx.lineTo(ox,pad+sz+tip); cx.closePath();
       cx.fill();
-      m.addImage(key,{width:sz,height:totalH,data:cx.getImageData(0,0,sz,totalH).data});
+      m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
     });
 
     m.addSource('speed-cam',{type:'geojson',data:data,cluster:true,clusterMaxZoom:13,clusterRadius:50});
@@ -4896,8 +4873,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var glow     = document.getElementById('speedingGlow');
     if (display)  display.textContent  = Math.round(simSpeed);
     if (speedVal) speedVal.textContent = Math.round(simSpeed);
-    var navPill = document.getElementById('navSpeedPillNum');
-    if (navPill) navPill.textContent = Math.round(simSpeed);
     var over = simLimit > 0 && simSpeed > simLimit;
     if (rect6) rect6.classList.toggle('speeding', over);
     if (glow)  glow.classList.toggle('active', over);
@@ -4953,6 +4928,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   };
 })();
 </script>
+
 <!-- ===== WASD 鍵盤駕駛測試 ===== -->
 <div id="kbHud" style="
   display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
