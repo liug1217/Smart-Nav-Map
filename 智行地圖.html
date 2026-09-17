@@ -48,7 +48,7 @@ html,body{
   left:16px;
   right:16px;
   bottom:calc(16px + 0px);
-  height:83px;
+  height:160px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   border-radius:40px;
@@ -1873,7 +1873,8 @@ if (navigator.geolocation) {
     _drawerOpen = false;
   }
   function _closeNavPanel() {
-    _setPanelState(RECT1_COMPACT, true);
+    var isNav = document.body.classList.contains('navigating');
+    _setPanelState(isNav ? RECT1_COMPACT : RECT1_COLLAPSED, true);
     setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
     _drawerOpen = false;
   }
@@ -1892,7 +1893,7 @@ if (navigator.geolocation) {
 
   // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
-    let _tsY = 0, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
+    let _tsY = 0, _curH = RECT1_COLLAPSED, _moved = false, _rafId = null;
 
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
@@ -3823,7 +3824,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
