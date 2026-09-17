@@ -692,8 +692,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   display:flex;
   align-items:center;
   overflow:hidden;
-  opacity:0;
-  pointer-events:none;
   transition:opacity 0.25s ease;
 }
 
@@ -1799,7 +1797,7 @@ if (navigator.geolocation) {
     var l, bot, mcBot, r4Bot, showRadio;
     var COMPACT = 83, NORMAL = 160;
     var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
-    if (h >= NORMAL) {
+    if (!isNav || h >= NORMAL) {
       l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
     } else if (h <= COMPACT) {
       l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
@@ -1865,7 +1863,8 @@ if (navigator.geolocation) {
 
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
-      _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || RECT1_COMPACT);
+      const isNav = document.body.classList.contains('navigating');
+      _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || (isNav ? RECT1_COMPACT : RECT1_COLLAPSED));
       if (!_drawerOpen) {
         _buildVoiceList();
         _expandedH = _measureExpanded();
@@ -1879,7 +1878,9 @@ if (navigator.geolocation) {
       const dy = _tsY - e.touches[0].clientY;
       if (!_moved && Math.abs(dy) < 5) return;
       e.preventDefault();
-      const newH = Math.min(_expandedH, Math.max(RECT1_COMPACT, _curH + dy));
+      const isNav = document.body.classList.contains('navigating');
+      const minH = isNav ? RECT1_COMPACT : RECT1_COLLAPSED;
+      const newH = Math.min(_expandedH, Math.max(minH, _curH + dy));
       _moved = true;
       if (_rafId) cancelAnimationFrame(_rafId);
       _rafId = requestAnimationFrame(() => {
@@ -1888,11 +1889,16 @@ if (navigator.geolocation) {
       });
     }
     function _snapPanel(dy) {
-      const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
-      if (dy > 40) {
-        curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
+      const isNav = document.body.classList.contains('navigating');
+      const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
+      if (isNav) {
+        if (dy > 40) {
+          curH <= RECT1_COMPACT + 40 ? _openNavPanel() : _openDrawer();
+        } else {
+          _drawerOpen ? _closeDrawer() : _closeNavPanel();
+        }
       } else {
-        _drawerOpen ? _closeDrawer() : _closeNavPanel();
+        dy > 40 ? _openDrawer() : _closeDrawer();
       }
     }
     function _onDragEnd(e) {
@@ -1900,9 +1906,10 @@ if (navigator.geolocation) {
       const dy = _tsY - e.changedTouches[0].clientY;
       if (!_moved || Math.abs(dy) < 8) {
         if (!e.target.closest('button, input, select, a, label')) {
-          const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
+          const isNav = document.body.classList.contains('navigating');
+          const curH = parseFloat(_rect1El.style.height) || RECT1_COLLAPSED;
           if (_drawerOpen) { _closeDrawer(); }
-          else if (curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
+          else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
           else { _openDrawer(); }
         }
         return;
