@@ -24,7 +24,7 @@
   z-index:2;
 }
 
-:root{ --sab: env(safe-area-inset-bottom, 0px); }
+:root{ --sab: 0px; }
 html,body{
   margin:0;
   padding:0;
@@ -38,7 +38,7 @@ html,body{
   position:absolute;
   left:0;
   right:0;
-  bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  bottom:calc(8px + 0px);
   height:160px;
 }
 
@@ -47,7 +47,7 @@ html,body{
   position:fixed;
   left:16px;
   right:16px;
-  bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  bottom:calc(16px + 0px);
   height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -279,7 +279,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
-  bottom:calc(180px + env(safe-area-inset-bottom, 0px));
+  bottom:calc(180px + 0px);
   z-index:5;
   background:#FFFFFF;
   border-radius:14px;
