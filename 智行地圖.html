@@ -845,6 +845,12 @@ body.navigating .earthquakeAlert{ top:218px; }
 }
 .fmTick.active .tick-line{ background:#2F80FF; height:14px; }
 .fmTick.active .tick-label{ color:#2F80FF; font-weight:700; }
+.radioStartBtn{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  gap:8px;background:transparent;border:none;color:#000;font-size:15px;
+  font-weight:500;cursor:pointer;padding:0 16px;-webkit-tap-highlight-color:transparent;
+}
+.radioFullUI{width:100%;height:100%;display:flex;align-items:center;}
 .radioControls{
   display:flex;
   align-items:center;
@@ -1283,42 +1289,47 @@ html, body {
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
       <div class="navInfoCard" id="radioCard">
-      <div class="navInfoCardIcon" id="radioIcon"></div>
-      <div class="navInfoCardMeta">
-        <div class="navInfoCardText" id="radioName">全國治安交通網</div>
-        <div class="navInfoCardFreqRow">
-          <div class="navInfoCardFreq" id="radioFreq">104.9 MHz</div>
-          <div class="radioWaveform" id="radioWaveform">
-            <span></span><span></span><span></span><span></span><span></span>
+      <button class="radioStartBtn" id="radioStartBtn">
+        <svg width="13" height="15" viewBox="0 0 13 15" fill="none"><path d="M1.5 1.5L11.5 7.5L1.5 13.5V1.5Z" fill="#000"/></svg>
+        開始播放
+      </button>
+      <div class="radioFullUI" id="radioFullUI" style="display:none;">
+        <div class="navInfoCardIcon" id="radioIcon"></div>
+        <div class="navInfoCardMeta">
+          <div class="navInfoCardText" id="radioName">全國治安交通網</div>
+          <div class="navInfoCardFreqRow">
+            <div class="navInfoCardFreq" id="radioFreq">104.9 MHz</div>
+            <div class="radioWaveform" id="radioWaveform">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
           </div>
         </div>
-      </div>
-      <!-- FM 刻度盤：隱藏但保留 JS 功能 -->
-      <div class="fmDial" id="fmDial" style="display:none;flex:0;width:0;overflow:hidden;">
-        <div class="fmNeedle" style="display:none;"></div>
-        <div class="fmTrack" id="fmTrack"></div>
-      </div>
-      <div class="radioControls">
-        <button class="navInfoCardArrow" id="radioPrev">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="1.5" y="2" width="2.5" height="12" rx="1.25" fill="currentColor"/>
-            <path d="M14 3L6.5 8L14 13V3Z" fill="currentColor"/>
-          </svg>
-        </button>
-        <button class="navInfoCardPlayBtn" id="radioPlayBtn">
-          <span class="play-icon">
-            <svg width="13" height="15" viewBox="0 0 13 15" fill="none">
-              <path d="M1.5 1.5L11.5 7.5L1.5 13.5V1.5Z" fill="white"/>
+        <div class="fmDial" id="fmDial" style="display:none;flex:0;width:0;overflow:hidden;">
+          <div class="fmNeedle" style="display:none;"></div>
+          <div class="fmTrack" id="fmTrack"></div>
+        </div>
+        <div class="radioControls">
+          <button class="navInfoCardArrow" id="radioPrev">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1.5" y="2" width="2.5" height="12" rx="1.25" fill="currentColor"/>
+              <path d="M14 3L6.5 8L14 13V3Z" fill="currentColor"/>
             </svg>
-          </span>
-          <span class="pause-icon"><span></span><span></span></span>
-        </button>
-        <button class="navInfoCardArrow" id="radioNext">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="12" y="2" width="2.5" height="12" rx="1.25" fill="currentColor"/>
-            <path d="M2 3L9.5 8L2 13V3Z" fill="currentColor"/>
-          </svg>
-        </button>
+          </button>
+          <button class="navInfoCardPlayBtn" id="radioPlayBtn">
+            <span class="play-icon">
+              <svg width="13" height="15" viewBox="0 0 13 15" fill="none">
+                <path d="M1.5 1.5L11.5 7.5L1.5 13.5V1.5Z" fill="white"/>
+              </svg>
+            </span>
+            <span class="pause-icon"><span></span><span></span></span>
+          </button>
+          <button class="navInfoCardArrow" id="radioNext">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="12" y="2" width="2.5" height="12" rx="1.25" fill="currentColor"/>
+              <path d="M2 3L9.5 8L2 13V3Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
     </div><!-- /rect1Body -->
@@ -3883,6 +3894,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(playing){ vjs.pause(); startPlay(); }
     else { setStatus('點擊收聽'); }
   }
+
+  var radioStartBtn = document.getElementById('radioStartBtn');
+  var radioFullUI   = document.getElementById('radioFullUI');
+  if(radioStartBtn) radioStartBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    radioStartBtn.style.display = 'none';
+    if(radioFullUI) radioFullUI.style.display = 'flex';
+    startPlay();
+  });
 
   if(prevBtn) prevBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(-1); });
   if(nextBtn) nextBtn.addEventListener('click', function(e){ e.stopPropagation(); switchStation(1); });
