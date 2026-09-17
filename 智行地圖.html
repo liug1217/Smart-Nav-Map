@@ -692,6 +692,8 @@ body.navigating .earthquakeAlert{ top:218px; }
   display:flex;
   align-items:center;
   overflow:hidden;
+  opacity:0;
+  pointer-events:none;
   transition:opacity 0.25s ease;
 }
 
@@ -1797,7 +1799,7 @@ if (navigator.geolocation) {
     var l, bot, mcBot, r4Bot, showRadio;
     var COMPACT = 83, NORMAL = 160;
     var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
-    if (!isNav || h >= NORMAL) {
+    if (h >= NORMAL) {
       l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
     } else if (h <= COMPACT) {
       l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
@@ -1812,7 +1814,7 @@ if (navigator.geolocation) {
     if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
     if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
-    if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
+    if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? 'auto' : 'none'; }
     var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
     if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
