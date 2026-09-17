@@ -24,6 +24,7 @@
   z-index:2;
 }
 
+:root{ --sab: env(safe-area-inset-bottom, 0px); }
 html,body{
   margin:0;
   padding:0;
@@ -37,7 +38,7 @@ html,body{
   position:absolute;
   left:0;
   right:0;
-  bottom:8px;
+  bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   height:160px;
 }
 
@@ -46,7 +47,7 @@ html,body{
   position:fixed;
   left:16px;
   right:16px;
-  bottom:16px;
+  bottom:calc(16px + env(safe-area-inset-bottom, 0px));
   height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -73,7 +74,7 @@ html,body{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:0 29px;
+  padding:0 15px;
   flex-shrink:0;
 }
 .rect1Center{
@@ -87,7 +88,6 @@ html,body{
   margin:19px 21px 0;
   flex-shrink:0;
 }
-
 .rect3{
   position:absolute;
   width:56px;
@@ -96,8 +96,7 @@ html,body{
   left:50%;
   top:6px;
   transform:translateX(-50%);
-  background:#555555;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  background:rgba(60,60,67,0.3);
   border-radius:2.5px;
 }
 
@@ -105,6 +104,7 @@ html,body{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
   font-size:20px;
+  line-height:1.2;
   color:#000000;
   white-space:nowrap;
   text-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -277,7 +277,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
-  bottom:180px;
+  bottom:calc(180px + 0px);
   z-index:5;
   background:#FFFFFF;
   border-radius:14px;
@@ -651,91 +651,8 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-weight:400;
 }
 
-/* ===== 速限標誌 ===== */
-.speedLimitSign{
-  position:fixed;
-  left:266px;
-  top:454px;
-  width:50px;
-  height:50px;
-  background:#ffffff;
-  border:5px solid #ff0000;
-  border-radius:25px;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:6;
-  box-sizing:border-box;
-}
-.speedLimitSign .limit-num{
-  font-size:22px;
-  font-weight:400;
-  color:#000000;
-  line-height:1;
-}
 
-/* ===== 導航速度膠囊（導航中顯示）===== */
-.navSpeedPill{
-  position:fixed;
-  left:120px;
-  top:549px;
-  width:105px;
-  height:43px;
-  background:rgba(17,35,62,0.9);
-  border-top:1px solid rgba(255,255,255,1);
-  border-radius:22.5px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  z-index:5;
-  overflow:hidden;
-}
-.navSpeedPillCircle{
-  width:42px;
-  height:42px;
-  border-radius:21px;
-  background:#30D158;
-  flex-shrink:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-left:1px;
-}
-.navSpeedPillNum{
-  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:35px;
-  font-weight:500;
-  color:#ecfeef;
-  margin-left:6px;
-  line-height:1;
-}
-body.navigating .navSpeedPill{ display:flex; }
 
-/* ===== 紅綠燈指示條（導航中顯示）===== */
-.trafficLightBar{
-  position:fixed;
-  left:302px;
-  top:674px;
-  width:28px;
-  height:14px;
-  background:#253a63;
-  border:2px solid #d9e6fc;
-  border-radius:7px;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  gap:1px;
-  z-index:5;
-  box-sizing:border-box;
-}
-.trafficLightBar .tl-dot{
-  width:6px;
-  height:6px;
-  border-radius:3px;
-  flex-shrink:0;
-}
-body.navigating .trafficLightBar{ display:flex; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
@@ -743,6 +660,7 @@ body.navigating .trafficLightBar{ display:flex; }
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
   font-size:20px;
+  line-height:1.2;
   color:#404345;
   white-space:nowrap;
   text-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -750,7 +668,8 @@ body.navigating .trafficLightBar{ display:flex; }
 
 .navExitBtn,.navOverviewBtn{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-weight:500;
+  font-weight:510;
+  line-height:16px;
   font-size:13px;
   color:#000000;
   background:none;
@@ -798,7 +717,6 @@ body.navigating .trafficLightBar{ display:flex; }
   font-weight:500;
   font-size:14px;
   color:#000000;
-  text-shadow:0 4px 4px rgba(0,0,0,0.25);
   line-height:1;
   white-space:nowrap;
   overflow:hidden;
@@ -1086,6 +1004,7 @@ html, body {
   text-align:center;
   display:none;
 }
+
 </style>
 </head>
 <body>
@@ -1099,6 +1018,7 @@ html, body {
 </div>
 
 <div id="map"></div>
+
 
 <!-- 🌩️ 天氣特報橫幅(目前所在縣市有特報時顯示) -->
 <div class="weatherAlert" id="weatherAlert"></div>
@@ -1276,27 +1196,7 @@ html, body {
   ">重置</button>
 </div>
 
-<!-- 速限標誌（JS 控制顯示）-->
-<div class="speedLimitSign" id="speedLimitSign">
-  <div class="limit-num" id="speedLimitNum">110</div>
-</div>
 
-<!-- 導航速度膠囊 -->
-<div class="navSpeedPill" id="navSpeedPill">
-  <div class="navSpeedPillCircle">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M12 5L5 14h5v5h4v-5h5L12 5z" fill="white"/>
-    </svg>
-  </div>
-  <span class="navSpeedPillNum" id="navSpeedPillNum">0</span>
-</div>
-
-<!-- 紅綠燈指示條 -->
-<div class="trafficLightBar" id="trafficLightBar">
-  <div class="tl-dot" style="background:#ff3b30;"></div>
-  <div class="tl-dot" style="background:#ffcc00;"></div>
-  <div class="tl-dot" style="background:#30d158;"></div>
-</div>
 
 
 <div class="cctvOverlay" id="cctvOverlay">
@@ -1358,6 +1258,8 @@ html, body {
   </button>
   <!-- 地圖風格 -->
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
+  <!-- AI 助理 -->
+  <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
 </div>
 
 <div class="bottomBar">
@@ -1420,7 +1322,7 @@ html, body {
     </div>
     </div><!-- /rect1Body -->
     <!-- 語音設定：在導航下方，overflow:hidden 收起時自動隱藏 -->
-    <div id="voiceDrawer" style="padding:4px 20px 14px;border-top:0.5px solid #eee;margin-top:2px;display:none;">
+    <div id="voiceDrawer" style="padding:4px 20px 14px;margin-top:2px;display:none;">
       <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🔊 導航語音</div>
       <div id="voiceList" style="display:flex;flex-direction:column;gap:6px;max-height:35vh;overflow-y:auto;"></div>
       <div style="margin-top:12px;font-size:12px;color:#666;">語速
@@ -1506,8 +1408,9 @@ if (navigator.geolocation) {
   // 使用者手動拖曳地圖時,暫停自動跟隨定位點,避免地圖被強制拉回;
   // 點擊定位按鈕(GeolocateControl)恢復跟隨。
   let followUser = true;
-  window._setFollowUser = function(v){ followUser = v; };
-  map.on('dragstart', () => { followUser = false; });
+  window._cameraFollow = true;
+  window._setFollowUser = function(v){ followUser = v; window._cameraFollow = v; };
+  map.on('dragstart', () => { followUser = false; window._cameraFollow = false; });
 
   map.on('load',()=>{
     // GeolocateControl 已移除，改用自訂 watchPosition + 車子圖示
@@ -1517,7 +1420,6 @@ if (navigator.geolocation) {
 
   const infoElement = document.querySelector('.info');
   const speedPillNum = document.getElementById('rect6SpeedValue');
-  const navSpeedPillNumEl = document.getElementById('navSpeedPillNum');
   const rect6El = document.getElementById('rect6');
   
   let startTime = null;
@@ -1569,6 +1471,7 @@ if (navigator.geolocation) {
   // ===== 退出導航（不需重新載入頁面）=====
   function stopNavigation() {
     isNavigating = false;
+    _navState = 'idle';
     navSteps = [];
     currentStepIndex = 0;
     Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
@@ -1894,6 +1797,7 @@ if (navigator.geolocation) {
     var isNav = document.body.classList.contains('navigating');
     var l, bot, mcBot, r4Bot, showRadio;
     var COMPACT = 83, NORMAL = 160;
+    var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
     if (h >= NORMAL) {
       l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
     } else if (h <= COMPACT) {
@@ -1905,10 +1809,13 @@ if (navigator.geolocation) {
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
     var trB = animated ? ('bottom .38s '+ease) : 'none';
-    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = bot+'px'; r1.style.height = h+'px'; }
-    if (mc) { mc.style.transition = trB; mc.style.bottom = mcBot+'px'; }
+    var trPad = animated ? ('padding .38s '+ease) : 'none';
+    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
+    if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
     if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? '' : 'none'; }
+    var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
+    if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
 
   // ===== rect1 卡片展開語音設定（跟手上滑）=====
@@ -1929,6 +1836,15 @@ if (navigator.geolocation) {
     return RECT1_COLLAPSED + dh + 8;
   }
 
+  function _openNavPanel() {
+    _setPanelState(RECT1_COLLAPSED, true);
+    _drawerOpen = false;
+  }
+  function _closeNavPanel() {
+    _setPanelState(RECT1_COMPACT, true);
+    setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
+    _drawerOpen = false;
+  }
   function _openDrawer() {
     _buildVoiceList();
     _expandedH = _measureExpanded();
@@ -1938,15 +1854,6 @@ if (navigator.geolocation) {
   }
   function _closeDrawer() {
     _setPanelState(RECT1_COLLAPSED, true);
-    setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
-    _drawerOpen = false;
-  }
-  function _openNavPanel() {
-    _setPanelState(RECT1_COLLAPSED, true);
-    _drawerOpen = false;
-  }
-  function _closeNavPanel() {
-    _setPanelState(RECT1_COMPACT, true);
     setTimeout(() => { if (!_drawerOpen) _voiceDrawer.style.display = 'none'; }, 400);
     _drawerOpen = false;
   }
@@ -2287,7 +2194,7 @@ if (navigator.geolocation) {
     });
   }
 
-  function selectDestination(lat, lon, name, addr){
+  window.selectDestination = function selectDestination(lat, lon, name, addr){
     selectedDest = { lat, lon, name, addr };
 
     if (destMarker) destMarker.remove();
@@ -2340,7 +2247,26 @@ if (navigator.geolocation) {
   let isNavigating = false;
   let navSteps = [];
   let currentStepIndex = 0;
-  const navStepVoiceState = {}; // key: 步驟索引, value: idle/warned200/warned30
+  const navStepVoiceState = {}; // key: 步驟索引, value: idle/w1000/w900/.../w100
+  let _lastNavAnnounceMs = 0;   // 上次轉彎播報的時間戳（毫秒），用於最小間隔保護
+  // 導航狀態機：'idle'|'planning'|'navigating'|'rerouting'|'arriving'|'completed'
+  let _navState = 'idle';
+  window._getNavState = () => _navState;
+  // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
+  // 回傳陣列由遠到近，最多 3 個值
+  function getActiveThresholds(speedKmh) {
+    const ms = Math.max(1, speedKmh / 3.6);
+    const far  = Math.min(2000, Math.max(400, Math.round(ms * 115 / 50) * 50));
+    const mid  = Math.min(600,  Math.max(150, Math.round(ms * 22  / 25) * 25));
+    const near = Math.min(120,  Math.max(60,  Math.round(ms * 6.7 / 10) * 10));
+    // 去重並過濾太接近的值（差距 < 50m 不重複播報）
+    const raw = [far, mid, near];
+    const out = [raw[0]];
+    for (let i = 1; i < raw.length; i++) {
+      if (raw[i] < out[out.length - 1] - 49) out.push(raw[i]);
+    }
+    return out;
+  }
 
   const rect8 = document.getElementById('rect8');
   const rect8Icon = document.getElementById('rect8Icon');
@@ -2381,6 +2307,47 @@ if (navigator.geolocation) {
     return '繼續前進';
   }
 
+  // 把動態門檻取整到導航 App 慣用的整數距離
+  function roundToNatural(m) {
+    if (m >= 1000) return Math.round(m / 1000) * 1000; // → 1公里, 2公里…
+    if (m >= 200)  return Math.round(m / 100) * 100; // → 200, 300, 400, 500…
+    return Math.round(m / 50) * 50;                  // → 50, 100
+  }
+
+  // 依門檻與步驟產生符合規格的語音字串
+  function buildNavVoice(step, threshold) {
+    const m = step.maneuver;
+    if (m.type === 'depart') return null;
+    if (m.type === 'arrive') return '您已抵達目的地。';
+    const r = roundToNatural(threshold);
+    const d = r >= 1000
+      ? (r / 1000 % 1 === 0 ? (r / 1000) : (r / 1000).toFixed(1)) + ' 公里'
+      : r + ' 公尺';
+    if (m.type === 'roundabout' || m.type === 'rotary') {
+      const exitNum = m.exit ? ('進入圓環後，從第' + m.exit + '個出口離開。') : '';
+      return d + '後進入圓環。' + exitNum;
+    }
+    if (m.type === 'merge') return d + '後匯入主線。';
+    if (m.type === 'off ramp') {
+      const name = step.name || null;
+      return name ? (d + '後，請靠右下交流道，' + name + '。') : (d + '後，請靠右下交流道。');
+    }
+    if (m.type === 'on ramp') {
+      return d + '後' + ((m.modifier && m.modifier.includes('left')) ? '請靠左' : '請靠右') + '上匝道。';
+    }
+    if (m.type === 'fork') {
+      return (m.modifier && m.modifier.includes('left')) ? (d + '後請靠左行駛。') : (d + '後請靠右行駛。');
+    }
+    const mod = m.modifier || '';
+    if (mod === 'left'  || mod === 'sharp left')  return d + '後請左轉。';
+    if (mod === 'right' || mod === 'sharp right') return d + '後請右轉。';
+    if (mod === 'slight left')  return d + '後向左前方行駛。';
+    if (mod === 'slight right') return d + '後向右前方行駛。';
+    if (mod === 'uturn') return d + '後迴轉。';
+    if (mod === 'straight' || m.type === 'continue' || m.type === 'new name') return d + '後直行。';
+    return d + '後' + maneuverToChinese(m) + '。';
+  }
+
   // 轉彎方向對應的箭頭圖示
   function iconForManeuver(maneuver){
     if (maneuver.type === 'depart') return '🚗';
@@ -2396,6 +2363,28 @@ if (navigator.geolocation) {
     if (mod === 'uturn') return '↩';
     return '↑';
   }
+  function svgForManeuver(maneuver){
+    const S=(d)=>`<svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const up   = S('<line x1="16" y1="27" x2="16" y2="7"/><polyline points="9,14 16,7 23,14"/>');
+    const right= S('<path d="M10,27 L10,15 Q10,7 17,7 L24,7" fill="none"/><polyline points="17,3 24,7 17,11"/>');
+    const left = S('<path d="M22,27 L22,15 Q22,7 15,7 L8,7" fill="none"/><polyline points="15,3 8,7 15,11"/>');
+    const sR   = S('<polyline points="10,27 10,7 24,7"/><polyline points="17,2 24,7 17,12"/>');
+    const sL   = S('<polyline points="22,27 22,7 8,7"/><polyline points="15,2 8,7 15,12"/>');
+    const uturn= S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,20" fill="none"/><polyline points="17,15 23,20 17,25"/>');
+    const round= S('<path d="M23,16 A7,7 0 1,1 16,9" fill="none"/><polyline points="14,5 16,9 20,9"/>');
+    const dest = S('<circle cx="16" cy="11" r="5"/><line x1="16" y1="16" x2="16" y2="27"/>');
+    if (maneuver.type==='arrive') return dest;
+    if (maneuver.type==='roundabout'||maneuver.type==='rotary') return round;
+    if (maneuver.type==='on ramp') return up;
+    if (maneuver.type==='off ramp') return (maneuver.modifier||'').includes('left')?left:right;
+    const mod=maneuver.modifier||'';
+    if (mod.includes('sharp left')) return sL;
+    if (mod.includes('sharp right')) return sR;
+    if (mod.includes('left')) return left;
+    if (mod.includes('right')) return right;
+    if (mod==='uturn') return uturn;
+    return up;
+  }
 
   // 更新Rectangle 8畫面顯示(圖示+距離+轉彎指示文字)
   function updateRect8Display(distanceMeters){
@@ -2405,7 +2394,7 @@ if (navigator.geolocation) {
     const text = maneuverToChinese(step.maneuver);
     const roadName = step.name ? ('進入' + step.name) : '';
     if (rect8Instruction) rect8Instruction.innerText = text + (roadName ? roadName : '');
-    if (rect8Icon) rect8Icon.innerText = iconForManeuver(step.maneuver);
+    if (rect8Icon) rect8Icon.innerHTML = svgForManeuver(step.maneuver);
     let distText = '';
     if (rect8Distance) {
       if (distanceMeters == null) {
@@ -2466,28 +2455,28 @@ if (navigator.geolocation) {
 
     console.log('[轉彎導航] 第' + currentStepIndex + '步,距離' + Math.round(meters) + '公尺,狀態:' + state + ',指示:' + text);
 
-    // 距離播報：1000m → 900 → 800 → ... → 200 → 100m（請轉彎）
-    // 速度快時自動跳過中間段，避免太頻繁
-    const NAV_THRESHOLDS = [1000, 300, 100]; // 只播 3 次：1公里、300公尺、請轉彎
-
     if (meters <= 15) {
       const already = navStepVoiceState[currentStepIndex];
-      if (!isDepart && already !== 'w100') speakText('請' + text + roadPart);
+      if (!isDepart && already !== 'w100') {
+        const v = buildNavVoice(step, 100);
+        if (v) speakText(v);
+      }
       currentStepIndex++;
       if (window._navStats) window._navStats.turns++;
       if (typeof window.earnCoin === 'function') window.earnCoin(2, '✅ 轉彎完成');
       navStepVoiceState[currentStepIndex] = navStepVoiceState[currentStepIndex] || 'idle';
       if (currentStepIndex >= navSteps.length) {
         isNavigating = false;
+        _navState = 'completed';
+        window._cameraFollow = false;
         document.body.classList.remove('navigating');
         _setPanelState(160, true);
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
-        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
         togglePoiLayers(true);
         if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
-        speakText('您已到達目的地');
+        speakText('您已抵達目的地。');
         if (typeof window.earnCoin === 'function') window.earnCoin(15, '完成導航');
         (function(){
           const s = window._navStats;
@@ -2523,19 +2512,23 @@ if (navigator.geolocation) {
         })();
       }
     } else if (!isDepart) {
-      const curState = navStepVoiceState[currentStepIndex] || 'idle';
-      const curIdx = curState === 'idle' ? -1 : NAV_THRESHOLDS.indexOf(parseInt(curState.slice(1)));
+      // 最小間隔保護：兩次轉彎播報至少間隔 8 秒，避免唸完馬上接下一句
+      if (Date.now() - _lastNavAnnounceMs < 8000) return;
 
-      for (let i = 0; i < NAV_THRESHOLDS.length; i++) {
-        const th = NAV_THRESHOLDS[i];
-        if (meters > th) continue;
-        if (i <= curIdx) continue;
+      const curState = navStepVoiceState[currentStepIndex] || 'idle';
+      const lastDist = curState === 'idle' ? Infinity : parseInt(curState.slice(1));
+      const active = getActiveThresholds(window.currentSpeedKmh || 50); // [遠→近]
+      const nearTh = active[active.length - 1];
+      const speedMs = Math.max((window.currentSpeedKmh || 50) / 3.6, 1);
+
+      for (const th of active) {
+        if (meters > th) continue;     // 還沒到這個距離
+        if (th >= lastDist) continue;  // 已播報過此距離以上的提示
+        // 仿 OsmAnd：中/遠段播報若距轉彎剩不到 15 秒，跳過（讓 near 來念）
+        if (th > nearTh && meters / speedMs < 15) continue;
         navStepVoiceState[currentStepIndex] = 'w' + th;
-        if (th === 100) {
-          speakText('請' + text + (roadPart ? '，'+roadPart : ''));
-        } else {
-          speakText('前方' + (th >= 1000 ? '1公里' : th+'公尺') + '，' + text + (roadPart ? '，'+roadPart : ''));
-        }
+        const voiceText = buildNavVoice(step, th);
+        if (voiceText) { speakText(voiceText); _lastNavAnnounceMs = Date.now(); }
         break;
       }
     }
@@ -2598,19 +2591,21 @@ if (navigator.geolocation) {
   async function triggerReroute(lat, lon) {
     if (isRerouting || !selectedDest) return;
     isRerouting = true;
+    _navState = 'rerouting';
 
-    speakText('您已偏航,正在重新規劃路線');
+    speakText('正在重新規劃路線。');
 
     if (rect8) {
       rect8Instruction.innerText = '重新規劃路線中...';
-      rect8Icon.innerText = '🔄';
+      rect8Icon.innerHTML = svgForManeuver({type:'roundabout'});
       rect8Distance.innerText = '';
     }
 
     try {
       await planRouteTo(selectedDest.lat, selectedDest.lon, { lat, lon });
-      lastRerouteTime = Date.now(); // 冷卻期從重新規劃成功後開始計算
-      speakText('路線已重新規劃');
+      lastRerouteTime = Date.now();
+      _navState = 'navigating';
+      speakText('路線已重新規劃。');
     } catch (e) {
       console.error('[偏航] 重新規劃失敗:', e);
       speakText('重新規劃失敗，請手動搜尋目的地');
@@ -2742,7 +2737,7 @@ if (navigator.geolocation) {
     }
 
     if (!fromPosition) {
-      // 正常導航才更新按鈕狀態
+      _navState = 'planning';
       navigateBtn.disabled = true;
       navigateBtn.innerText = '規劃路線中...';
     }
@@ -2808,6 +2803,7 @@ if (navigator.geolocation) {
       currentStepIndex = 0;
       Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
       isNavigating = true;
+      _navState = 'navigating';
       window._navStats = {t0:Date.now(), coins0:+(localStorage.getItem('sn_coins')||0), km0:totalDistance, turns:0, cleanCams:0};
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
       if (typeof window._coinFirstNav === 'function') window._coinFirstNav();
@@ -2831,20 +2827,22 @@ if (navigator.geolocation) {
         const firstRoadPart = firstStep.name ? ('進入' + firstStep.name) : '';
         const prevStep = navSteps[firstTurnIndex - 1];
         const firstStepDistanceMeters = prevStep ? prevStep.distance : null;
-        // 標記這一步已經播報過,避免GPS之後在200公尺/30公尺門檻又重複講一次
+        // 以出發距離作為「上次播報」基準，自動跳過比出發點更遠的門檻
         currentStepIndex = firstTurnIndex;
-        navStepVoiceState[firstTurnIndex] = 'w1000';
+        navStepVoiceState[firstTurnIndex] = 'w' + (firstStepDistanceMeters || 1200);
         updateRect8Display(firstStepDistanceMeters);
 
         if (fromPosition) {
-          // 重新規劃：只播報下一個轉彎指示，不重複「開始導航」全程摘要
-          // (triggerReroute 會接著播報「路線已重新規劃」)
+          // 重新規劃：只播報下一個轉彎指示
           if (firstStepDistanceMeters != null) {
-            const meters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            speakText('前方' + meters + '公尺' + firstText + firstRoadPart);
+            const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
+            const initActive = getActiveThresholds(window.currentSpeedKmh || 50);
+            const nearTh = initActive.find(th => th <= initMeters) || initActive[initActive.length - 1];
+            const initVoice = buildNavVoice(firstStep, nearTh);
+            if (initVoice) speakText(initVoice);
           }
         } else {
-          // 初始導航：依序播報各段（各段能單獨對應錄音包）
+          // 初始導航：依序播報各段
           const startH = Math.floor(durationMin / 60);
           const startM = durationMin % 60;
           const distKmInt = Math.round(route.distance / 1000);
@@ -2855,8 +2853,11 @@ if (navigator.geolocation) {
           const etaText = '預計' + etaH + '點' + etaM + '分到達';
           const items = ['開始導航', '全程' + distKmInt + '公里', durText, etaText];
           if (firstStepDistanceMeters != null) {
-            const meters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            items.push('前方' + meters + '公尺' + firstText + firstRoadPart);
+            const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
+            const initActive2 = getActiveThresholds(window.currentSpeedKmh || 50);
+            const nearTh = initActive2.find(th => th <= initMeters) || initActive2[initActive2.length - 1];
+            const initVoice = buildNavVoice(firstStep, nearTh);
+            if (initVoice) items.push(initVoice);
           } else if (firstText) {
             items.push(firstText + firstRoadPart);
           }
@@ -2914,8 +2915,6 @@ if (navigator.geolocation) {
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
   window.plannedRouteCoordinates = plannedRouteCoordinates;
 
-  const _speedSignEl = document.getElementById('speedLimitSign');
-  const _speedNumEl = document.getElementById('speedLimitNum');
   function checkSpeedCameraVoice(lat, lon, currentSpeedKmh){
     const data = window.speedCameraData;
     if (!data || !data.features) return;
@@ -2943,41 +2942,27 @@ if (navigator.geolocation) {
           if (window._navStats) window._navStats.cleanCams++;
           localStorage.setItem('sn_cam_clean', (parseInt(localStorage.getItem('sn_cam_clean')||'0')+1));
         }
-        speakQueue(['通過測速照相']);
+        speakText('通過測速照相。');
         speedCameraVoiceState[idx] = 'passed';
       } else {
         const camCurIdx = state === 'idle' ? -1 : CAM_THRESHOLDS.indexOf(parseInt(state.slice(1)));
-        const camSpd = currentSpeedKmh || 0;
-        const camGap = camSpd > 90 ? 500 : camSpd > 60 ? 200 : 100;
         for (let i = 0; i < CAM_THRESHOLDS.length; i++) {
           const th = CAM_THRESHOLDS[i];
           if (d*1000 > th) continue;
           if (i <= camCurIdx) continue;
           speedCameraVoiceState[idx] = 'w' + th;
-          const shouldPlay = th === 1000 || th === 100 || (th % camGap === 0);
-          if (shouldPlay) {
-            const distTxt = th >= 1000 ? '前方1公里' : '前方' + th + '公尺';
-            const items = [distTxt, '有固定', '測速照相'];
-            if (limTxt) items.push(limTxt);
-            if (th <= 100 && overTxt) items.push(overTxt);
-            speakQueue(items);
-            if (th <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
-          }
+          const distPart = th >= 1000 ? '1 公里' : th + ' 公尺';
+          const camVoice = p.limit
+            ? (distPart + '後有測速照相，限速' + p.limit + '公里。')
+            : (distPart + '後有測速照相。');
+          speakText(camVoice);
+          if (th <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
           break;
         }
       }
     });
     // 更新 currentSpeedLimit（供 updateDisplay 超速判斷用）
     window.currentSpeedLimit = nearestLimit ? Number(nearestLimit) : null;
-    // 速限標誌顯示
-    if (_speedSignEl && _speedNumEl) {
-      if (nearestLimit) {
-        _speedNumEl.textContent = nearestLimit;
-        _speedSignEl.style.display = 'flex';
-      } else {
-        _speedSignEl.style.display = 'none';
-      }
-    }
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
@@ -2986,6 +2971,13 @@ if (navigator.geolocation) {
   //   參數:緯度, 經度, 模擬車速(km/h)
   window.testSpeedCameraVoice = function(lat, lon, speedKmh){
     checkSpeedCameraVoice(lat, lon, speedKmh || 0);
+  };
+  // 供鍵盤測試模式呼叫，完全模擬真實 GPS 更新流程
+  window._navPositionUpdate = function(lat, lng, speedKmh){
+    checkTurnByTurn(lat, lng);
+    checkSpeedCameraVoice(lat, lng, speedKmh || 0);
+    if(typeof updateDisplay === 'function') updateDisplay(speedKmh || 0, 0);
+    if(typeof requestRoadNameUpdate === 'function') requestRoadNameUpdate(lng, lat);
   };
   // 重置所有測速照相的播報狀態,方便重複測試同一支
   window.resetSpeedCameraVoiceState = function(){
@@ -3091,7 +3083,6 @@ if (navigator.geolocation) {
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
-    if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = Math.round(speed);
     if (rect6El) {
       const lim = window.currentSpeedLimit;
       const isSpeeding = !!(lim && speed > lim);
@@ -3147,20 +3138,13 @@ if (navigator.geolocation) {
         });
       }
 
-      // 更新車子位置
-      if (typeof window.updateCarMarker === 'function') {
-        window.updateCarMarker(currentLon, currentLat);
-      }
-
-      // 地圖跟隨（不強制 zoom，由使用者控制縮放層級）
-      if (followUser) {
-        map.easeTo({
-          center: [currentLon, currentLat],
-          duration: 350,
-          padding: getUserCameraPadding(),
-          bearing: (window.compassHeading != null ? window.compassHeading : 0)
-        });
-      }
+      // 更新車子目標位置（rAF 插值迴圈會平滑插值到此）
+      window._vehicleTarget = {
+        lng: currentLon,
+        lat: currentLat,
+        bearing: window.compassHeading != null ? window.compassHeading : 0,
+        timestamp: Date.now()
+      };
 
       if (typeof checkTurnByTurn === 'function') {
         checkTurnByTurn(currentLat, currentLon);
@@ -3184,8 +3168,7 @@ if (navigator.geolocation) {
     }, (err) => {
       console.error('GPS error:', err);
       if (!window.simRunning) {
-        if (speedPillNum) speedPillNum.innerText = '—';
-        if (navSpeedPillNumEl) navSpeedPillNumEl.innerText = '—';
+        if (speedPillNum) speedPillNum.innerText = '--';
       }
     }, {
       enableHighAccuracy: true,
@@ -3258,29 +3241,93 @@ map.on('load', function() {
       }
     });
 
-    // 更新車子位置（每次 GPS 更新呼叫）
-    window.updateCarMarker = function(lng, lat) {
-      const heading = window.compassHeading != null ? window.compassHeading : 0;
+    // 原始繪製函式（由 rAF 插值迴圈呼叫）
+    window._updateCarMarkerRaw = function(lng, lat, bearing) {
       map.getSource('user-pos').setData({
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: heading } }]
+        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: bearing } }]
       });
     };
 
-    // 更新車子方向（羅盤轉動時呼叫）
+    // 兼容舊呼叫：直接寫入 target，由 rAF 接手
+    window.updateCarMarker = function(lng, lat) {
+      window._vehicleTarget = {
+        lng: lng, lat: lat,
+        bearing: window.compassHeading != null ? window.compassHeading : 0,
+        timestamp: Date.now()
+      };
+    };
+
+    // 羅盤轉動時更新 target bearing
     window.updateUserMarkerHeading = function() {
       if (window.currentLon != null && window.currentLat != null) {
-        window.updateCarMarker(window.currentLon, window.currentLat);
+        if (window._vehicleTarget) {
+          window._vehicleTarget.bearing = window.compassHeading != null ? window.compassHeading : 0;
+        } else {
+          window._vehicleTarget = {
+            lng: window.currentLon, lat: window.currentLat,
+            bearing: window.compassHeading != null ? window.compassHeading : 0,
+            timestamp: Date.now()
+          };
+        }
       }
     };
 
     // 若已有定位立即顯示
     if (window.currentLon != null && window.currentLat != null) {
-      window.updateCarMarker(window.currentLon, window.currentLat);
+      window._updateCarMarkerRaw(window.currentLon, window.currentLat,
+        window.compassHeading != null ? window.compassHeading : 0);
     }
   };
   _carImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(_carSvg);
 });
+</script>
+
+<script>
+// ===== 🚗 平滑車輛插值 rAF 迴圈 =====
+(function() {
+  // 目前插值後的顯示位置
+  let _dispLng = null, _dispLat = null, _dispBearing = 0;
+
+  function _lerpAngle(a, b, t) {
+    // 取最短角差（bearing 繞回處理）
+    let diff = ((b - a) % 360 + 540) % 360 - 180;
+    return a + diff * t;
+  }
+
+  function _rafLoop() {
+    requestAnimationFrame(_rafLoop);
+    const tgt = window._vehicleTarget;
+    if (!tgt) return;
+
+    if (_dispLng === null) {
+      _dispLng = tgt.lng;
+      _dispLat = tgt.lat;
+      _dispBearing = tgt.bearing;
+    } else {
+      const alpha = 0.15; // 插值係數：0 = 不動，1 = 瞬間到位
+      _dispLng = _dispLng + (_dispLng !== tgt.lng ? (tgt.lng - _dispLng) * alpha : 0);
+      _dispLat = _dispLat + (_dispLat !== tgt.lat ? (tgt.lat - _dispLat) * alpha : 0);
+      _dispBearing = _lerpAngle(_dispBearing, tgt.bearing, alpha);
+    }
+
+    if (typeof window._updateCarMarkerRaw === 'function') {
+      window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
+    }
+
+    // 地圖鏡頭跟隨
+    if (window._cameraFollow && typeof map !== 'undefined') {
+      map.easeTo({
+        center: [_dispLng, _dispLat],
+        bearing: _dispBearing,
+        duration: 0,
+        padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
+      });
+    }
+  }
+
+  _rafLoop();
+})();
 </script>
 
 <script>
@@ -3694,6 +3741,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if(window.currentLat !== undefined && window.currentLon !== undefined){
         map.easeTo({ center:[window.currentLon, window.currentLat], zoom:17, duration:600 });
         if(window._setFollowUser) window._setFollowUser(true);
+        window._cameraFollow = true;
       } else {
         navigator.geolocation.getCurrentPosition(function(pos){
           map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:17, duration:600 });
@@ -3740,9 +3788,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
+
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
@@ -4165,30 +4214,36 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（底部加三角指針）
+    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影、底部三角指針）
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
-      var sz=60, tip=10, totalH=sz+tip, r=sz/2, border=5;
-      var cv=document.createElement('canvas'); cv.width=sz; cv.height=totalH;
+      var sz=50, pad=8, tip=10;
+      var W=sz+pad*2, H=sz+pad*2+8+tip;
+      var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
       var cx=cv.getContext('2d');
-      // 白底圓
-      cx.beginPath(); cx.arc(r,r,r-1,0,Math.PI*2);
+      var r=sz/2, ox=W/2, oy=pad+r;
+      // 陰影 + 白底圓
+      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
+      cx.beginPath(); cx.arc(ox,oy,r,0,Math.PI*2);
       cx.fillStyle='#FFFFFF'; cx.fill();
-      // 紅框
-      cx.beginPath(); cx.arc(r,r,r-border/2,0,Math.PI*2);
-      cx.strokeStyle='#FF0000'; cx.lineWidth=border; cx.stroke();
-      // 速限文字
+      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+      // 紅框 5px
+      cx.beginPath(); cx.arc(ox,oy,r-2.5,0,Math.PI*2);
+      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
+      // 速限文字 + 文字陰影
+      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
       var fs=lim>=100?20:22;
-      cx.font='bold '+fs+'px Arial,sans-serif';
+      cx.font='400 '+fs+'px -apple-system,"SF Pro",Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillStyle='#000000'; cx.fillText(String(lim),r,r+1);
+      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy);
+      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
       // 底部三角指針
       cx.fillStyle='#FFFFFF';
       cx.beginPath();
-      cx.moveTo(r-8,sz); cx.lineTo(r+8,sz); cx.lineTo(r,sz+tip); cx.closePath();
+      cx.moveTo(ox-8,pad+sz); cx.lineTo(ox+8,pad+sz); cx.lineTo(ox,pad+sz+tip); cx.closePath();
       cx.fill();
-      m.addImage(key,{width:sz,height:totalH,data:cx.getImageData(0,0,sz,totalH).data});
+      m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
     });
 
     m.addSource('speed-cam',{type:'geojson',data:data,cluster:true,clusterMaxZoom:13,clusterRadius:50});
@@ -4817,8 +4872,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var glow     = document.getElementById('speedingGlow');
     if (display)  display.textContent  = Math.round(simSpeed);
     if (speedVal) speedVal.textContent = Math.round(simSpeed);
-    var navPill = document.getElementById('navSpeedPillNum');
-    if (navPill) navPill.textContent = Math.round(simSpeed);
     var over = simLimit > 0 && simSpeed > simLimit;
     if (rect6) rect6.classList.toggle('speeding', over);
     if (glow)  glow.classList.toggle('active', over);
@@ -4872,6 +4925,101 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var w = document.getElementById('speedingTestWidget');
     if (w) w.style.display = w.style.display === 'none' ? 'block' : 'none';
   };
+})();
+</script>
+
+<!-- ===== WASD 鍵盤駕駛測試 ===== -->
+<div id="kbHud" style="
+  display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.72);backdrop-filter:blur(12px);
+  color:#fff;font-family:'SF Pro Display',Arial,sans-serif;font-size:13px;font-weight:500;
+  padding:7px 16px;border-radius:20px;z-index:9999;
+  pointer-events:none;white-space:nowrap;
+  border:0.5px solid rgba(255,255,255,0.2);
+">⌨️ W油門 S煞車 A左 D右 &nbsp;|&nbsp; <span id="kbSpeedDisplay">0</span> km/h</div>
+
+<script>
+(function(){
+  var active = {};
+  var speed = 0;          // m/s
+  var bearing = 0;        // degrees
+  var lng = null, lat = null;
+  var lastT = null;
+  var hud = document.getElementById('kbHud');
+  var kbSpeedEl = document.getElementById('kbSpeedDisplay');
+
+  var ACCEL   = 2;    // m/s²
+  var BRAKE   = 6;    // m/s²
+  var FRICTION = 2;   // m/s² natural deceleration
+  var TURN    = 60;   // deg/s
+  var MAX_SPD = 28;   // m/s ≈ 100 km/h
+
+  function isActive(){ return active.w||active.s||active.a||active.d||speed>0.05; }
+
+  function init(){
+    var t = window._vehicleTarget;
+    if(t){ lng=t.lng; lat=t.lat; bearing=t.bearing||0; return; }
+    if(window.currentLon!=null){ lng=window.currentLon; lat=window.currentLat; bearing=0; }
+  }
+
+  function tick(now){
+    requestAnimationFrame(tick);
+    if(!isActive()){ lastT=null; if(hud)hud.style.display='none'; return; }
+    if(hud)hud.style.display='block';
+
+    if(lastT===null){ lastT=now; return; }
+    var dt = Math.min((now-lastT)/1000, 0.1);
+    lastT=now;
+
+    // 初始化座標
+    if(lng===null) init();
+    if(lng===null) return;
+
+    // 轉向（只有在移動中才需要調向）
+    if(active.a) bearing=(bearing-TURN*dt+360)%360;
+    if(active.d) bearing=(bearing+TURN*dt)%360;
+
+    // 油門/煞車/摩擦
+    if(active.w)      speed=Math.min(speed+ACCEL*dt, MAX_SPD);
+    else if(active.s) speed=Math.max(speed-BRAKE*dt, 0);
+    else              speed=Math.max(speed-FRICTION*dt, 0);
+
+    if(speed<0.01) return;
+
+    // 移動
+    var rad = bearing*Math.PI/180;
+    var cosLat = Math.cos(lat*Math.PI/180);
+    var dist = speed*dt;                         // meters
+    lat += (dist*Math.cos(rad))/111320;
+    lng += (dist*Math.sin(rad))/(111320*cosLat);
+
+    // 寫入車輛目標（rAF插值迴圈會接手平滑移動）
+    window._vehicleTarget = {lng:lng, lat:lat, bearing:bearing};
+    window.currentLon = lng;
+    window.currentLat = lat;
+
+    var kmh = Math.round(speed*3.6);
+    window.currentSpeedKmh = kmh;
+
+    // HUD 速度
+    if(kbSpeedEl) kbSpeedEl.textContent = kmh;
+
+    // ===== 觸發與真實 GPS 完全相同的導航邏輯 =====
+    if(typeof window._navPositionUpdate === 'function') window._navPositionUpdate(lat, lng, kmh);
+  }
+
+  document.addEventListener('keydown', function(e){
+    var k=e.key.toLowerCase();
+    if(['w','a','s','d'].includes(k)){
+      e.preventDefault();
+      if(!active[k]){ active[k]=true; if(lng===null) init(); }
+    }
+  });
+  document.addEventListener('keyup', function(e){
+    active[e.key.toLowerCase()]=false;
+  });
+
+  requestAnimationFrame(tick);
 })();
 </script>
 </body>
