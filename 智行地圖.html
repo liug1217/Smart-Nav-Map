@@ -24,7 +24,7 @@
   z-index:2;
 }
 
-:root{ --sab: env(safe-area-inset-bottom, 0px); }
+:root{ --sab: 0px; }
 html,body{
   margin:0;
   padding:0;
@@ -38,7 +38,7 @@ html,body{
   position:absolute;
   left:0;
   right:0;
-  bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  bottom:calc(8px + 0px);
   height:160px;
 }
 
@@ -47,7 +47,7 @@ html,body{
   position:fixed;
   left:16px;
   right:16px;
-  bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  bottom:calc(16px + 0px);
   height:83px;
   border:0.5px solid #d9d9d9;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -88,6 +88,8 @@ html,body{
   margin:19px 21px 0;
   flex-shrink:0;
 }
+
+
 .rect3{
   position:absolute;
   width:56px;
@@ -277,7 +279,7 @@ html,body{
   position:absolute;
   left:8px;
   right:8px;
-  bottom:calc(180px + env(safe-area-inset-bottom, 0px));
+  bottom:calc(180px + 0px);
   z-index:5;
   background:#FFFFFF;
   border-radius:14px;
@@ -663,7 +665,6 @@ body.navigating .earthquakeAlert{ top:218px; }
   line-height:1.2;
   color:#404345;
   white-space:nowrap;
-  text-shadow:0 4px 4px rgba(0,0,0,0.25);
 }
 
 .navExitBtn,.navOverviewBtn{
@@ -3791,7 +3792,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video-js.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.21.0/video.min.js"></script>
-<video id="bgMusic" class="video-js" style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;top:-9999px;left:-9999px;" preload="auto" playsinline></video>
+<video id="bgMusic" class="video-js" style="display:none!important" preload="auto" playsinline></video>
 <script>
 (function(){
   var BASE = 'https://stream.pbs.gov.tw:443/live/';
