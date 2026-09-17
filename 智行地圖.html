@@ -1866,7 +1866,7 @@ if (navigator.geolocation) {
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
       _moved = false;
-      _tgtIsBtn = !!e.target.closest('button, input, select, a, label, .navInfoCard');
+      _tgtIsBtn = !!e.target.closest('button, input, select, a, label');
       if (_tgtIsBtn) return;
       _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || RECT1_COMPACT);
       if (!_drawerOpen) {
