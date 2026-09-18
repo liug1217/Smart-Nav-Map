@@ -5534,7 +5534,7 @@ function _buildSingle(pts,cfg,feats){
   var totalHalfW=halfRoadW+(cfg.shoulder?cfg.shoulderW:0);
   // 路面
   var surf=_bandPoly(pts,-halfRoadW,halfRoadW);
-  if(surf) feats.push({type:'Feature',geometry:surf,properties:{cat:'surface',color:'#4A4A52',h:0.25,b:0}});
+  if(surf) feats.push({type:'Feature',geometry:surf,properties:{cat:'surface',color:'#3A3A42',h:0.25,b:0}});
   // 路肩
   if(cfg.shoulder&&cfg.shoulderW>0){
     var ls=_bandPoly(pts,-(halfRoadW+cfg.shoulderW),-halfRoadW);
@@ -5568,7 +5568,7 @@ function _buildDivided(pts,cfg,feats){
   [rL,lL].forEach(function(left,idx){
     var right=idx===0?rR:lR;
     var s=_bandPoly(pts,left,right);
-    if(s) feats.push({type:'Feature',geometry:s,properties:{cat:'surface',color:'#4A4A52',h:0.25,b:0}});
+    if(s) feats.push({type:'Feature',geometry:s,properties:{cat:'surface',color:'#3A3A42',h:0.25,b:0}});
   });
 
   // 中央分隔帶
