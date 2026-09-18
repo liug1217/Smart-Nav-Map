@@ -5319,11 +5319,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 (function(){
 'use strict';
 
+// ---------- 狀態 ----------
 var _panelOpen  = false;
 var _menuOpen   = false;
 var _drawActive = false;
 var _layers     = [];
 var _nextId     = 1;
+var _clickBuf   = [];   // [lng,lat] 等待配對
+var _roads      = [];   // 已提交的路段
 
 var _defaults = {
   yellowLine: {},
@@ -5333,6 +5336,7 @@ var _defaults = {
 };
 var _labels = {yellowLine:'黃線', lane:'車道', shoulder:'路肩', guardrail:'護欄'};
 
+// ---------- 面板開關 ----------
 function _openPanel(){
   _panelOpen = true;
   document.getElementById('roadToolPanel').style.display = 'block';
@@ -5349,6 +5353,7 @@ function _closeMenu(){
   document.getElementById('rtAddMenu').style.display = 'none';
 }
 
+// ---------- 截面元素清單 ----------
 function _addLayer(type){
   _layers.push({id:_nextId++, type:type, cfg:JSON.parse(JSON.stringify(_defaults[type]))});
   _renderList();
@@ -5414,6 +5419,64 @@ function _renderList(){
   });
 }
 
+// ---------- 截面幾何 ----------
+function _getCrossSection(layers){
+  var total = 0;
+  layers.forEach(function(l){
+    total += (l.type==='yellowLine') ? 0.20 : (l.cfg.width||0);
+  });
+  var pos = -(total/2), result = [];
+  layers.forEach(function(l){
+    var w, color, h;
+    if(l.type==='yellowLine'){ w=0.20; color='#FFD700'; h=0.28; }
+    else if(l.type==='lane'){  w=l.cfg.width; color='#3A3A42'; h=0.20; }
+    else if(l.type==='shoulder'){ w=l.cfg.width; color='#4A4A52'; h=0.18; }
+    else { w=l.cfg.width; color=l.cfg.color; h=l.cfg.height; }
+    result.push({off0:pos, off1:pos+w, color:color, h:h});
+    pos += w;
+  });
+  return result;
+}
+
+function _buildSegFeatures(A, B, layers){
+  var cosLat = Math.cos((A[1]+B[1])/2*Math.PI/180);
+  var dx = (B[0]-A[0])*111320*cosLat, dy = (B[1]-A[1])*111320;
+  var len = Math.sqrt(dx*dx+dy*dy);
+  if(len < 0.01) return [];
+  var pLng = -dy/len/(111320*cosLat), pLat = dx/len/111320;
+
+  return _getCrossSection(layers).map(function(e){
+    var A0=[A[0]+e.off0*pLng, A[1]+e.off0*pLat];
+    var A1=[A[0]+e.off1*pLng, A[1]+e.off1*pLat];
+    var B0=[B[0]+e.off0*pLng, B[1]+e.off0*pLat];
+    var B1=[B[0]+e.off1*pLng, B[1]+e.off1*pLat];
+    return {type:'Feature',
+            geometry:{type:'Polygon', coordinates:[[A0,A1,B1,B0,A0]]},
+            properties:{color:e.color, h:e.h, b:0}};
+  });
+}
+
+function _refreshMap(){
+  if(!map.getSource('rt-data')) return;
+  var feats = [];
+  _roads.forEach(function(r){ feats = feats.concat(_buildSegFeatures(r.A, r.B, r.layers)); });
+  map.getSource('rt-data').setData({type:'FeatureCollection', features:feats});
+}
+
+// ---------- 地圖點擊 ----------
+function _onMapClick(e){
+  if(!_drawActive) return;
+  var pt = [e.lngLat.lng, e.lngLat.lat];
+  if(_clickBuf.length === 0){
+    _clickBuf = [pt];
+  } else {
+    _roads.push({A:_clickBuf[0], B:pt, layers:JSON.parse(JSON.stringify(_layers))});
+    _clickBuf = [pt];
+    _refreshMap();
+  }
+}
+
+// ---------- UI 綁定 ----------
 function _bindUI(){
   document.getElementById('roadToolBtn').addEventListener('click', function(){
     _panelOpen ? _closePanel() : _openPanel();
@@ -5422,7 +5485,6 @@ function _bindUI(){
 
   var addBtn  = document.getElementById('rtAddBtn');
   var addMenu = document.getElementById('rtAddMenu');
-
   addBtn.addEventListener('click', function(e){
     e.stopPropagation();
     _menuOpen = !_menuOpen;
@@ -5437,16 +5499,36 @@ function _bindUI(){
 
   document.getElementById('rtDrawBtn').addEventListener('click', function(){
     _drawActive = !_drawActive;
+    _clickBuf = [];
     this.textContent = _drawActive ? '⏹ 停止繪畫' : '▶ 開始繪畫';
     this.style.background = _drawActive ? '#E53935' : '#1E88E5';
-    if(typeof map !== 'undefined') map.getCanvas().style.cursor = _drawActive ? 'crosshair' : '';
+    map.getCanvas().style.cursor = _drawActive ? 'crosshair' : '';
+    if(_drawActive) map.easeTo({pitch:45, duration:500});
   });
 }
 
-_bindUI();
+// ---------- 初始化 MapLibre 圖層 ----------
+function _initLayers(){
+  map.addSource('rt-data', {type:'geojson', data:{type:'FeatureCollection', features:[]}});
+  map.addLayer({
+    id:'rt-road', type:'fill-extrusion', source:'rt-data',
+    paint:{
+      'fill-extrusion-color':   ['get','color'],
+      'fill-extrusion-height':  ['get','h'],
+      'fill-extrusion-base':    ['get','b'],
+      'fill-extrusion-opacity': 1
+    }
+  });
+}
 
-// ---------- 幾何輔助（保留供後續使用） ----------
-function _lerp2D(a,b,t){ return [a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]; }
+function _init(){
+  _initLayers();
+  _bindUI();
+  map.on('click', _onMapClick);
+}
+
+if(map.loaded()) _init();
+else map.on('load', _init);
 
 })();
 </script>
