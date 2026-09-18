@@ -1424,6 +1424,19 @@ if (navigator.geolocation) {
   window._setFollowUser = function(v){ followUser = v; window._cameraFollow = v; };
   map.on('dragstart', () => { followUser = false; window._cameraFollow = false; });
 
+  // touchstart / mousedown 在地圖 canvas 上立刻停止跟隨，
+  // 避免 rAF 每幀 easeTo 阻止 MapLibre 偵測到手勢開始
+  map.getCanvas().addEventListener('touchstart', () => {
+    followUser = false; window._cameraFollow = false;
+  }, { passive: true });
+  map.getCanvas().addEventListener('mousedown', () => {
+    followUser = false; window._cameraFollow = false;
+  }, { passive: true });
+  // 捲軸縮放也立刻停止跟隨
+  map.getCanvas().addEventListener('wheel', () => {
+    followUser = false; window._cameraFollow = false;
+  }, { passive: true });
+
   map.on('load',()=>{
     // GeolocateControl 已移除，改用自訂 watchPosition + 車子圖示
   });
