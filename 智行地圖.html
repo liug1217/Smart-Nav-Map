@@ -5295,32 +5295,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   <h3>🛣 道路繪製</h3>
   <div class="rt-status" id="rtStatus">開啟繪製後點擊地圖新增節點</div>
 
-  <!-- 道路類型 -->
+  <!-- 每側車道設定 -->
   <div class="rt-section">
-    <div class="rt-section-title">道路類型</div>
+    <div class="rt-section-title">每側車道設定</div>
     <div class="rt-row">
-      <select id="rtRoadType" class="rt-select" style="flex:1">
-        <option value="single">一般道路（雙向）</option>
-        <option value="divided">分隔道路（國道 / 高速）</option>
-      </select>
-    </div>
-  </div>
-
-  <!-- 車道設定 -->
-  <div class="rt-section">
-    <div class="rt-section-title" id="rtLaneSectionTitle">車道設定</div>
-    <div class="rt-row">
-      <span style="flex:1" id="rtLanesLabel">車道數</span>
+      <span style="flex:1">車道數</span>
       <input type="number" id="rtLanes" value="4" min="1" max="10" step="1">
     </div>
     <div class="rt-row">
       <span style="flex:1">車道寬</span>
       <input type="number" id="rtLaneW" value="3.75" step="0.25" min="2" max="6">
-      <span>m</span>
-    </div>
-    <div class="rt-row">
-      <label><input type="checkbox" id="rtHasShoulder" checked>路肩</label>
-      <input type="number" id="rtShoulderW" value="3.0" step="0.25" min="0.5" max="6">
       <span>m</span>
     </div>
     <div class="rt-row">
@@ -5335,8 +5319,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     </div>
   </div>
 
-  <!-- 中央分隔帶（分隔道路才顯示） -->
-  <div class="rt-section" id="rtMedianSection" style="display:none">
+  <!-- 中央分隔帶 -->
+  <div class="rt-section">
     <div class="rt-section-title">中央分隔帶</div>
     <div class="rt-row">
       <span style="flex:1">寬度</span>
@@ -5608,11 +5592,8 @@ function _refreshData(){
 
 // ---------- 讀取 UI ----------
 function _readCfg(){
-  _cfg.roadType    = document.getElementById('rtRoadType').value;
   _cfg.lanes       = parseInt(document.getElementById('rtLanes').value)||4;
   _cfg.laneW       = parseFloat(document.getElementById('rtLaneW').value)||3.75;
-  _cfg.shoulder    = document.getElementById('rtHasShoulder').checked;
-  _cfg.shoulderW   = parseFloat(document.getElementById('rtShoulderW').value)||3.0;
   _cfg.guardrail   = document.getElementById('rtHasGuardrail').checked;
   _cfg.guardrailH  = parseFloat(document.getElementById('rtGuardrailH').value)||1.1;
   _cfg.guardrailW  = parseFloat(document.getElementById('rtGuardrailW').value)||0.5;
@@ -5682,6 +5663,10 @@ function _bindUI(){
   document.getElementById('roadToolPanel').querySelector('h3').addEventListener('dblclick',_closePanel);
 
   document.getElementById('rtShowMarkings').addEventListener('change',function(){_readCfg();_refreshData();});
+  document.getElementById('rtHasGuardrail').addEventListener('change',function(){
+    document.getElementById('rtGuardrailWidthRow').style.display=this.checked?'flex':'none';
+    _readCfg(); _refreshData();
+  });
 
   document.getElementById('rtToggleBtn').addEventListener('click',function(){
     _drawActive=!_drawActive;
@@ -5724,10 +5709,6 @@ function _bindUI(){
    'rtMedianStyle','rtMedianGuardrail','rtMedianGuardrailH'].forEach(function(id){
     var el=document.getElementById(id);
     if(el) el.addEventListener('change',function(){_readCfg();_refreshData();});
-  });
-  document.getElementById('rtHasGuardrail').addEventListener('change',function(){
-    document.getElementById('rtGuardrailWidthRow').style.display=this.checked?'flex':'none';
-    _readCfg(); _refreshData();
   });
 }
 
