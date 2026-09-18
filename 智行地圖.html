@@ -5295,9 +5295,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   <h3>🛣 道路繪製</h3>
   <div class="rt-status" id="rtStatus">開啟繪製後點擊地圖新增節點</div>
 
-  <!-- 每側車道設定 -->
+  <!-- 道路類型 -->
   <div class="rt-section">
-    <div class="rt-section-title">每側車道設定</div>
+    <div class="rt-row">
+      <select id="rtRoadType" class="rt-select" style="flex:1">
+        <option value="single">一般道路（4 點 / 2 點延伸）</option>
+        <option value="divided">分隔道路（8 點 / 4 點延伸）</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 車道設定 -->
+  <div class="rt-section">
+    <div class="rt-section-title" id="rtLaneSectionTitle">車道設定</div>
     <div class="rt-row">
       <span style="flex:1">車道數</span>
       <input type="number" id="rtLanes" value="4" min="1" max="10" step="1">
@@ -5319,8 +5329,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     </div>
   </div>
 
-  <!-- 中央分隔帶 -->
-  <div class="rt-section">
+  <!-- 中央分隔帶（分隔道路才顯示） -->
+  <div class="rt-section" id="rtMedianSection" style="display:none">
     <div class="rt-section-title">中央分隔帶</div>
     <div class="rt-row">
       <span style="flex:1">寬度</span>
@@ -5372,9 +5382,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 var _panelOpen  = false;
 var _drawActive = false;
-var _baseCross  = null; // 上一段的終點截面 {LL,LR,RL,RR}；null=尚未有參考點
-var _clickBuf   = [];   // 收集中的點：null時需8點，有baseCross時需4點
-var _roads      = [];   // 完成的路段 [{xs0,xs1,prevBase,cfg}]
+var _mode       = 'single'; // 'single'(4/2點) | 'divided'(8/4點)
+var _baseCross  = null;     // 上一段的終點截面；single={L,R} divided={LL,LR,RL,RR}
+var _clickBuf   = [];       // 收集中的點
+var _roads      = [];       // 完成的路段 [{mode,xs0,xs1,prevBase,cfg}]
 var _cfg = {
   roadType:'single', lanes:4, laneW:3.75,
   shoulder:true, shoulderW:3.0,
@@ -5482,7 +5493,7 @@ function _getSpec(cfg){
 
 }
 
-// ---------- 建構一段路（4 點截面 × 2） ----------
+// ---------- 建構一段路 ----------
 function _quad(a,b,c,d,cat,color,h){
   return {type:'Feature',geometry:{type:'Polygon',coordinates:[[a,b,c,d,a]]},properties:{cat:cat,color:color,h:h,b:0}};
 }
@@ -5524,6 +5535,31 @@ function _buildSeg4(xs0,xs1,cfg){
   }
   return feats;
 }
+function _buildSeg2(xs0,xs1,cfg){
+  var feats=[],gW=cfg.guardrailW||0.5,mH=0.32,mCol='#E8E8E8';
+  feats.push(_quad(xs0.L,xs0.R,xs1.R,xs1.L,'surface','#3A3A42',0.25));
+  if(cfg.guardrail){
+    var gH=cfg.guardrailH||1.1;
+    feats.push({type:'Feature',geometry:_bandLine(xs0.L,xs1.L,gW),properties:{cat:'guardrail',color:'#B0B0B8',h:gH,b:0}});
+    feats.push({type:'Feature',geometry:_bandLine(xs0.R,xs1.R,gW),properties:{cat:'guardrail',color:'#B0B0B8',h:gH,b:0}});
+  }
+  if(cfg.showMarkings){
+    var n=cfg.lanes||4;
+    for(var i=1;i<n;i++){
+      var t=i/n;
+      var A=_lerp2D(xs0.L,xs0.R,t),B=_lerp2D(xs1.L,xs1.R,t);
+      _dashedLineBands(A,B,0.15).forEach(function(f){f.properties={cat:'marking',color:mCol,h:mH,b:0};feats.push(f);});
+    }
+    feats.push({type:'Feature',geometry:_bandLine(xs0.L,xs1.L,0.15),properties:{cat:'marking',color:mCol,h:mH,b:0}});
+    feats.push({type:'Feature',geometry:_bandLine(xs0.R,xs1.R,0.15),properties:{cat:'marking',color:mCol,h:mH,b:0}});
+    var mA=_lerp2D(xs0.L,xs0.R,0.5),mB=_lerp2D(xs1.L,xs1.R,0.5);
+    _doubleLineBands(mA,mB,0.15,0.1).forEach(function(f){f.properties={cat:'marking',color:'#FFD700',h:mH,b:0};feats.push(f);});
+  }
+  return feats;
+}
+function _buildRoad(r){
+  return r.mode==='divided'?_buildSeg4(r.xs0,r.xs1,r.cfg):_buildSeg2(r.xs0,r.xs1,r.cfg);
+}
 
 // ---------- MapLibre 圖層 ----------
 function _initLayers(){
@@ -5551,47 +5587,73 @@ function _initLayers(){
 
 function _refreshData(){
   var all=[];
-  _roads.forEach(function(r){all=all.concat(_buildSeg4(r.xs0,r.xs1,r.cfg));});
-  // 預覽路段
-  var xs0=null,xs1=null;
+  _roads.forEach(function(r){all=all.concat(_buildRoad(r));});
+
+  // 預覽
+  var xs0=null,xs1=null,isDivided=(_mode==='divided');
   if(_baseCross===null){
-    if(_clickBuf.length>=4) xs0={LL:_clickBuf[0],LR:_clickBuf[1],RL:_clickBuf[2],RR:_clickBuf[3]};
-    if(_clickBuf.length>=8) xs1={LL:_clickBuf[4],LR:_clickBuf[5],RL:_clickBuf[6],RR:_clickBuf[7]};
+    if(isDivided){
+      if(_clickBuf.length>=4) xs0={LL:_clickBuf[0],LR:_clickBuf[1],RL:_clickBuf[2],RR:_clickBuf[3]};
+      if(_clickBuf.length>=8) xs1={LL:_clickBuf[4],LR:_clickBuf[5],RL:_clickBuf[6],RR:_clickBuf[7]};
+    } else {
+      if(_clickBuf.length>=2) xs0={L:_clickBuf[0],R:_clickBuf[1]};
+      if(_clickBuf.length>=4) xs1={L:_clickBuf[2],R:_clickBuf[3]};
+    }
   } else {
     xs0=_baseCross;
-    if(_clickBuf.length>=4) xs1={LL:_clickBuf[0],LR:_clickBuf[1],RL:_clickBuf[2],RR:_clickBuf[3]};
+    if(isDivided){
+      if(_clickBuf.length>=4) xs1={LL:_clickBuf[0],LR:_clickBuf[1],RL:_clickBuf[2],RR:_clickBuf[3]};
+    } else {
+      if(_clickBuf.length>=2) xs1={L:_clickBuf[0],R:_clickBuf[1]};
+    }
   }
-  if(xs0&&xs1) all=all.concat(_buildSeg4(xs0,xs1,_cfg));
+  if(xs0&&xs1) all=all.concat(isDivided?_buildSeg4(xs0,xs1,_cfg):_buildSeg2(xs0,xs1,_cfg));
   map.getSource('rt-data').setData({type:'FeatureCollection',features:all});
 
   var prev=[];
-  // 顯示 baseCross 的參考線
+  function _pt(p){return {type:'Feature',geometry:{type:'Point',coordinates:p},properties:{}};}
+  function _ln(a,b){return {type:'Feature',geometry:{type:'LineString',coordinates:[a,b]},properties:{}};}
+
+  // 參考截面（baseCross 的點線）
   if(_baseCross){
     var bc=_baseCross;
-    [[bc.LL,bc.LR],[bc.RL,bc.RR]].forEach(function(seg){
-      prev.push({type:'Feature',geometry:{type:'LineString',coordinates:seg},properties:{}});
-    });
-    [bc.LL,bc.LR,bc.RL,bc.RR].forEach(function(p){
-      prev.push({type:'Feature',geometry:{type:'Point',coordinates:p},properties:{}});
-    });
+    if(isDivided){
+      prev.push(_ln(bc.LL,bc.LR)); prev.push(_ln(bc.RL,bc.RR));
+      [bc.LL,bc.LR,bc.RL,bc.RR].forEach(function(p){prev.push(_pt(p));});
+    } else {
+      prev.push(_ln(bc.L,bc.R));
+      [bc.L,bc.R].forEach(function(p){prev.push(_pt(p));});
+    }
   }
-  // 目前 buffer 的點與截面線
-  _clickBuf.forEach(function(p){prev.push({type:'Feature',geometry:{type:'Point',coordinates:p},properties:{}});});
-  var off=(_baseCross===null)?0:0; // buffer index offset always 0
+
+  // buffer 點
+  _clickBuf.forEach(function(p){prev.push(_pt(p));});
+
+  // buffer 截面線
   if(_baseCross===null){
-    if(_clickBuf.length>=2) prev.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[0],_clickBuf[1]]},properties:{}});
-    if(_clickBuf.length>=4) prev.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[2],_clickBuf[3]]},properties:{}});
-    if(_clickBuf.length>=6) prev.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[4],_clickBuf[5]]},properties:{}});
-    if(_clickBuf.length>=8) prev.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[6],_clickBuf[7]]},properties:{}});
+    if(isDivided){
+      if(_clickBuf.length>=2) prev.push(_ln(_clickBuf[0],_clickBuf[1]));
+      if(_clickBuf.length>=4) prev.push(_ln(_clickBuf[2],_clickBuf[3]));
+      if(_clickBuf.length>=6) prev.push(_ln(_clickBuf[4],_clickBuf[5]));
+      if(_clickBuf.length>=8) prev.push(_ln(_clickBuf[6],_clickBuf[7]));
+    } else {
+      if(_clickBuf.length>=2) prev.push(_ln(_clickBuf[0],_clickBuf[1]));
+      if(_clickBuf.length>=4) prev.push(_ln(_clickBuf[2],_clickBuf[3]));
+    }
   } else {
-    if(_clickBuf.length>=2) prev.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[0],_clickBuf[1]]},properties:{}});
-    if(_clickBuf.length>=4) prev.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[2],_clickBuf[3]]},properties:{}});
+    if(isDivided){
+      if(_clickBuf.length>=2) prev.push(_ln(_clickBuf[0],_clickBuf[1]));
+      if(_clickBuf.length>=4) prev.push(_ln(_clickBuf[2],_clickBuf[3]));
+    } else {
+      if(_clickBuf.length>=2) prev.push(_ln(_clickBuf[0],_clickBuf[1]));
+    }
   }
   map.getSource('rt-preview').setData({type:'FeatureCollection',features:prev});
 }
 
 // ---------- 讀取 UI ----------
 function _readCfg(){
+  _mode            = document.getElementById('rtRoadType').value;
   _cfg.lanes       = parseInt(document.getElementById('rtLanes').value)||4;
   _cfg.laneW       = parseFloat(document.getElementById('rtLaneW').value)||3.75;
   _cfg.guardrail   = document.getElementById('rtHasGuardrail').checked;
@@ -5604,38 +5666,49 @@ function _readCfg(){
   _cfg.medianGuardrailH = parseFloat(document.getElementById('rtMedianGuardrailH').value)||1.3;
 }
 
-// ---------- 地圖點擊（首段 8 點，延伸每 4 點） ----------
-var _LBL8=['1/8 左道左緣(起)','2/8 左道右緣(起)','3/8 右道左緣(起)','4/8 右道右緣(起)',
-           '5/8 左道左緣(終)','6/8 左道右緣(終)','7/8 右道左緣(終)','8/8 右道右緣(終)'];
-var _LBL4=['1/4 左道左緣','2/4 左道右緣','3/4 右道左緣','4/4 右道右緣'];
+// ---------- 地圖點擊 ----------
+var _LBL={
+  single:{first:['1/4 左緣(起)','2/4 右緣(起)','3/4 左緣(終)','4/4 右緣(終)'],
+          cont: ['1/2 左緣','2/2 右緣']},
+  divided:{first:['1/8 左道左緣(起)','2/8 左道右緣(起)','3/8 右道左緣(起)','4/8 右道右緣(起)',
+                  '5/8 左道左緣(終)','6/8 左道右緣(終)','7/8 右道左緣(終)','8/8 右道右緣(終)'],
+           cont: ['1/4 左道左緣','2/4 左道右緣','3/4 右道左緣','4/4 右道右緣']}
+};
 function _setStatus(txt,active){
   var s=document.getElementById('rtStatus');
   s.textContent=txt; s.className='rt-status'+(active?' active':'');
+}
+function _xsFromBuf(buf,off,isDivided){
+  return isDivided
+    ?{LL:buf[off],LR:buf[off+1],RL:buf[off+2],RR:buf[off+3]}
+    :{L:buf[off],R:buf[off+1]};
 }
 function _onMapClick(e){
   if(!_drawActive) return;
   _clickBuf.push([e.lngLat.lng,e.lngLat.lat]);
   var n=_clickBuf.length;
-  var needed=(_baseCross===null)?8:4;
+  var isDivided=(_mode==='divided');
+  var xsSize=isDivided?4:2;
+  var needed=(_baseCross===null)?xsSize*2:xsSize;
   if(n===needed){
     var xs0,xs1;
     if(_baseCross===null){
-      xs0={LL:_clickBuf[0],LR:_clickBuf[1],RL:_clickBuf[2],RR:_clickBuf[3]};
-      xs1={LL:_clickBuf[4],LR:_clickBuf[5],RL:_clickBuf[6],RR:_clickBuf[7]};
+      xs0=_xsFromBuf(_clickBuf,0,isDivided);
+      xs1=_xsFromBuf(_clickBuf,xsSize,isDivided);
     } else {
       xs0=_baseCross;
-      xs1={LL:_clickBuf[0],LR:_clickBuf[1],RL:_clickBuf[2],RR:_clickBuf[3]};
+      xs1=_xsFromBuf(_clickBuf,0,isDivided);
     }
     _readCfg();
-    _roads.push({xs0:xs0,xs1:xs1,prevBase:_baseCross,cfg:JSON.parse(JSON.stringify(_cfg))});
+    _roads.push({mode:_mode,xs0:xs0,xs1:xs1,prevBase:_baseCross,cfg:JSON.parse(JSON.stringify(_cfg))});
     _baseCross=xs1;
     _clickBuf=[];
     _refreshData();
-    _setStatus('路段完成！再點 4 下延伸，或「完成路段」開始新路',true);
+    _setStatus('路段完成！繼續點擊延伸，或「完成路段」開始新路',true);
   } else {
     _refreshData();
-    var labels=(_baseCross===null)?_LBL8:_LBL4;
-    _setStatus('點 '+labels[n],true);
+    var lbls=_LBL[_mode][_baseCross===null?'first':'cont'];
+    _setStatus('點 '+lbls[n],true);
   }
 }
 
@@ -5652,7 +5725,7 @@ function _closePanel(){
   document.getElementById('roadToolBtn').classList.remove('rt-active');
   document.getElementById('rtToggleBtn').textContent='▶ 開始繪製';
   document.getElementById('rtToggleBtn').style.background='#1E88E5';
-  _baseCross=null; _clickBuf=[]; _refreshData();
+  _baseCross=null; _clickBuf=[]; _mode='single'; _refreshData();
   map.easeTo({pitch:0,duration:400});
   map.getCanvas().style.cursor='';
 }
@@ -5661,6 +5734,14 @@ function _closePanel(){
 function _bindUI(){
   document.getElementById('roadToolBtn').addEventListener('click',function(){_panelOpen?_closePanel():_openPanel();});
   document.getElementById('roadToolPanel').querySelector('h3').addEventListener('dblclick',_closePanel);
+
+  document.getElementById('rtRoadType').addEventListener('change',function(){
+    _readCfg();
+    document.getElementById('rtMedianSection').style.display=(_mode==='divided')?'block':'none';
+    document.getElementById('rtLaneSectionTitle').textContent=(_mode==='divided')?'每側車道設定':'車道設定';
+    _baseCross=null; _clickBuf=[]; _refreshData();
+    if(_drawActive) _setStatus('點 '+_LBL[_mode].first[0],true);
+  });
 
   document.getElementById('rtShowMarkings').addEventListener('change',function(){_readCfg();_refreshData();});
   document.getElementById('rtHasGuardrail').addEventListener('change',function(){
@@ -5673,30 +5754,30 @@ function _bindUI(){
     this.textContent=_drawActive?'⏹ 停止繪製':'▶ 開始繪製';
     this.style.background=_drawActive?'#E53935':'#1E88E5';
     if(_drawActive){
-      _setStatus('點 '+(_baseCross?_LBL4[0]:_LBL8[0]),true);
+      var lbls=_LBL[_mode][_baseCross?'cont':'first'];
+      _setStatus('點 '+lbls[0],true);
       map.getCanvas().style.cursor='crosshair';
     } else {
       _setStatus('已停止繪製'); map.getCanvas().style.cursor='';
     }
   });
 
-  // 完成路段 = 結束目前路，下次重新從 8 點開始
   document.getElementById('rtFinishBtn').addEventListener('click',function(){
     _baseCross=null; _clickBuf=[]; _refreshData();
-    _setStatus('點 '+_LBL8[0]+' 開始新路',true);
+    _setStatus('點 '+_LBL[_mode].first[0]+' 開始新路',true);
   });
 
   document.getElementById('rtUndoBtn').addEventListener('click',function(){
     if(_clickBuf.length>0){
       _clickBuf.pop(); _refreshData();
       var n=_clickBuf.length;
-      var labels=(_baseCross===null)?_LBL8:_LBL4;
-      _setStatus(n===0?'點 '+labels[0]:('點 '+labels[n]),true);
+      var lbls=_LBL[_mode][_baseCross===null?'first':'cont'];
+      _setStatus('點 '+(n===0?lbls[0]:lbls[n]),true);
     } else if(_roads.length>0){
       var last=_roads.pop();
       _baseCross=last.prevBase;
       _refreshData();
-      _setStatus('已撤銷，'+(_baseCross?'點 '+_LBL4[0]+' 延伸':'點 '+_LBL8[0]+' 重新開始'),true);
+      _setStatus('已撤銷，點 '+_LBL[_mode][_baseCross?'cont':'first'][0],true);
     }
   });
 
