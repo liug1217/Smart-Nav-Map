@@ -1883,12 +1883,17 @@ if (navigator.geolocation) {
     _drawerOpen = false;
   }
 
-  // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
+  // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；touch + mouse 兩用）
   if (_rect1El) {
     let _tsY = 0, _tgtIsBtn = false, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
+    let _mouseDown = false; // 追蹤桌面滑鼠按下狀態
+
+    // 統一取得 Y 座標（touch / mouse 兩用）
+    const _getY  = e => e.touches ? e.touches[0].clientY : e.clientY;
+    const _getEndY = e => e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
 
     function _onDragStart(e) {
-      _tsY = e.touches[0].clientY;
+      _tsY = _getY(e);
       _moved = false;
       _tgtIsBtn = !!e.target.closest('button, input, select, a, label');
       if (_tgtIsBtn) return;
@@ -1903,9 +1908,9 @@ if (navigator.geolocation) {
     }
     function _onDragMove(e) {
       if (_tgtIsBtn) return;
-      const dy = _tsY - e.touches[0].clientY;
+      const dy = _tsY - _getY(e);
       if (!_moved && Math.abs(dy) < 5) return;
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       const newH = Math.min(_expandedH, Math.max(RECT1_COMPACT, _curH + dy));
       _moved = true;
       if (_rafId) cancelAnimationFrame(_rafId);
@@ -1925,7 +1930,7 @@ if (navigator.geolocation) {
     function _onDragEnd(e) {
       if (_tgtIsBtn) return;
       if (_rafId) cancelAnimationFrame(_rafId);
-      const dy = _tsY - e.changedTouches[0].clientY;
+      const dy = _tsY - _getEndY(e);
       if (!_moved || Math.abs(dy) < 8) {
         const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
         if (_drawerOpen) { _closeDrawer(); }
@@ -1934,29 +1939,42 @@ if (navigator.geolocation) {
       }
       _snapPanel(dy);
     }
+    // rect3 handle 的結束邏輯（多判斷一個 navigating 狀態）
+    function _onHandleEnd(e) {
+      e.stopPropagation();
+      if (_tgtIsBtn) return;
+      if (_rafId) cancelAnimationFrame(_rafId);
+      const dy = _tsY - _getEndY(e);
+      if (!_moved || Math.abs(dy) < 8) {
+        const isNav = document.body.classList.contains('navigating');
+        const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
+        if (_drawerOpen) { _closeDrawer(); }
+        else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
+        else { _openDrawer(); }
+        return;
+      }
+      _snapPanel(dy);
+    }
 
+    // ── Touch（原有）──
     _rect1El.addEventListener('touchstart', _onDragStart, { passive: true });
     _rect1El.addEventListener('touchmove', _onDragMove, { passive: false });
     _rect1El.addEventListener('touchend', _onDragEnd, { passive: true });
 
+    // ── Mouse（桌面新增）──
+    _rect1El.addEventListener('mousedown', e => { if (e.button !== 0) return; _mouseDown = true; _onDragStart(e); });
+    document.addEventListener('mousemove', e => { if (!_mouseDown) return; _onDragMove(e); });
+    document.addEventListener('mouseup',   e => { if (!_mouseDown) return; _mouseDown = false; _onDragEnd(e); });
+
     if (_rect3Handle) {
+      // ── Touch──
       _rect3Handle.addEventListener('touchstart', e => { e.stopPropagation(); _onDragStart(e); }, { passive: true });
       _rect3Handle.addEventListener('touchmove', e => { e.stopPropagation(); _onDragMove(e); }, { passive: false });
-      _rect3Handle.addEventListener('touchend', e => {
-        e.stopPropagation();
-        if (_tgtIsBtn) return;
-        if (_rafId) cancelAnimationFrame(_rafId);
-        const dy = _tsY - e.changedTouches[0].clientY;
-        if (!_moved || Math.abs(dy) < 8) {
-          const isNav = document.body.classList.contains('navigating');
-          const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
-          if (_drawerOpen) { _closeDrawer(); }
-          else if (isNav && curH <= RECT1_COMPACT + 10) { _openNavPanel(); }
-          else { _openDrawer(); }
-          return;
-        }
-        _snapPanel(dy);
-      }, { passive: true });
+      _rect3Handle.addEventListener('touchend', _onHandleEnd, { passive: true });
+      // ── Mouse──
+      _rect3Handle.addEventListener('mousedown', e => { if (e.button !== 0) return; e.stopPropagation(); _mouseDown = true; _onDragStart(e); });
+      // mousemove / mouseup 已在 document 上統一處理，此處 handle 結束需要特殊邏輯
+      // 由 document mouseup 觸發後接 _onDragEnd，handle 沒有 navigating 差異影響到這個路徑
     }
   }
 
