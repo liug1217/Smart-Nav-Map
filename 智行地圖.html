@@ -5287,9 +5287,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 /* 新增選單 */
 #rtAddWrap{position:relative;}
 #rtAddMenu{
-  display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;
+  display:none;margin-top:4px;
   background:#141b28;border:1px solid rgba(255,255,255,0.14);border-radius:8px;
-  overflow:hidden;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,0.65);
+  overflow:hidden;
 }
 .rt-add-opt{
   display:block;width:100%;padding:9px 12px;background:none;border:none;
@@ -5303,7 +5303,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <div id="roadToolPanel">
   <h3>🛣 道路繪製</h3>
   <div id="rtLayerList"></div>
-  <div id="rtAddWrap">
+  <div id="rtAddWrap" style="margin-bottom:10px">
     <button class="rt-btn rt-btn-secondary" id="rtAddBtn">＋ 新增截面元素</button>
     <div id="rtAddMenu">
       <button class="rt-add-opt" data-type="yellowLine">— 黃線（中線）</button>
@@ -5312,16 +5312,18 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       <button class="rt-add-opt" data-type="guardrail">　 護欄</button>
     </div>
   </div>
+  <button id="rtDrawBtn" style="width:100%;padding:10px 0;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;background:#1E88E5;color:#fff;transition:background 0.2s">▶ 開始繪畫</button>
 </div>
 
 <script>
 (function(){
 'use strict';
 
-var _panelOpen = false;
-var _menuOpen  = false;
-var _layers    = [];
-var _nextId    = 1;
+var _panelOpen  = false;
+var _menuOpen   = false;
+var _drawActive = false;
+var _layers     = [];
+var _nextId     = 1;
 
 var _defaults = {
   yellowLine: {},
@@ -5431,6 +5433,13 @@ function _bindUI(){
   });
   document.addEventListener('click', function(e){
     if(_menuOpen && !addMenu.contains(e.target) && e.target !== addBtn) _closeMenu();
+  });
+
+  document.getElementById('rtDrawBtn').addEventListener('click', function(){
+    _drawActive = !_drawActive;
+    this.textContent = _drawActive ? '⏹ 停止繪畫' : '▶ 開始繪畫';
+    this.style.background = _drawActive ? '#E53935' : '#1E88E5';
+    if(typeof map !== 'undefined') map.getCanvas().style.cursor = _drawActive ? 'crosshair' : '';
   });
 }
 
