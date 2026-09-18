@@ -5322,9 +5322,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       <input type="number" id="rtGuardrailH" value="1.1" step="0.1" min="0.3" max="4">
       <span>m</span>
     </div>
-    <div class="rt-row" id="rtGuardrailWidthRow" style="display:none">
-      <span style="flex:1;padding-left:20px">護欄寬</span>
-      <input type="number" id="rtGuardrailW" value="0.5" step="0.1" min="0.1" max="1.5">
+    <!-- 一般道路才顯示內側護欄 -->
+    <div class="rt-row" id="rtInnerRailRow">
+      <label><input type="checkbox" id="rtHasInnerRail">內側護欄</label>
+      <input type="number" id="rtInnerRailH" value="1.1" step="0.1" min="0.3" max="4">
       <span>m</span>
     </div>
   </div>
@@ -5346,7 +5347,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     </div>
     <div class="rt-row">
       <label><input type="checkbox" id="rtMedianGuardrail" checked>中央護欄</label>
-      <input type="number" id="rtMedianGuardrailH" value="1.3" step="0.1" min="0.3" max="4">
+      <input type="number" id="rtMedianGuardrailH" value="1.1" step="0.1" min="0.3" max="4">
       <span>m</span>
     </div>
   </div>
@@ -5387,11 +5388,11 @@ var _baseCross  = null;     // 上一段的終點截面；single={L,R} divided={
 var _clickBuf   = [];       // 收集中的點
 var _roads      = [];       // 完成的路段 [{mode,xs0,xs1,prevBase,cfg}]
 var _cfg = {
-  roadType:'single', lanes:4, laneW:3.75,
-  shoulder:true, shoulderW:3.0,
-  guardrail:false, guardrailH:1.1, guardrailW:0.5,
+  lanes:4, laneW:3.75,
+  guardrail:false, guardrailH:1.1,
+  innerRail:false, innerRailH:1.1,
   showMarkings:false,
-  medianW:6, medianStyle:'grass', medianGuardrail:true, medianGuardrailH:1.3
+  medianW:6, medianStyle:'grass', medianGuardrail:true, medianGuardrailH:1.1
 };
 
 // ---------- 幾何輔助 ----------
@@ -5436,7 +5437,7 @@ function _doubleLineBands(A,B,wM,gapM){
 function _getSpec(cfg){
   var spec=[]; var pos=0;
   var n=cfg.lanes, lw=cfg.laneW, sw=cfg.shoulder?cfg.shoulderW:0;
-  var gw=cfg.guardrail?(cfg.guardrailW||0.5):0, gh=cfg.guardrailH||1.1;
+  var gw=cfg.guardrail?1.0:0, gh=cfg.guardrailH||1.1;
   function band(f0,f1,cat,col,h){ spec.push({kind:'band',f0:f0,f1:f1,cat:cat,color:col,h:h}); }
   function line(f,t,col,w,g)    { spec.push({kind:'line',f:f,type:t,color:col,w:w,gap:g||0.1}); }
   if(cfg.roadType==='divided'){
@@ -5501,10 +5502,10 @@ function _buildSeg4(xs0,xs1,cfg){
   var feats=[];
   var medColor=(cfg.medianStyle==='grass')?'#4A7040':'#3A3A42';
   var medH=(cfg.medianStyle==='grass')?0.10:0.20;
-  var gW=cfg.guardrailW||0.5;
+  var gW=1.0;
   // 兩側車道
-  feats.push(_quad(xs0.LL,xs0.LR,xs1.LR,xs1.LL,'surface','#3A3A42',0.25));
-  feats.push(_quad(xs0.RL,xs0.RR,xs1.RR,xs1.RL,'surface','#3A3A42',0.25));
+  feats.push(_quad(xs0.LL,xs0.LR,xs1.LR,xs1.LL,'surface','#3A3A42',0.20));
+  feats.push(_quad(xs0.RL,xs0.RR,xs1.RR,xs1.RL,'surface','#3A3A42',0.20));
   // 中央分隔島
   feats.push(_quad(xs0.LR,xs0.RL,xs1.RL,xs1.LR,'surface',medColor,medH));
   // 中央護欄
@@ -5536,12 +5537,17 @@ function _buildSeg4(xs0,xs1,cfg){
   return feats;
 }
 function _buildSeg2(xs0,xs1,cfg){
-  var feats=[],gW=cfg.guardrailW||0.5,mH=0.32,mCol='#E8E8E8';
-  feats.push(_quad(xs0.L,xs0.R,xs1.R,xs1.L,'surface','#3A3A42',0.25));
+  var feats=[],gW=1.0,mH=0.32,mCol='#E8E8E8';
+  feats.push(_quad(xs0.L,xs0.R,xs1.R,xs1.L,'surface','#3A3A42',0.20));
   if(cfg.guardrail){
     var gH=cfg.guardrailH||1.1;
     feats.push({type:'Feature',geometry:_bandLine(xs0.L,xs1.L,gW),properties:{cat:'guardrail',color:'#B0B0B8',h:gH,b:0}});
     feats.push({type:'Feature',geometry:_bandLine(xs0.R,xs1.R,gW),properties:{cat:'guardrail',color:'#B0B0B8',h:gH,b:0}});
+  }
+  if(cfg.innerRail){
+    var irH=cfg.innerRailH||1.1;
+    var mA=_lerp2D(xs0.L,xs0.R,0.5),mB=_lerp2D(xs1.L,xs1.R,0.5);
+    feats.push({type:'Feature',geometry:_bandLine(mA,mB,gW),properties:{cat:'guardrail',color:'#C8C8D0',h:irH,b:0}});
   }
   if(cfg.showMarkings){
     var n=cfg.lanes||4;
@@ -5653,17 +5659,18 @@ function _refreshData(){
 
 // ---------- 讀取 UI ----------
 function _readCfg(){
-  _mode            = document.getElementById('rtRoadType').value;
-  _cfg.lanes       = parseInt(document.getElementById('rtLanes').value)||4;
-  _cfg.laneW       = parseFloat(document.getElementById('rtLaneW').value)||3.75;
-  _cfg.guardrail   = document.getElementById('rtHasGuardrail').checked;
-  _cfg.guardrailH  = parseFloat(document.getElementById('rtGuardrailH').value)||1.1;
-  _cfg.guardrailW  = parseFloat(document.getElementById('rtGuardrailW').value)||0.5;
-  _cfg.showMarkings= document.getElementById('rtShowMarkings').checked;
-  _cfg.medianW     = parseFloat(document.getElementById('rtMedianW').value)||6;
-  _cfg.medianStyle = document.getElementById('rtMedianStyle').value;
+  _mode              = document.getElementById('rtRoadType').value;
+  _cfg.lanes         = parseInt(document.getElementById('rtLanes').value)||4;
+  _cfg.laneW         = parseFloat(document.getElementById('rtLaneW').value)||3.75;
+  _cfg.guardrail     = document.getElementById('rtHasGuardrail').checked;
+  _cfg.guardrailH    = parseFloat(document.getElementById('rtGuardrailH').value)||1.1;
+  _cfg.innerRail     = document.getElementById('rtHasInnerRail').checked;
+  _cfg.innerRailH    = parseFloat(document.getElementById('rtInnerRailH').value)||1.1;
+  _cfg.showMarkings  = document.getElementById('rtShowMarkings').checked;
+  _cfg.medianW       = parseFloat(document.getElementById('rtMedianW').value)||6;
+  _cfg.medianStyle   = document.getElementById('rtMedianStyle').value;
   _cfg.medianGuardrail  = document.getElementById('rtMedianGuardrail').checked;
-  _cfg.medianGuardrailH = parseFloat(document.getElementById('rtMedianGuardrailH').value)||1.3;
+  _cfg.medianGuardrailH = parseFloat(document.getElementById('rtMedianGuardrailH').value)||1.1;
 }
 
 // ---------- 地圖點擊 ----------
@@ -5737,17 +5744,17 @@ function _bindUI(){
 
   document.getElementById('rtRoadType').addEventListener('change',function(){
     _readCfg();
-    document.getElementById('rtMedianSection').style.display=(_mode==='divided')?'block':'none';
-    document.getElementById('rtLaneSectionTitle').textContent=(_mode==='divided')?'每側車道設定':'車道設定';
+    var d=(_mode==='divided');
+    document.getElementById('rtMedianSection').style.display=d?'block':'none';
+    document.getElementById('rtInnerRailRow').style.display=d?'none':'flex';
+    document.getElementById('rtLaneSectionTitle').textContent=d?'每側車道設定':'車道設定';
     _baseCross=null; _clickBuf=[]; _refreshData();
     if(_drawActive) _setStatus('點 '+_LBL[_mode].first[0],true);
   });
 
   document.getElementById('rtShowMarkings').addEventListener('change',function(){_readCfg();_refreshData();});
-  document.getElementById('rtHasGuardrail').addEventListener('change',function(){
-    document.getElementById('rtGuardrailWidthRow').style.display=this.checked?'flex':'none';
-    _readCfg(); _refreshData();
-  });
+  document.getElementById('rtHasGuardrail').addEventListener('change',function(){_readCfg();_refreshData();});
+  document.getElementById('rtHasInnerRail').addEventListener('change',function(){_readCfg();_refreshData();});
 
   document.getElementById('rtToggleBtn').addEventListener('click',function(){
     _drawActive=!_drawActive;
@@ -5786,7 +5793,7 @@ function _bindUI(){
     _setStatus('已清除全部道路');
   });
 
-  ['rtLanes','rtLaneW','rtGuardrailH','rtGuardrailW',
+  ['rtLanes','rtLaneW','rtGuardrailH','rtInnerRailH',
    'rtMedianStyle','rtMedianGuardrail','rtMedianGuardrailH'].forEach(function(id){
     var el=document.getElementById(id);
     if(el) el.addEventListener('change',function(){_readCfg();_refreshData();});
