@@ -1245,6 +1245,8 @@ html, body {
 
 <!-- 自訂地圖控制按鈕群 -->
 <div class="mapCtrlGroup">
+  <!-- 道路繪製 -->
+  <button class="mapCtrlBtn" id="roadToolBtn" title="道路繪製" style="font-size:18px;">🛣</button>
   <!-- 指南針 -->
   <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
@@ -1267,8 +1269,6 @@ html, body {
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
   <!-- AI 助理 -->
   <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
-  <!-- 道路繪製 -->
-  <button class="mapCtrlBtn" id="roadToolBtn" title="道路繪製" style="font-size:18px;">🛣</button>
 </div>
 
 <div class="bottomBar">
@@ -5514,7 +5514,7 @@ function _initLayers(){
   map.addLayer({id:'rt-surface',type:'fill-extrusion',source:'rt-data',
     filter:['in',['get','cat'],['literal',['surface','shoulder']]],
     paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','h'],
-           'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':0.95}});
+           'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':1}});
   // 標線（在路面之上）
   map.addLayer({id:'rt-marking',type:'fill-extrusion',source:'rt-data',
     filter:['==',['get','cat'],'marking'],
@@ -5524,7 +5524,7 @@ function _initLayers(){
   map.addLayer({id:'rt-guardrail',type:'fill-extrusion',source:'rt-data',
     filter:['==',['get','cat'],'guardrail'],
     paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','h'],
-           'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':0.92}});
+           'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':1}});
   // 繪製預覽線
   map.addLayer({id:'rt-prev-line',type:'line',source:'rt-preview',
     filter:['==',['geometry-type'],'LineString'],
