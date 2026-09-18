@@ -3271,17 +3271,13 @@ map.on('load', function() {
       c.width = W; c.height = H;
       const ctx = c.getContext('2d');
       ctx.drawImage(raw, 0, 0);
-      const d = ctx.getImageData(0, 0, W, H);
-      for (let i = 0; i < d.data.length; i += 4) {
-        const r = d.data[i], g = d.data[i+1], b = d.data[i+2];
-        if (r < 20 && g < 20 && b < 20) d.data[i+3] = 0; // 去黑底
+      const imgData = ctx.getImageData(0, 0, W, H);
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const r = imgData.data[i], g = imgData.data[i+1], b = imgData.data[i+2];
+        if (r < 20 && g < 20 && b < 20) imgData.data[i+3] = 0; // 去黑底
       }
-      ctx.putImageData(d, 0, 0);
-      // pixelRatio = 原圖寬 / 60px 顯示寬
-      const PR = W / 60;
-      const _carImg = new Image(W, H);
-      _carImg.onload = function() { _onCarReady(_carImg, PR); };
-      _carImg.src = c.toDataURL();
+      // 直接傳 ImageData，pixelRatio = 原圖寬 / 60px 顯示寬
+      _onCarReady(imgData, W / 60);
     };
     raw.onerror = function() { _setupCarFallback(); };
     raw.src = src;
