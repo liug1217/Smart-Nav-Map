@@ -5319,13 +5319,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     </div>
     <div class="rt-row">
       <label><input type="checkbox" id="rtHasGuardrail">外側護欄</label>
-      <input type="number" id="rtGuardrailH" value="1.1" step="0.1" min="0.3" max="4">
+      <input type="number" id="rtGuardrailH" value="1.0" step="0.1" min="0.3" max="4">
       <span>m</span>
     </div>
     <!-- 一般道路才顯示內側護欄 -->
     <div class="rt-row" id="rtInnerRailRow">
       <label><input type="checkbox" id="rtHasInnerRail">內側護欄</label>
-      <input type="number" id="rtInnerRailH" value="1.1" step="0.1" min="0.3" max="4">
+      <input type="number" id="rtInnerRailH" value="1.0" step="0.1" min="0.3" max="4">
       <span>m</span>
     </div>
   </div>
@@ -5347,7 +5347,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     </div>
     <div class="rt-row">
       <label><input type="checkbox" id="rtMedianGuardrail" checked>中央護欄</label>
-      <input type="number" id="rtMedianGuardrailH" value="1.1" step="0.1" min="0.3" max="4">
+      <input type="number" id="rtMedianGuardrailH" value="1.0" step="0.1" min="0.3" max="4">
       <span>m</span>
     </div>
   </div>
@@ -5389,10 +5389,10 @@ var _clickBuf   = [];       // 收集中的點
 var _roads      = [];       // 完成的路段 [{mode,xs0,xs1,prevBase,cfg}]
 var _cfg = {
   lanes:4, laneW:3.75,
-  guardrail:false, guardrailH:1.1,
-  innerRail:false, innerRailH:1.1,
+  guardrail:false, guardrailH:1.0,
+  innerRail:false, innerRailH:1.0,
   showMarkings:false,
-  medianW:6, medianStyle:'grass', medianGuardrail:true, medianGuardrailH:1.1
+  medianW:6, medianStyle:'grass', medianGuardrail:true, medianGuardrailH:1.0
 };
 
 // ---------- 幾何輔助 ----------
