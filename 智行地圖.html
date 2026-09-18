@@ -3246,6 +3246,9 @@ if (navigator.geolocation) {
         });
       }
 
+      // WASD 模擬器主動時，GPS 不覆蓋車輛位置
+      if (window._wasdRunning) return;
+
       // 更新車子目標位置（rAF 插值迴圈會平滑插值到此）
       // 正常導航中：吸附到路線中心並使用路線行進方向
       // 偏航/重規劃/非導航：使用真實 GPS 讓使用者知道自己在哪
@@ -5131,13 +5134,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function init(){
     var t = window._vehicleTarget;
-    if(t){ lng=t.lng; lat=t.lat; bearing=t.bearing||0; return; }
-    if(window.currentLon!=null){ lng=window.currentLon; lat=window.currentLat; bearing=0; }
+    if(t && t.lng!=null){ lng=t.lng; lat=t.lat; bearing=t.bearing||0; return; }
+    if(window.currentLon!=null){ lng=window.currentLon; lat=window.currentLat; bearing=0; return; }
+    // 桌面沒有 GPS 時：用地圖目前中心當起始位置
+    try { var c=map.getCenter(); lng=c.lng; lat=c.lat; bearing=0; } catch(e){}
   }
 
   function tick(now){
     requestAnimationFrame(tick);
-    if(!isActive()){ lastT=null; if(hud)hud.style.display='none'; return; }
+    if(!isActive()){ lastT=null; if(hud)hud.style.display='none'; window._wasdRunning=false; return; }
     if(hud)hud.style.display='block';
 
     if(lastT===null){ lastT=now; return; }
@@ -5167,6 +5172,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     lng += (dist*Math.sin(rad))/(111320*cosLat);
 
     // 寫入車輛目標（rAF插值迴圈會接手平滑移動）
+    window._wasdRunning = true;
     window._vehicleTarget = {lng:lng, lat:lat, bearing:bearing};
     window.currentLon = lng;
     window.currentLat = lat;
