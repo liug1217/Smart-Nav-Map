@@ -3266,19 +3266,21 @@ map.on('load', function() {
   function _setupCarIcon(src) {
     const raw = new Image();
     raw.onload = function() {
-      const W = 80, H = 120; // 2× → 顯示 40×60px
+      const W = raw.naturalWidth, H = raw.naturalHeight;
       const c = document.createElement('canvas');
       c.width = W; c.height = H;
       const ctx = c.getContext('2d');
-      ctx.drawImage(raw, 0, 0, W, H);
+      ctx.drawImage(raw, 0, 0);
       const d = ctx.getImageData(0, 0, W, H);
       for (let i = 0; i < d.data.length; i += 4) {
         const r = d.data[i], g = d.data[i+1], b = d.data[i+2];
         if (r < 20 && g < 20 && b < 20) d.data[i+3] = 0; // 去黑底
       }
       ctx.putImageData(d, 0, 0);
+      // pixelRatio = 原圖寬 / 60px 顯示寬
+      const PR = W / 60;
       const _carImg = new Image(W, H);
-      _carImg.onload = function() { _onCarReady(_carImg); };
+      _carImg.onload = function() { _onCarReady(_carImg, PR); };
       _carImg.src = c.toDataURL();
     };
     raw.onerror = function() { _setupCarFallback(); };
@@ -3299,8 +3301,8 @@ map.on('load', function() {
     img.onload = function() { _onCarReady(img); };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
-  function _onCarReady(_carImg) {
-    map.addImage('car-icon', _carImg, { pixelRatio: 2 });
+  function _onCarReady(_carImg, PR) {
+    map.addImage('car-icon', _carImg, { pixelRatio: PR || 2 });
 
     // GeoJSON source：只有一個點（使用者位置）
     map.addSource('user-pos', {
