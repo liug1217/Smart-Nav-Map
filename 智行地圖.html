@@ -5246,59 +5246,70 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   box-shadow:0 8px 40px rgba(0,0,0,0.55);
 }
 #roadToolPanel h3{margin:0 0 12px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
-#roadToolPanel label{display:flex;align-items:center;gap:7px;color:#ccc;cursor:pointer;user-select:none;}
 #roadToolPanel input[type=number]{
   background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
-  border-radius:7px;padding:5px 8px;color:#fff;font-size:13px;width:72px;
+  border-radius:7px;padding:4px 6px;color:#fff;font-size:12px;width:56px;
 }
-#roadToolPanel input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:#1E88E5;}
-.rt-select{
-  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
-  border-radius:7px;padding:5px 8px;color:#fff;font-size:12px;cursor:pointer;
+#roadToolPanel input[type=color]{
+  width:26px;height:20px;padding:0;border:none;border-radius:4px;cursor:pointer;
+  background:none;vertical-align:middle;
 }
-.rt-select option{background:#1a1a2e;color:#fff;}
-.rt-section{margin-bottom:12px;}
-.rt-section-title{font-size:11px;color:#888;margin-bottom:6px;letter-spacing:0.3px;text-transform:uppercase;}
-.rt-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
-.rt-row span{color:#aaa;font-size:12px;}
-.rt-divider{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;}
-.rt-marking-row{
-  display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;
-  padding:5px 8px;background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:4px;
-  border-left:3px solid transparent;
-}
-.rt-marking-row.yellow{border-left-color:#FFD700;}
-.rt-marking-row.white{border-left-color:#ddd;}
-.rt-marking-row .rt-mlabel{font-size:11px;color:#bbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.rt-marking-row select{
-  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
-  border-radius:5px;color:#fff;font-size:11px;padding:3px 4px;
-}
-.rt-marking-row select option{background:#1a1a2e;color:#fff;}
 .rt-btn{
   padding:8px 0;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;
   transition:opacity 0.15s;width:100%;
 }
 .rt-btn:active{opacity:0.75;}
-.rt-btn-primary{background:#1E88E5;color:#fff;}
-.rt-btn-danger{background:rgba(255,59,48,0.15);color:#ff6b6b;border:1px solid rgba(255,59,48,0.25);}
 .rt-btn-secondary{background:rgba(255,255,255,0.08);color:#ccc;border:1px solid rgba(255,255,255,0.15);}
-.rt-status{
-  font-size:12px;text-align:center;padding:7px;border-radius:8px;margin-bottom:10px;
-  background:rgba(30,136,229,0.15);border:1px solid rgba(30,136,229,0.35);color:#64B5F6;
-}
-.rt-status.active{background:rgba(76,175,80,0.15);border-color:rgba(76,175,80,0.4);color:#81C784;}
 #roadToolBtn.rt-active{background:rgba(30,136,229,0.25)!important;border:1.5px solid #1E88E5!important;}
+
+/* 截面元素清單 */
+#rtLayerList{margin-bottom:10px;min-height:4px;}
+.rt-layer-item{
+  display:flex;align-items:center;gap:7px;
+  background:rgba(255,255,255,0.05);border-radius:8px;
+  padding:7px 8px;margin-bottom:5px;
+  border-left:3px solid rgba(255,255,255,0.18);
+}
+.rt-layer-item[data-type="yellowLine"]{border-left-color:#FFD700;}
+.rt-layer-item[data-type="lane"]     {border-left-color:#4FC3F7;}
+.rt-layer-item[data-type="shoulder"] {border-left-color:#81C784;}
+.rt-layer-item[data-type="guardrail"]{border-left-color:#EF9A9A;}
+.rt-layer-label{font-size:11px;font-weight:700;color:#fff;min-width:26px;white-space:nowrap;}
+.rt-layer-cfg{display:flex;align-items:center;gap:5px;flex:1;flex-wrap:wrap;}
+.rt-cfg-field{display:flex;align-items:center;gap:3px;font-size:11px;color:#aaa;}
+.rt-cfg-unit{opacity:0.55;font-size:10px;}
+.rt-layer-del{
+  width:20px;height:20px;padding:0;border-radius:4px;border:none;flex-shrink:0;
+  background:rgba(255,80,80,0.15);color:#ff6b6b;font-size:14px;line-height:1;cursor:pointer;
+}
+.rt-layer-del:hover{background:rgba(255,80,80,0.3);}
+
+/* 新增選單 */
+#rtAddWrap{position:relative;}
+#rtAddMenu{
+  display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;
+  background:#141b28;border:1px solid rgba(255,255,255,0.14);border-radius:8px;
+  overflow:hidden;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,0.65);
+}
+.rt-add-opt{
+  display:block;width:100%;padding:9px 12px;background:none;border:none;
+  color:#ccc;font-size:12px;text-align:left;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.rt-add-opt:last-child{border-bottom:none;}
+.rt-add-opt:hover{background:rgba(255,255,255,0.07);color:#fff;}
 </style>
 
 <div id="roadToolPanel">
   <h3>🛣 道路繪製</h3>
-  <div class="rt-section">
-    <div class="rt-section-title">車道數量</div>
-    <div class="rt-row" style="justify-content:center;align-items:center;gap:16px">
-      <button class="rt-btn rt-btn-secondary" id="rtLaneMinus" style="width:34px;height:34px;font-size:20px;padding:0;line-height:1">−</button>
-      <span id="rtLaneCount" style="font-size:26px;font-weight:700;color:#fff;min-width:36px;text-align:center">4</span>
-      <button class="rt-btn rt-btn-secondary" id="rtLanePlus" style="width:34px;height:34px;font-size:20px;padding:0;line-height:1">+</button>
+  <div id="rtLayerList"></div>
+  <div id="rtAddWrap">
+    <button class="rt-btn rt-btn-secondary" id="rtAddBtn">＋ 新增截面元素</button>
+    <div id="rtAddMenu">
+      <button class="rt-add-opt" data-type="yellowLine">— 黃線（中線）</button>
+      <button class="rt-add-opt" data-type="lane">　 車道</button>
+      <button class="rt-add-opt" data-type="shoulder">　 路肩</button>
+      <button class="rt-add-opt" data-type="guardrail">　 護欄</button>
     </div>
   </div>
 </div>
@@ -5308,30 +5319,121 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 'use strict';
 
 var _panelOpen = false;
-var _lanes = 4;
+var _menuOpen  = false;
+var _layers    = [];
+var _nextId    = 1;
+
+var _defaults = {
+  yellowLine: {},
+  lane:       {width:3.75},
+  shoulder:   {width:2.50},
+  guardrail:  {height:1.0, width:0.5, color:'#ffffff'}
+};
+var _labels = {yellowLine:'黃線', lane:'車道', shoulder:'路肩', guardrail:'護欄'};
 
 function _openPanel(){
-  _panelOpen=true;
-  document.getElementById('roadToolPanel').style.display='block';
+  _panelOpen = true;
+  document.getElementById('roadToolPanel').style.display = 'block';
   document.getElementById('roadToolBtn').classList.add('rt-active');
 }
 function _closePanel(){
-  _panelOpen=false;
-  document.getElementById('roadToolPanel').style.display='none';
+  _panelOpen = false;
+  document.getElementById('roadToolPanel').style.display = 'none';
   document.getElementById('roadToolBtn').classList.remove('rt-active');
+  _closeMenu();
 }
+function _closeMenu(){
+  _menuOpen = false;
+  document.getElementById('rtAddMenu').style.display = 'none';
+}
+
+function _addLayer(type){
+  _layers.push({id:_nextId++, type:type, cfg:JSON.parse(JSON.stringify(_defaults[type]))});
+  _renderList();
+  _closeMenu();
+}
+function _removeLayer(id){
+  _layers = _layers.filter(function(l){ return l.id !== id; });
+  _renderList();
+}
+
+function _numField(layer, key, lbl, unit, min, max, step){
+  var wrap = document.createElement('label');
+  wrap.className = 'rt-cfg-field';
+  var s = document.createElement('span'); s.textContent = lbl;
+  var inp = document.createElement('input');
+  inp.type = 'number'; inp.value = layer.cfg[key];
+  inp.min = min; inp.max = max; inp.step = step;
+  (function(l,k){ inp.addEventListener('change', function(){ l.cfg[k] = parseFloat(this.value)||min; }); })(layer,key);
+  var u = document.createElement('span'); u.textContent = unit; u.className = 'rt-cfg-unit';
+  wrap.appendChild(s); wrap.appendChild(inp); wrap.appendChild(u);
+  return wrap;
+}
+function _colorField(layer, key, lbl){
+  var wrap = document.createElement('label');
+  wrap.className = 'rt-cfg-field';
+  var s = document.createElement('span'); s.textContent = lbl;
+  var inp = document.createElement('input'); inp.type = 'color'; inp.value = layer.cfg[key];
+  (function(l,k){ inp.addEventListener('input', function(){ l.cfg[k] = this.value; }); })(layer,key);
+  wrap.appendChild(s); wrap.appendChild(inp);
+  return wrap;
+}
+
+function _renderList(){
+  var list = document.getElementById('rtLayerList');
+  list.innerHTML = '';
+  _layers.forEach(function(layer){
+    var item = document.createElement('div');
+    item.className = 'rt-layer-item';
+    item.dataset.type = layer.type;
+
+    var lbl = document.createElement('span');
+    lbl.className = 'rt-layer-label';
+    lbl.textContent = _labels[layer.type];
+    item.appendChild(lbl);
+
+    var cfg = document.createElement('div');
+    cfg.className = 'rt-layer-cfg';
+    if(layer.type === 'lane' || layer.type === 'shoulder'){
+      cfg.appendChild(_numField(layer, 'width', '寬', 'm', 0.1, 20, 0.25));
+    } else if(layer.type === 'guardrail'){
+      cfg.appendChild(_numField(layer, 'height', '高', 'm', 0.1, 5, 0.1));
+      cfg.appendChild(_numField(layer, 'width',  '寬', 'm', 0.1, 5, 0.1));
+      cfg.appendChild(_colorField(layer, 'color', '色'));
+    }
+    item.appendChild(cfg);
+
+    var del = document.createElement('button');
+    del.className = 'rt-layer-del'; del.textContent = '×';
+    (function(id){ del.addEventListener('click', function(){ _removeLayer(id); }); })(layer.id);
+    item.appendChild(del);
+
+    list.appendChild(item);
+  });
+}
+
 function _bindUI(){
-  document.getElementById('roadToolBtn').addEventListener('click',function(){
-    _panelOpen?_closePanel():_openPanel();
+  document.getElementById('roadToolBtn').addEventListener('click', function(){
+    _panelOpen ? _closePanel() : _openPanel();
   });
-  document.getElementById('roadToolPanel').querySelector('h3').addEventListener('dblclick',_closePanel);
-  document.getElementById('rtLanePlus').addEventListener('click',function(){
-    if(_lanes<20){_lanes++;document.getElementById('rtLaneCount').textContent=_lanes;}
+  document.getElementById('roadToolPanel').querySelector('h3').addEventListener('dblclick', _closePanel);
+
+  var addBtn  = document.getElementById('rtAddBtn');
+  var addMenu = document.getElementById('rtAddMenu');
+
+  addBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    _menuOpen = !_menuOpen;
+    addMenu.style.display = _menuOpen ? 'block' : 'none';
   });
-  document.getElementById('rtLaneMinus').addEventListener('click',function(){
-    if(_lanes>1){_lanes--;document.getElementById('rtLaneCount').textContent=_lanes;}
+  addMenu.querySelectorAll('.rt-add-opt').forEach(function(btn){
+    btn.addEventListener('click', function(){ _addLayer(this.dataset.type); });
+  });
+  document.addEventListener('click', function(e){
+    if(_menuOpen && !addMenu.contains(e.target) && e.target !== addBtn) _closeMenu();
   });
 }
+
 _bindUI();
 
 // ---------- 幾何輔助（保留供後續使用） ----------
