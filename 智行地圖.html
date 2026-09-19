@@ -3360,7 +3360,9 @@ if (navigator.geolocation) {
 
     // 原始繪製函式（由 rAF 插值迴圈呼叫）
     window._updateCarMarkerRaw = function(lng, lat, bearing) {
-      map.getSource('user-pos').setData({
+      const _src = map.getSource('user-pos');
+      if (!_src) return; // 樣式切換後 source 暫時不存在
+      _src.setData({
         type: 'FeatureCollection',
         features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: bearing } }]
       });
@@ -5213,6 +5215,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     // 載入全家圖示
     m.loadImage(ICON_URL, function(err, img){
       if(err || !img) return;
+      if(m.getSource('family-mart')) return; // 防快速切換樣式導致 addSource 重複
       if(!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 3 });
 
       m.addSource('family-mart', { type:'geojson', data:data, cluster:true, clusterMaxZoom:14, clusterRadius:40 });
