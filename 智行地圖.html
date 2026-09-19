@@ -3064,12 +3064,12 @@ if (navigator.geolocation) {
     const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
-  function _camIsAhead(fromLat, fromLon, toLat, toLon, headingDeg){
+  function _camIsAhead(fromLat, fromLon, toLat, toLon, headingDeg, halfAngle){
     // 行進方向不確定時（低速或無羅盤）視為正前方
     if (headingDeg == null) return true;
     const bear = _camBearing(fromLat, fromLon, toLat, toLon);
     const diff = Math.abs(((bear - headingDeg) + 540) % 360 - 180);
-    return diff < 90; // 前方 ±90° 內才算前方
+    return diff < (halfAngle || 90);
   }
 
   function _camOnRoute(camLon, camLat){
@@ -3090,20 +3090,24 @@ if (navigator.geolocation) {
 
     // 行進方向：低速（< 10 km/h）時不做方向過濾（停車/走路羅盤不可信）
     const heading = (currentSpeedKmh >= 10) ? window.compassHeading : null;
+    const hasRoute = !!(window.plannedRouteCoordinates && window.plannedRouteCoordinates.length >= 2);
+    // 沒有規劃路線時：收窄方向角 ±55°、縮短預警距離到 400m，避免旁邊路的相機觸發
+    const halfAngle  = hasRoute ? 90  : 55;
+    const warnKm     = hasRoute ? SPEED_CAM_WARN_KM : 0.4;
 
     let nearestLimit = null, nearestDist = Infinity;
     data.features.forEach((f, idx) => {
       const [camLon, camLat] = f.geometry.coordinates;
       const p = f.properties;
       const d = calculateDistance(lat, lon, camLat, camLon); // 公里
-      const ahead = _camIsAhead(lat, lon, camLat, camLon, heading);
+      const ahead = _camIsAhead(lat, lon, camLat, camLon, heading, halfAngle);
 
       // 有導航路線時只考慮路線上的測速點
       const onRoute = _camOnRoute(camLon, camLat);
       if (!onRoute) { speedCameraVoiceDist[idx] = d; return; }
 
       // nearestLimit 只考慮前方且在路線上的測速點
-      if (ahead && d < nearestDist && d <= SPEED_CAM_WARN_KM) { nearestDist = d; nearestLimit = p.limit || null; }
+      if (ahead && d < nearestDist && d <= warnKm) { nearestDist = d; nearestLimit = p.limit || null; }
 
       const state = speedCameraVoiceState[idx] || 'idle';
       const prevD = speedCameraVoiceDist[idx];
@@ -3125,8 +3129,8 @@ if (navigator.geolocation) {
         }
         playSpeedCameraPassBeep();
         speedCameraVoiceState[idx] = 'passed';
-      } else if (ahead && approaching) {
-        // 只有前方且真的在靠近時才播報距離預告
+      } else if (ahead && approaching && d <= warnKm) {
+        // 只有前方、真的在靠近、且在有效預警距離內才播報
         const camCurIdx = state === 'idle' ? -1 : CAM_THRESHOLDS.indexOf(parseInt(state.slice(1)));
         for (let i = 0; i < CAM_THRESHOLDS.length; i++) {
           const th = CAM_THRESHOLDS[i];
