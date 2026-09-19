@@ -3639,6 +3639,7 @@ document.addEventListener("DOMContentLoaded", function(){
     if(cctvPanelTitle) cctvPanelTitle.textContent = "📷 " + label;
     window.cctvActiveCameraId = camId || null;
     window.cctvActiveIsAuto = !!isAuto;
+    if(cctvOverlay) cctvOverlay.style.display = 'block';
     reloadCctvImage();
   };
 
@@ -3648,6 +3649,7 @@ document.addEventListener("DOMContentLoaded", function(){
       clearTimeout(cctvReloadTimer);
       cctvReloadTimer = null;
     }
+    if(cctvOverlay) cctvOverlay.style.display = 'none';
     CCTV_BASE_URL = "";
     window.cctvActiveCameraId = null;
     window.cctvActiveIsAuto = false;
