@@ -4543,7 +4543,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       el.style.cssText='width:48px;height:60px;cursor:pointer;font-size:36px;text-align:center;line-height:50px;filter:drop-shadow(0 2px 5px rgba(0,0,0,0.45))';
       el.textContent='🌋';
       el._eq=eq;
-      el.addEventListener('click',function(){ showEqPopup(el._eq,[lon,lat]); });
+      el.addEventListener('click',function(){
+        var ep=(el._eq.EarthquakeInfo||{}).Epicenter||{};
+        showEqPopup(el._eq,[ep.EpicenterLongitude,ep.EpicenterLatitude]);
+      });
       eqMarker=new maplibregl.Marker({element:el,anchor:'bottom'})
         .setLngLat([lon,lat]).addTo(m);
     }
