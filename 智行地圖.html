@@ -3262,24 +3262,29 @@ if (navigator.geolocation) {
 
 <script>
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
-map.on('load', function() {
+// 車子圖示不需要等圖磚，style 解析完就能 addImage/addSource/addLayer
+(map.isStyleLoaded() ? Promise.resolve() : new Promise(r => map.once('style.load', r))).then(function() {
   // 使用 PNG 車子圖片，canvas 縮放並去除純黑背景
   function _setupCarIcon(src) {
     const raw = new Image();
+    raw.crossOrigin = 'anonymous';
     raw.onload = function() {
       const W = 80, H = 120; // 2× → 顯示 40×60px
       const c = document.createElement('canvas');
       c.width = W; c.height = H;
       const ctx = c.getContext('2d');
       ctx.drawImage(raw, 0, 0, W, H);
-      const d = ctx.getImageData(0, 0, W, H);
-      for (let i = 0; i < d.data.length; i += 4) {
-        const r = d.data[i], g = d.data[i+1], b = d.data[i+2];
-        if (r < 20 && g < 20 && b < 20) d.data[i+3] = 0; // 去黑底
-      }
-      ctx.putImageData(d, 0, 0);
+      try {
+        const d = ctx.getImageData(0, 0, W, H);
+        for (let i = 0; i < d.data.length; i += 4) {
+          const r = d.data[i], g = d.data[i+1], b = d.data[i+2];
+          if (r < 20 && g < 20 && b < 20) d.data[i+3] = 0; // 去黑底
+        }
+        ctx.putImageData(d, 0, 0);
+      } catch(e) { /* CORS taint → 跳過去黑底，直接用原圖 */ }
       const _carImg = new Image(W, H);
       _carImg.onload = function() { _onCarReady(_carImg); };
+      _carImg.onerror = function() { _setupCarFallback(); };
       _carImg.src = c.toDataURL();
     };
     raw.onerror = function() { _setupCarFallback(); };
