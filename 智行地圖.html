@@ -5544,31 +5544,35 @@ function _getCrossSection(layers){
 }
 
 // corners: [nearLeft, nearRight, farRight, farLeft]
-// Road direction = midpoint(near edge) → midpoint(far edge).
-// Cross-section elements keep their REAL metre widths (not stretched to quad width).
+// Cross-section fills the quad proportionally — quad size = road size.
 function _buildRoadFeatures(corners, layers){
-  var A=[(corners[0][0]+corners[1][0])/2, (corners[0][1]+corners[1][1])/2];
-  var B=[(corners[2][0]+corners[3][0])/2, (corners[2][1]+corners[3][1])/2];
-  var cosLat = Math.cos((A[1]+B[1])/2*Math.PI/180);
-  var dx=(B[0]-A[0])*111320*cosLat, dy=(B[1]-A[1])*111320;
+  var p0=corners[0],p1=corners[1],p2=corners[2],p3=corners[3];
+  var midNear=[(p0[0]+p1[0])/2,(p0[1]+p1[1])/2];
+  var midFar =[(p2[0]+p3[0])/2,(p2[1]+p3[1])/2];
+  var cosLat=Math.cos((midNear[1]+midFar[1])/2*Math.PI/180);
+  var dx=(midFar[0]-midNear[0])*111320*cosLat, dy=(midFar[1]-midNear[1])*111320;
   var len=Math.sqrt(dx*dx+dy*dy);
   if(len<0.01) return [];
-  var pLng=-dy/len/(111320*cosLat), pLat=dx/len/111320;
-  var uLng= dx/len/(111320*cosLat), uLat=dy/len/111320;
-  var feats=[];
-  _getCrossSection(layers).forEach(function(e){
+
+  function lerp(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]; }
+  function roadPt(tf,f){ var L=lerp(p0,p3,tf),R=lerp(p1,p2,tf); return lerp(L,R,f); }
+
+  var section=_getCrossSection(layers);
+  var total=0; section.forEach(function(e){ total+=e.off1-e.off0; });
+  if(total<0.001) return [];
+  var halfW=total/2, feats=[];
+
+  section.forEach(function(e){
+    var f0=(e.off0+halfW)/total, f1=(e.off1+halfW)/total;
     if(!e.dashed){
-      var A0=[A[0]+e.off0*pLng,A[1]+e.off0*pLat], A1=[A[0]+e.off1*pLng,A[1]+e.off1*pLat];
-      var B0=[B[0]+e.off0*pLng,B[1]+e.off0*pLat], B1=[B[0]+e.off1*pLng,B[1]+e.off1*pLat];
+      var A0=roadPt(0,f0),A1=roadPt(0,f1),B0=roadPt(1,f0),B1=roadPt(1,f1);
       feats.push({type:'Feature',geometry:{type:'Polygon',coordinates:[[A0,A1,B1,B0,A0]]},properties:{color:e.color,h:e.h,b:0}});
     } else {
-      var pat=e.dashLen+e.dashGap, t=0;
+      var pat=e.dashLen+e.dashGap,t=0;
       while(t<len){
-        var t1=Math.min(t+e.dashLen,len);
-        var S=[A[0]+t*uLng,A[1]+t*uLat], E=[A[0]+t1*uLng,A[1]+t1*uLat];
-        var S0=[S[0]+e.off0*pLng,S[1]+e.off0*pLat], S1=[S[0]+e.off1*pLng,S[1]+e.off1*pLat];
-        var E0=[E[0]+e.off0*pLng,E[1]+e.off0*pLat], E1=[E[0]+e.off1*pLng,E[1]+e.off1*pLat];
-        feats.push({type:'Feature',geometry:{type:'Polygon',coordinates:[[S0,S1,E1,E0,S0]]},properties:{color:e.color,h:e.h,b:0}});
+        var t1=Math.min(t+e.dashLen,len),tf0=t/len,tf1=t1/len;
+        var A0=roadPt(tf0,f0),A1=roadPt(tf0,f1),B0=roadPt(tf1,f0),B1=roadPt(tf1,f1);
+        feats.push({type:'Feature',geometry:{type:'Polygon',coordinates:[[A0,A1,B1,B0,A0]]},properties:{color:e.color,h:e.h,b:0}});
         t+=pat;
       }
     }
