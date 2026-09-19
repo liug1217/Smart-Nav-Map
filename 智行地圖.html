@@ -5312,15 +5312,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       <button class="rt-add-opt" data-type="guardrail">　 護欄</button>
     </div>
   </div>
-  <div style="margin-bottom:10px">
-    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:5px">路面偏移高度</div>
-    <div style="display:flex;align-items:center;gap:6px">
-      <button id="rtBaseDown" class="rt-btn rt-btn-secondary" style="width:30px;height:30px;padding:0;font-size:16px;flex-shrink:0;line-height:1">↓</button>
-      <input id="rtBaseH" type="number" value="0" min="-100" max="500" step="0.5" style="flex:1;text-align:center">
-      <button id="rtBaseUp" class="rt-btn rt-btn-secondary" style="width:30px;height:30px;padding:0;font-size:16px;flex-shrink:0;line-height:1">↑</button>
-      <span style="font-size:11px;color:#888;flex-shrink:0">m</span>
-    </div>
-  </div>
   <button id="rtDrawBtn" style="width:100%;padding:10px 0;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;background:#1E88E5;color:#fff;transition:background 0.2s">▶ 開始繪畫</button>
 </div>
 
@@ -5328,14 +5319,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 (function(){
 'use strict';
 
+// ---------- 狀態 ----------
 var _panelOpen  = false;
 var _menuOpen   = false;
 var _drawActive = false;
 var _layers     = [];
 var _nextId     = 1;
-var _clickBuf   = [];
-var _roads      = [];
-var _baseH      = 0;
+var _clickBuf   = [];   // [lng,lat] 等待配對
+var _roads      = [];   // 已提交的路段
 
 var _defaults = {
   yellowLine: {},
@@ -5345,6 +5336,7 @@ var _defaults = {
 };
 var _labels = {yellowLine:'黃線', lane:'車道', shoulder:'路肩', guardrail:'護欄'};
 
+// ---------- 面板開關 ----------
 function _openPanel(){
   _panelOpen = true;
   document.getElementById('roadToolPanel').style.display = 'block';
@@ -5361,6 +5353,7 @@ function _closeMenu(){
   document.getElementById('rtAddMenu').style.display = 'none';
 }
 
+// ---------- 截面元素清單 ----------
 function _addLayer(type){
   _layers.push({id:_nextId++, type:type, cfg:JSON.parse(JSON.stringify(_defaults[type]))});
   _renderList();
@@ -5400,24 +5393,28 @@ function _renderList(){
     var item = document.createElement('div');
     item.className = 'rt-layer-item';
     item.dataset.type = layer.type;
+
     var lbl = document.createElement('span');
     lbl.className = 'rt-layer-label';
     lbl.textContent = _labels[layer.type];
     item.appendChild(lbl);
+
     var cfg = document.createElement('div');
     cfg.className = 'rt-layer-cfg';
-    if(layer.type==='lane'||layer.type==='shoulder'){
-      cfg.appendChild(_numField(layer,'width','寬','m',0.1,20,0.25));
-    } else if(layer.type==='guardrail'){
-      cfg.appendChild(_numField(layer,'height','高','m',0.1,5,0.1));
-      cfg.appendChild(_numField(layer,'width','寬','m',0.1,5,0.1));
-      cfg.appendChild(_colorField(layer,'color','色'));
+    if(layer.type === 'lane' || layer.type === 'shoulder'){
+      cfg.appendChild(_numField(layer, 'width', '寬', 'm', 0.1, 20, 0.25));
+    } else if(layer.type === 'guardrail'){
+      cfg.appendChild(_numField(layer, 'height', '高', 'm', 0.1, 5, 0.1));
+      cfg.appendChild(_numField(layer, 'width',  '寬', 'm', 0.1, 5, 0.1));
+      cfg.appendChild(_colorField(layer, 'color', '色'));
     }
     item.appendChild(cfg);
+
     var del = document.createElement('button');
     del.className = 'rt-layer-del'; del.textContent = '×';
     (function(id){ del.addEventListener('click', function(){ _removeLayer(id); }); })(layer.id);
     item.appendChild(del);
+
     list.appendChild(item);
   });
 }
@@ -5441,134 +5438,97 @@ function _getCrossSection(layers){
   return result;
 }
 
-function _buildSegFeatures(A, B, layers, baseH){
-  baseH = baseH||0;
+function _buildSegFeatures(A, B, layers){
   var cosLat = Math.cos((A[1]+B[1])/2*Math.PI/180);
-  var dx=(B[0]-A[0])*111320*cosLat, dy=(B[1]-A[1])*111320;
+  var dx = (B[0]-A[0])*111320*cosLat, dy = (B[1]-A[1])*111320;
   var len = Math.sqrt(dx*dx+dy*dy);
-  if(len<0.01) return [];
-  var pLng=-dy/len/(111320*cosLat), pLat=dx/len/111320;
+  if(len < 0.01) return [];
+  var pLng = -dy/len/(111320*cosLat), pLat = dx/len/111320;
+
   return _getCrossSection(layers).map(function(e){
-    var A0=[A[0]+e.off0*pLng,A[1]+e.off0*pLat];
-    var A1=[A[0]+e.off1*pLng,A[1]+e.off1*pLat];
-    var B0=[B[0]+e.off0*pLng,B[1]+e.off0*pLat];
-    var B1=[B[0]+e.off1*pLng,B[1]+e.off1*pLat];
-    return {type:'Feature',geometry:{type:'Polygon',coordinates:[[A0,A1,B1,B0,A0]]},
-            properties:{color:e.color,h:baseH+e.h,b:baseH}};
+    var A0=[A[0]+e.off0*pLng, A[1]+e.off0*pLat];
+    var A1=[A[0]+e.off1*pLng, A[1]+e.off1*pLat];
+    var B0=[B[0]+e.off0*pLng, B[1]+e.off0*pLat];
+    var B1=[B[0]+e.off1*pLng, B[1]+e.off1*pLat];
+    return {type:'Feature',
+            geometry:{type:'Polygon', coordinates:[[A0,A1,B1,B0,A0]]},
+            properties:{color:e.color, h:e.h, b:0}};
   });
 }
 
 function _refreshMap(){
   if(!map.getSource('rt-data')) return;
-  var feats=[];
-  _roads.forEach(function(r){ feats=feats.concat(_buildSegFeatures(r.A,r.B,r.layers,r.baseH)); });
-  map.getSource('rt-data').setData({type:'FeatureCollection',features:feats});
+  var feats = [];
+  _roads.forEach(function(r){ feats = feats.concat(_buildSegFeatures(r.A, r.B, r.layers)); });
+  map.getSource('rt-data').setData({type:'FeatureCollection', features:feats});
 }
 
-// ---------- 預覽 ----------
-function _updatePreview(cursor){
-  if(!map.getSource('rt-preview')) return;
-  var feats=[];
-  if(_drawActive&&_clickBuf.length>0){
-    feats.push({type:'Feature',geometry:{type:'Point',coordinates:_clickBuf[0]},properties:{}});
-    if(cursor) feats.push({type:'Feature',geometry:{type:'LineString',coordinates:[_clickBuf[0],cursor]},properties:{}});
-  }
-  map.getSource('rt-preview').setData({type:'FeatureCollection',features:feats});
-}
-
-// ---------- 地圖互動 ----------
+// ---------- 地圖點擊 ----------
 function _onMapClick(e){
   if(!_drawActive) return;
-  var pt=[e.lngLat.lng,e.lngLat.lat];
-  if(_clickBuf.length===0){
-    _clickBuf=[pt];
-    _updatePreview(null);
+  var pt = [e.lngLat.lng, e.lngLat.lat];
+  if(_clickBuf.length === 0){
+    _clickBuf = [pt];
   } else {
-    _roads.push({A:_clickBuf[0],B:pt,layers:JSON.parse(JSON.stringify(_layers)),baseH:_baseH});
-    _clickBuf=[pt];
+    _roads.push({A:_clickBuf[0], B:pt, layers:JSON.parse(JSON.stringify(_layers))});
+    _clickBuf = [pt];
     _refreshMap();
-    _updatePreview(null);
   }
-}
-function _onMouseMove(e){
-  if(!_drawActive||_clickBuf.length===0) return;
-  _updatePreview([e.lngLat.lng,e.lngLat.lat]);
 }
 
 // ---------- UI 綁定 ----------
 function _bindUI(){
-  document.getElementById('roadToolBtn').addEventListener('click',function(){
-    _panelOpen?_closePanel():_openPanel();
+  document.getElementById('roadToolBtn').addEventListener('click', function(){
+    _panelOpen ? _closePanel() : _openPanel();
   });
-  document.getElementById('roadToolPanel').querySelector('h3').addEventListener('dblclick',_closePanel);
+  document.getElementById('roadToolPanel').querySelector('h3').addEventListener('dblclick', _closePanel);
 
-  var addBtn=document.getElementById('rtAddBtn');
-  var addMenu=document.getElementById('rtAddMenu');
-  addBtn.addEventListener('click',function(e){
+  var addBtn  = document.getElementById('rtAddBtn');
+  var addMenu = document.getElementById('rtAddMenu');
+  addBtn.addEventListener('click', function(e){
     e.stopPropagation();
-    _menuOpen=!_menuOpen;
-    addMenu.style.display=_menuOpen?'block':'none';
+    _menuOpen = !_menuOpen;
+    addMenu.style.display = _menuOpen ? 'block' : 'none';
   });
   addMenu.querySelectorAll('.rt-add-opt').forEach(function(btn){
-    btn.addEventListener('click',function(){ _addLayer(this.dataset.type); });
+    btn.addEventListener('click', function(){ _addLayer(this.dataset.type); });
   });
-  document.addEventListener('click',function(e){
-    if(_menuOpen&&!addMenu.contains(e.target)&&e.target!==addBtn) _closeMenu();
-  });
-
-  // 路面偏移高度
-  var baseInp=document.getElementById('rtBaseH');
-  baseInp.addEventListener('change',function(){ _baseH=parseFloat(this.value)||0; });
-  document.getElementById('rtBaseUp').addEventListener('click',function(){
-    _baseH=Math.round((_baseH+0.5)*10)/10;
-    baseInp.value=_baseH;
-  });
-  document.getElementById('rtBaseDown').addEventListener('click',function(){
-    _baseH=Math.round((_baseH-0.5)*10)/10;
-    baseInp.value=_baseH;
+  document.addEventListener('click', function(e){
+    if(_menuOpen && !addMenu.contains(e.target) && e.target !== addBtn) _closeMenu();
   });
 
-  document.getElementById('rtDrawBtn').addEventListener('click',function(){
-    _drawActive=!_drawActive;
-    _clickBuf=[];
-    _updatePreview(null);
-    this.textContent=_drawActive?'⏹ 停止繪畫':'▶ 開始繪畫';
-    this.style.background=_drawActive?'#E53935':'#1E88E5';
-    map.getCanvas().style.cursor=_drawActive?'crosshair':'';
-    if(_drawActive) map.easeTo({pitch:45,duration:500});
+  document.getElementById('rtDrawBtn').addEventListener('click', function(){
+    _drawActive = !_drawActive;
+    _clickBuf = [];
+    this.textContent = _drawActive ? '⏹ 停止繪畫' : '▶ 開始繪畫';
+    this.style.background = _drawActive ? '#E53935' : '#1E88E5';
+    map.getCanvas().style.cursor = _drawActive ? 'crosshair' : '';
+    if(_drawActive) map.easeTo({pitch:45, duration:500});
   });
 }
 
-// ---------- 初始化圖層 ----------
+// ---------- 初始化 MapLibre 圖層 ----------
 function _initLayers(){
-  map.addSource('rt-data',    {type:'geojson',data:{type:'FeatureCollection',features:[]}});
-  map.addSource('rt-preview', {type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addSource('rt-data', {type:'geojson', data:{type:'FeatureCollection', features:[]}});
   map.addLayer({
-    id:'rt-road',type:'fill-extrusion',source:'rt-data',
-    paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','h'],
-           'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':1}
-  });
-  map.addLayer({
-    id:'rt-prev-line',type:'line',source:'rt-preview',
-    filter:['==',['geometry-type'],'LineString'],
-    paint:{'line-color':'#29B6F6','line-width':2,'line-dasharray':[4,3],'line-opacity':0.9}
-  });
-  map.addLayer({
-    id:'rt-prev-pt',type:'circle',source:'rt-preview',
-    filter:['==',['geometry-type'],'Point'],
-    paint:{'circle-radius':6,'circle-color':'#29B6F6','circle-stroke-color':'#fff','circle-stroke-width':2}
+    id:'rt-road', type:'fill-extrusion', source:'rt-data',
+    paint:{
+      'fill-extrusion-color':   ['get','color'],
+      'fill-extrusion-height':  ['get','h'],
+      'fill-extrusion-base':    ['get','b'],
+      'fill-extrusion-opacity': 1
+    }
   });
 }
 
 function _init(){
   _initLayers();
   _bindUI();
-  map.on('click',_onMapClick);
-  map.on('mousemove',_onMouseMove);
+  map.on('click', _onMapClick);
 }
 
 if(map.loaded()) _init();
-else map.on('load',_init);
+else map.on('load', _init);
 
 })();
 </script>
