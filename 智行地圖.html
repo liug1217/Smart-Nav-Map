@@ -4495,10 +4495,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var merged = data.concat(thb);
     window.cctvCameras = merged; // 供 checkCctvProximity 使用
     var geojson = buildGeoJSON(merged);
-    if(m.loaded()){
+    if(m.isStyleLoaded()){
       initLayers(m, geojson);
     } else {
-      m.once('load', function(){ initLayers(m, geojson); });
+      m.once('styledata', function(){ initLayers(m, geojson); });
     }
   }
   window._reloadCctvLayer = tryInit;
@@ -4594,8 +4594,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m=window.map;
     var data=window.speedCameraData;
     if(!m||!data){ setTimeout(trySpeedInit,300); return; }
-    if(m.loaded()){ initSpeedLayers(m); }
-    else { m.once('load',function(){ initSpeedLayers(m); }); }
+    if(m.isStyleLoaded()){ initSpeedLayers(m); }
+    else { m.once('styledata',function(){ initSpeedLayers(m); }); }
   }
   window._reloadSpeedLayer = trySpeedInit;
   trySpeedInit();
@@ -4672,8 +4672,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m=window.map;
     if(!m){ setTimeout(tryInit,300); return; }
     var fn=function(){ window.updateEqMapMarker(window.latestEarthquake||null); };
-    if(m.loaded()) fn();
-    else m.once('load',fn);
+    if(m.isStyleLoaded()) fn();
+    else m.once('styledata',fn);
   }
   window._reloadEqLayer = tryInit;
   tryInit();
@@ -4780,8 +4780,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function tryInit(){
     var m = window.map;
     if(!m){ setTimeout(tryInit,300); return; }
-    if(m.loaded()) initSignals(m);
-    else m.once('load', function(){ initSignals(m); });
+    if(m.isStyleLoaded()) initSignals(m);
+    else m.once('styledata', function(){ initSignals(m); });
   }
   window._reloadSignalLayer = tryInit;
   tryInit();
