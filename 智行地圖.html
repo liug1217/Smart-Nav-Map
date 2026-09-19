@@ -1696,8 +1696,9 @@ if (navigator.geolocation) {
   // ===== 🔊 測速照相語音播報 =====
   const SPEED_CAM_WARN_KM  = 1.0;  // 1公里:最遠預告
   const SPEED_CAM_PASS_KM  = 0.02; // 20公尺:視為已通過
-  const SPEED_CAM_RESET_KM = 1.2;  // 離開後重置
+  const SPEED_CAM_RESET_KM = 3.0;  // 明確遠離後才重置（避免彎道震盪重設）
   const speedCameraVoiceState = {}; // key: 該支測速照相在陣列裡的索引
+  const speedCameraVoiceDist  = {}; // 上一次記錄的距離（判斷靠近/遠離用）
 
   // 語音播報時把廣播音量降到 15%，播完後還原；同時設 flag 讓 mediaSession pause 不干擾
   function _duckRadio(){
@@ -3071,6 +3072,18 @@ if (navigator.geolocation) {
     return diff < 90; // 前方 ±90° 內才算前方
   }
 
+  function _camOnRoute(camLon, camLat){
+    const route = window.plannedRouteCoordinates;
+    if (!route || route.length < 2) return true; // 無導航路線 → 不過濾
+    const cosLat = Math.cos(camLat * Math.PI / 180);
+    for (let i = 0; i < route.length; i++){
+      const dx = (route[i][0] - camLon) * 111320 * cosLat;
+      const dy = (route[i][1] - camLat) * 111320;
+      if (dx*dx + dy*dy < 150*150) return true; // 150m 以內視為同路
+    }
+    return false;
+  }
+
   function checkSpeedCameraVoice(lat, lon, currentSpeedKmh){
     const data = window.speedCameraData;
     if (!data || !data.features) return;
@@ -3085,16 +3098,22 @@ if (navigator.geolocation) {
       const d = calculateDistance(lat, lon, camLat, camLon); // 公里
       const ahead = _camIsAhead(lat, lon, camLat, camLon, heading);
 
-      // nearestLimit 只考慮前方測速點
+      // 有導航路線時只考慮路線上的測速點
+      const onRoute = _camOnRoute(camLon, camLat);
+      if (!onRoute) { speedCameraVoiceDist[idx] = d; return; }
+
+      // nearestLimit 只考慮前方且在路線上的測速點
       if (ahead && d < nearestDist && d <= SPEED_CAM_WARN_KM) { nearestDist = d; nearestLimit = p.limit || null; }
 
       const state = speedCameraVoiceState[idx] || 'idle';
+      const prevD = speedCameraVoiceDist[idx];
+      speedCameraVoiceDist[idx] = d;
+      // approaching：距離縮短超過 10m（過濾 GPS 抖動）
+      const approaching = (prevD == null) || (d < prevD - 0.01);
 
-      // 測速照相：1000m→900→...→200→100m→通過
-      const overTxt = (currentSpeedKmh && p.limit && currentSpeedKmh > Number(p.limit)) ? '您已超速' : '';
       const CAM_THRESHOLDS = [1000,900,800,700,600,500,400,300,200,100]; // 公尺
 
-      // 離開後只重置「接近中」的狀態，已通過（passed）不重置，避免重新播報
+      // 明確遠離才重置（passed 不重置，避免重新播報）
       if (d > SPEED_CAM_RESET_KM && state !== 'idle' && state !== 'passed') {
         speedCameraVoiceState[idx] = 'idle';
       } else if (d <= SPEED_CAM_PASS_KM && state !== 'passed' && state !== 'idle') {
@@ -3106,8 +3125,8 @@ if (navigator.geolocation) {
         }
         playSpeedCameraPassBeep();
         speedCameraVoiceState[idx] = 'passed';
-      } else if (ahead) {
-        // 只有前方的測速點才播報距離預告
+      } else if (ahead && approaching) {
+        // 只有前方且真的在靠近時才播報距離預告
         const camCurIdx = state === 'idle' ? -1 : CAM_THRESHOLDS.indexOf(parseInt(state.slice(1)));
         for (let i = 0; i < CAM_THRESHOLDS.length; i++) {
           const th = CAM_THRESHOLDS[i];
@@ -3145,6 +3164,7 @@ if (navigator.geolocation) {
   // 重置所有測速照相的播報狀態,方便重複測試同一支
   window.resetSpeedCameraVoiceState = function(){
     Object.keys(speedCameraVoiceState).forEach(k => delete speedCameraVoiceState[k]);
+    Object.keys(speedCameraVoiceDist).forEach(k => delete speedCameraVoiceDist[k]);
     console.log('已重置所有測速照相播報狀態');
   };
   // 直接測試語音功能本身有沒有作用(不牽涉座標距離判斷)
