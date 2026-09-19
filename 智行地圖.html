@@ -1546,100 +1546,67 @@ if (navigator.geolocation) {
     });
   }
 
-  map.on('load', () => {
-    map.addSource('route', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: []
-      }
-    });
-
-    map.addLayer({
-      id: 'route',
-      type: 'fill-extrusion',
-      source: 'route',
-      paint: {
-        'fill-extrusion-color': '#888888',
-        'fill-extrusion-height': 0.1,
-        'fill-extrusion-base': 0,
-        'fill-extrusion-opacity': 1
-      }
-    });
-
-    map.addLayer({
-      id: 'route-outline',
-      type: 'line',
-      source: 'route',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#ffffff',
-        'line-width': 4,
-        'line-opacity': 1
-      }
-    });
-
-    // ===== 🧭 搜尋地點 → 真實路線規劃用的圖層(跟上面GPS軌跡記錄的route圖層分開) =====
-    map.addSource('navRoute', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
-
-    map.addLayer({
-      id: 'navRoute-outline',
-      type: 'line',
-      source: 'navRoute',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#325cb3', 'line-width': 15, 'line-opacity': 0.9 }
-    });
-
-    map.addLayer({
-      id: 'navRoute-line',
-      type: 'line',
-      source: 'navRoute',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
-    });
-
-    map.on('styleimagemissing', (e) => {
-      if (e.id !== 'nav-arrow') return;
-      const _c = document.createElement('canvas');
-      _c.width = 40; _c.height = 40;
-      const _x = _c.getContext('2d');
-      _x.strokeStyle = 'white';
-      _x.lineWidth = 7;
-      _x.lineCap = 'round';
-      _x.lineJoin = 'round';
-      _x.beginPath();
-      _x.moveTo(8, 4); _x.lineTo(32, 20); _x.lineTo(8, 36);
-      _x.stroke();
-      const _d = _x.getImageData(0, 0, 40, 40);
+  // nav-arrow 圖示遺失時重建（once 在 load 外，不會因重複 load 而疊加）
+  map.on('styleimagemissing', (e) => {
+    if (e.id !== 'nav-arrow') return;
+    const _c = document.createElement('canvas');
+    _c.width = 40; _c.height = 40;
+    const _x = _c.getContext('2d');
+    _x.strokeStyle = 'white'; _x.lineWidth = 7;
+    _x.lineCap = 'round'; _x.lineJoin = 'round';
+    _x.beginPath(); _x.moveTo(8, 4); _x.lineTo(32, 20); _x.lineTo(8, 36); _x.stroke();
+    const _d = _x.getImageData(0, 0, 40, 40);
+    if (!map.hasImage('nav-arrow'))
       map.addImage('nav-arrow', { width: 40, height: 40, data: new Uint8Array(_d.data.buffer) });
-    });
+  });
 
-    map.addLayer({
-      id: 'navRoute-arrows',
-      type: 'symbol',
-      source: 'navRoute',
-      layout: {
-        'symbol-placement': 'line',
-        'symbol-spacing': 100,
-        'icon-image': 'nav-arrow',
-        'icon-size': 0.275,
-        'icon-rotation-alignment': 'map',
-        'icon-pitch-alignment': 'map',
-        'icon-keep-upright': false,
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true
-      }
-    });
+  map.once('load', () => {
+    if (!map.getSource('route')) {
+      map.addSource('route', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+      map.addLayer({
+        id: 'route', type: 'fill-extrusion', source: 'route',
+        paint: { 'fill-extrusion-color': '#888888', 'fill-extrusion-height': 0.1,
+                 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 }
+      });
+      map.addLayer({
+        id: 'route-outline', type: 'line', source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': 4, 'line-opacity': 1 }
+      });
+    }
+
+    // ===== 🧭 搜尋地點 → 真實路線規劃用的圖層 =====
+    if (!map.getSource('navRoute')) {
+      map.addSource('navRoute', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+      map.addLayer({
+        id: 'navRoute-outline', type: 'line', source: 'navRoute',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#325cb3', 'line-width': 15, 'line-opacity': 0.9 }
+      });
+      map.addLayer({
+        id: 'navRoute-line', type: 'line', source: 'navRoute',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
+      });
+      map.addLayer({
+        id: 'navRoute-arrows', type: 'symbol', source: 'navRoute',
+        layout: {
+          'symbol-placement': 'line', 'symbol-spacing': 100,
+          'icon-image': 'nav-arrow', 'icon-size': 0.275,
+          'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
+          'icon-keep-upright': false, 'icon-allow-overlap': true, 'icon-ignore-placement': true
+        }
+      });
+    }
 
     window.navRouteSource = map.getSource('navRoute');
     routeSource = map.getSource('route');
-
   });
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -2784,8 +2751,14 @@ if (navigator.geolocation) {
       window.addEventListener('deviceorientation', handleDeviceOrientation, true);
     }
   }
-  document.addEventListener('click', requestOrientationPermission, { once: true });
-  document.addEventListener('touchstart', requestOrientationPermission, { once: true });
+  var _orientationRequested = false;
+  function _requestOrientationOnce() {
+    if (_orientationRequested) return;
+    _orientationRequested = true;
+    requestOrientationPermission();
+  }
+  document.addEventListener('click', _requestOrientationOnce, { once: true });
+  document.addEventListener('touchstart', _requestOrientationOnce, { once: true });
 
 
   function getCurrentPositionPromise(){
@@ -3306,17 +3279,19 @@ if (navigator.geolocation) {
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
   function _onCarReady(_carImg) {
-    map.addImage('car-icon', _carImg, { pixelRatio: 2 });
+    function _addCarLayers() {
+      if (map.getSource('user-pos')) return; // 防止重複
+      if (!map.hasImage('car-icon')) map.addImage('car-icon', _carImg, { pixelRatio: 2 });
 
-    // GeoJSON source：只有一個點（使用者位置）
-    map.addSource('user-pos', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+      // GeoJSON source：只有一個點（使用者位置）
+      map.addSource('user-pos', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
 
-    // 藍色脈衝光暈（在車子下面，貼地面）
-    map.addLayer({
-      id: 'user-pulse',
+      // 藍色脈衝光暈（在車子下面，貼地面）
+      map.addLayer({
+        id: 'user-pulse',
       type: 'circle',
       source: 'user-pos',
       paint: {
@@ -3379,10 +3354,18 @@ if (navigator.geolocation) {
       }
     };
 
-    // 若已有定位立即顯示
-    if (window.currentLon != null && window.currentLat != null) {
-      window._updateCarMarkerRaw(window.currentLon, window.currentLat,
-        window.compassHeading != null ? window.compassHeading : 0);
+      // 若已有定位立即顯示
+      if (window.currentLon != null && window.currentLat != null) {
+        window._updateCarMarkerRaw(window.currentLon, window.currentLat,
+          window.compassHeading != null ? window.compassHeading : 0);
+      }
+    } // end _addCarLayers
+
+    // 確保路線圖層先加（load 後），車子永遠在路線上面
+    if (map.loaded()) {
+      _addCarLayers();
+    } else {
+      map.once('load', _addCarLayers);
     }
   } // end _onCarReady
   _setupCarIcon('圖片/導航車子1.png');
@@ -5249,7 +5232,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     var data = window.familyMartData;
     if(!m || !data){ setTimeout(tryInit, 300); return; }
-    if(m.loaded()){ initFamilyMart(m); }
+    if(m.loaded() || m.isStyleLoaded()){ initFamilyMart(m); }
     else { m.once('style.load', function(){ initFamilyMart(m); }); }
   }
   tryInit();
