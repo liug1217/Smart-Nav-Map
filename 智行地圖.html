@@ -4645,7 +4645,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   window.updateEqMapMarker = function(eq){
     var m = window.map;
-    if(!m || !m.loaded()) return;
+    if(!m || !m.isStyleLoaded()) return;
     if(!eq){ if(eqMarker){ eqMarker.remove(); eqMarker=null; } return; }
     var epi = (eq.EarthquakeInfo||{}).Epicenter||{};
     var lat = epi.EpicenterLatitude, lon = epi.EpicenterLongitude;
