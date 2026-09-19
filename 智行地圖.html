@@ -3408,11 +3408,12 @@ if (navigator.geolocation) {
       }
     } // end _addCarLayers
 
-    // 確保路線圖層先加（load 後），車子永遠在路線上面
-    if (map.loaded()) {
+    // 樣式定義已套用即可加 source/layer，不需等所有 tile 載完
+    // map.loaded() 在衛星/夜間樣式下要等 tile 下載完才 true，會造成長時間等待
+    if (map.isStyleLoaded()) {
       _addCarLayers();
     } else {
-      map.once('load', _addCarLayers);
+      map.once('styledata', _addCarLayers);
     }
   } // end _onCarReady
   _setupCarIcon('圖片/導航車子1.png');
