@@ -1609,6 +1609,43 @@ if (navigator.geolocation) {
     routeSource = map.getSource('route');
   });
 
+  // 樣式切換後重新加回所有自訂圖層（被 applyStyle 的 styledata 監聽器呼叫）
+  window.reloadMapLayers = function() {
+    if (!map.getSource('route')) {
+      map.addSource('route', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      map.addLayer({ id:'route', type:'fill-extrusion', source:'route',
+        paint:{ 'fill-extrusion-color':'#888888','fill-extrusion-height':0.1,'fill-extrusion-base':0,'fill-extrusion-opacity':1 } });
+      map.addLayer({ id:'route-outline', type:'line', source:'route',
+        layout:{ 'line-join':'round','line-cap':'round' },
+        paint:{ 'line-color':'#ffffff','line-width':4,'line-opacity':1 } });
+      routeSource = map.getSource('route');
+      if (routeCoordinates.length > 1) {
+        routeSource.setData({ type:'FeatureCollection', features:[{ type:'Feature',
+          geometry:{ type:'LineString', coordinates:routeCoordinates } }] });
+      }
+    }
+    if (!map.getSource('navRoute')) {
+      map.addSource('navRoute', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      map.addLayer({ id:'navRoute-outline', type:'line', source:'navRoute',
+        layout:{ 'line-join':'round','line-cap':'round' },
+        paint:{ 'line-color':'#325cb3','line-width':15,'line-opacity':0.9 } });
+      map.addLayer({ id:'navRoute-line', type:'line', source:'navRoute',
+        layout:{ 'line-join':'round','line-cap':'round' },
+        paint:{ 'line-color':'#4783fe','line-width':11,'line-opacity':0.95 } });
+      map.addLayer({ id:'navRoute-arrows', type:'symbol', source:'navRoute',
+        layout:{ 'symbol-placement':'line','symbol-spacing':100,'icon-image':'nav-arrow','icon-size':0.275,
+          'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
+          'icon-keep-upright':false,'icon-allow-overlap':true,'icon-ignore-placement':true } });
+      window.navRouteSource = map.getSource('navRoute');
+    }
+    if (typeof window._reloadCarLayer === 'function') window._reloadCarLayer();
+    if (typeof window._reloadCctvLayer === 'function') window._reloadCctvLayer();
+    if (typeof window._reloadSpeedLayer === 'function') window._reloadSpeedLayer();
+    if (typeof window._reloadEqLayer === 'function') window._reloadEqLayer();
+    if (typeof window._reloadSignalLayer === 'function') window._reloadSignalLayer();
+    if (typeof window._reloadFamilyMartLayer === 'function') window._reloadFamilyMartLayer();
+  };
+
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -3166,16 +3203,12 @@ if (navigator.geolocation) {
       if (lastPosition) {
         const distance = calculateDistance(lastPosition.lat, lastPosition.lon, currentLat, currentLon);
         totalDistance += distance;
+        if (distance > 0.005) {
+          routeCoordinates.push([currentLon, currentLat]);
+        }
         lastPosition = { lat: currentLat, lon: currentLon };
         if (typeof window._coinCheckDist === 'function') window._coinCheckDist(totalDistance);
         if (typeof window._coinDriveHeartbeat === 'function') window._coinDriveHeartbeat();
-      }
-
-      if (lastPosition) {
-        const d = calculateDistance(lastPosition.lat, lastPosition.lon, currentLat, currentLon);
-        if (d > 0.005) {
-          routeCoordinates.push([currentLon, currentLat]);
-        }
       }
 
       if (routeSource) {
@@ -3369,6 +3402,7 @@ if (navigator.geolocation) {
     }
   } // end _onCarReady
   _setupCarIcon('圖片/導航車子1.png');
+  window._reloadCarLayer = function() { _setupCarIcon('圖片/導航車子1.png'); };
 });
 </script>
 
@@ -4336,6 +4370,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       m.once('load', function(){ initLayers(m, geojson); });
     }
   }
+  window._reloadCctvLayer = tryInit;
   tryInit();
 })();
 </script>
@@ -4431,6 +4466,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(m.loaded()){ initSpeedLayers(m); }
     else { m.once('load',function(){ initSpeedLayers(m); }); }
   }
+  window._reloadSpeedLayer = trySpeedInit;
   trySpeedInit();
 })();
 </script>
@@ -4505,6 +4541,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(m.loaded()) fn();
     else m.once('load',fn);
   }
+  window._reloadEqLayer = tryInit;
   tryInit();
 })();
 </script>
@@ -4610,6 +4647,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(m.loaded()) initSignals(m);
     else m.once('load', function(){ initSignals(m); });
   }
+  window._reloadSignalLayer = tryInit;
   tryInit();
 })();
 </script>
@@ -5235,6 +5273,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(m.loaded() || m.isStyleLoaded()){ initFamilyMart(m); }
     else { m.once('style.load', function(){ initFamilyMart(m); }); }
   }
+  window._reloadFamilyMartLayer = tryInit;
   tryInit();
 })();
 </script>
