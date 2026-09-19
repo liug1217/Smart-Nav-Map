@@ -3863,7 +3863,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     /* --- 指南針 --- */
     const compassSvg = document.getElementById('compassSvg');
     function updateCompass(){
-      if(compassSvg) compassSvg.style.transform = 'rotate(0deg)';
+      if(compassSvg) compassSvg.style.transform = 'rotate(' + (-map.getBearing()) + 'deg)';
     }
     map.on('rotate', updateCompass);
     map.on('rotateend', updateCompass);
