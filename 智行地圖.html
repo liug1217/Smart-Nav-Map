@@ -2132,6 +2132,7 @@ if (navigator.geolocation) {
       });
     },
   };
+  window.VP = VP; // 讓其他 <script> 區塊（如金幣音效）共用同一個 AudioContext
 
   // 頁面載入後背景預載所有錄音音檔，消除首次播放的載入延遲
   VP.prefetch(['1','2','3','4','5','6','7','8','9',
@@ -2147,7 +2148,8 @@ if (navigator.geolocation) {
   // 測速照相通過提示音（Web Audio，雙音短促，不走語音佇列）
   function playSpeedCameraPassBeep() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = VP._getCtx();
+      if(ctx.state === 'suspended') ctx.resume();
       function tone(freq, start, dur) {
         const o = ctx.createOscillator();
         const g = ctx.createGain();
@@ -2161,7 +2163,6 @@ if (navigator.geolocation) {
       }
       tone(880, ctx.currentTime,        0.12);
       tone(1100, ctx.currentTime + 0.16, 0.12);
-      setTimeout(function(){ ctx.close(); }, 600);
     } catch(e) { /* 瀏覽器不支援則靜音 */ }
   }
 
