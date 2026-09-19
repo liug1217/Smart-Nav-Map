@@ -2752,10 +2752,13 @@ if (navigator.geolocation) {
   function handleDeviceOrientation(event){
     let heading = null;
     if (typeof event.webkitCompassHeading === 'number') {
+      // iOS Safari：webkitCompassHeading 直接是真北方位角
       heading = event.webkitCompassHeading;
-    } else if (typeof event.alpha === 'number') {
+    } else if (event.absolute && typeof event.alpha === 'number') {
+      // Android deviceorientationabsolute：alpha 為真北修正過的絕對方位角
       heading = 360 - event.alpha;
     }
+    // 非絕對的 deviceorientation（event.absolute===false）的 alpha 是相對任意基準，忽略
     if (heading == null || isNaN(heading)) return;
 
     // 指數平滑 + 正確繞圈處理
@@ -3034,7 +3037,7 @@ if (navigator.geolocation) {
         }
         playSpeedCameraPassBeep();
         speedCameraVoiceState[idx] = 'passed';
-      } else {
+      } else if (state !== 'passed') {
         const camCurIdx = state === 'idle' ? -1 : CAM_THRESHOLDS.indexOf(parseInt(state.slice(1)));
         for (let i = 0; i < CAM_THRESHOLDS.length; i++) {
           const th = CAM_THRESHOLDS[i];
