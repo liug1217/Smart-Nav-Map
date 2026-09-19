@@ -4694,6 +4694,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   let _lastStep  = Math.floor(totalKm / 0.05); // 每 50m 一格
   let _toastQ    = [];  // toast 排隊
   let _toasting  = false;
+  let _prevSessionKm = 0; // 上次 _coinCheckDist 收到的 sessionKm，用於計算本次 delta
 
   // ── 工具 ──────────────────────────────
   function getLv(c){ let r=LEVELS[0]; for(const l of LEVELS) if(c>=l.min) r=l; return r; }
@@ -4867,10 +4868,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   // ── 距離追蹤：每 100m +1（夜間×2、週末×1.5）+ 里程碑 ──
   window._coinCheckDist = function(kmTotal){
+    // kmTotal 是本次 session 從0開始的累積公里（每次重新整理頁面歸零）
+    // 所以只取 delta，加到 totalKm（跨 session 持久化）上
+    const delta = kmTotal - _prevSessionKm;
+    _prevSessionKm = kmTotal;
+    if(delta <= 0) return;
     const prev = totalKm;
-    totalKm = kmTotal;
-    const delta = kmTotal - prev;
-    if(delta > 0) dailyKm += delta;
+    totalKm += delta;
+    dailyKm += delta;
     localStorage.setItem(K_KM, totalKm.toFixed(3));
     localStorage.setItem(K_DAILY, dailyKm.toFixed(3));
 
