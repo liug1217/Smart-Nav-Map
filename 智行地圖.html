@@ -2656,7 +2656,6 @@ if (navigator.geolocation) {
     const text = maneuverToChinese(step.maneuver);
     const roadPart = step.name ? ('進入' + step.name) : '';
 
-    console.log('[轉彎導航] 第' + currentStepIndex + '步,距離' + Math.round(meters) + '公尺,狀態:' + state + ',指示:' + text);
 
     if (meters <= 15) {
       const already = navStepVoiceState[currentStepIndex];
