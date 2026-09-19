@@ -1922,6 +1922,7 @@ if (navigator.geolocation) {
         const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
         if (_drawerOpen) { _closeDrawer(); }
         else if (curH <= RECT1_COMPACT + 10) { _openDrawer(); }
+        else { _voiceDrawer.style.display = 'none'; } // 點擊空白：取消 _onDragStart 預先展開的 drawer
         return;
       }
       _snapPanel(dy);
