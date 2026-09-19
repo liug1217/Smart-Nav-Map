@@ -5270,10 +5270,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   padding:7px 8px;margin-bottom:5px;
   border-left:3px solid rgba(255,255,255,0.18);
 }
-.rt-layer-item[data-type="yellowLine"]{border-left-color:#FFD700;}
 .rt-layer-item[data-type="lane"]     {border-left-color:#4FC3F7;}
 .rt-layer-item[data-type="shoulder"] {border-left-color:#81C784;}
 .rt-layer-item[data-type="guardrail"]{border-left-color:#EF9A9A;}
+.rt-marking-sel{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:#fff;font-size:11px;padding:2px 4px;cursor:pointer;}
 .rt-layer-label{font-size:11px;font-weight:700;color:#fff;min-width:26px;white-space:nowrap;}
 .rt-layer-cfg{display:flex;align-items:center;gap:5px;flex:1;flex-wrap:wrap;}
 .rt-cfg-field{display:flex;align-items:center;gap:3px;font-size:11px;color:#aaa;}
@@ -5309,7 +5309,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   <div id="rtAddWrap" style="margin-bottom:10px">
     <button class="rt-btn rt-btn-secondary" id="rtAddBtn">＋ 新增截面元素</button>
     <div id="rtAddMenu">
-      <button class="rt-add-opt" data-type="yellowLine">— 黃線（中線）</button>
+      <button class="rt-add-opt" data-type="marking" data-variant="whiteSolid">— 白實線</button>
+      <button class="rt-add-opt" data-type="marking" data-variant="whiteDash">╌ 白虛線</button>
+      <button class="rt-add-opt" data-type="marking" data-variant="yellowSolid">— 黃實線</button>
+      <button class="rt-add-opt" data-type="marking" data-variant="yellowDash">╌ 黃虛線</button>
       <button class="rt-add-opt" data-type="lane">　 車道</button>
       <button class="rt-add-opt" data-type="shoulder">　 路肩</button>
       <button class="rt-add-opt" data-type="guardrail">　 護欄</button>
@@ -5332,13 +5335,19 @@ var _clickBuf   = [];
 var _roads      = [];
 var _dragId     = null;
 
-var _defaults = {
-  yellowLine: {},
-  lane:       {width:3.75},
-  shoulder:   {width:2.50},
-  guardrail:  {height:1.0, width:0.5, color:'#ffffff'}
+var _markingVariants = {
+  whiteSolid:  {color:'#ffffff', width:0.15, solid:true,  dashLen:4, dashGap:6},
+  whiteDash:   {color:'#ffffff', width:0.15, solid:false, dashLen:4, dashGap:6},
+  yellowSolid: {color:'#FFD700', width:0.15, solid:true,  dashLen:4, dashGap:6},
+  yellowDash:  {color:'#FFD700', width:0.15, solid:false, dashLen:4, dashGap:6},
 };
-var _labels = {yellowLine:'黃線', lane:'車道', shoulder:'路肩', guardrail:'護欄'};
+var _defaults = {
+  marking:  {color:'#ffffff', width:0.15, solid:true, dashLen:4, dashGap:6},
+  lane:     {width:3.75},
+  shoulder: {width:2.50},
+  guardrail:{height:1.0, width:0.5, color:'#ffffff'}
+};
+var _labels = {marking:'標線', lane:'車道', shoulder:'路肩', guardrail:'護欄'};
 
 // ---------- 面板開關 ----------
 function _openPanel(){
@@ -5358,8 +5367,14 @@ function _closeMenu(){
 }
 
 // ---------- 截面元素清單 ----------
-function _addLayer(type){
-  _layers.push({id:_nextId++, type:type, cfg:JSON.parse(JSON.stringify(_defaults[type]))});
+function _addLayer(type, variant){
+  var cfg;
+  if(type==='marking' && variant && _markingVariants[variant]){
+    cfg = JSON.parse(JSON.stringify(_markingVariants[variant]));
+  } else {
+    cfg = JSON.parse(JSON.stringify(_defaults[type]));
+  }
+  _layers.push({id:_nextId++, type:type, cfg:cfg});
   _renderList();
   _closeMenu();
 }
@@ -5380,13 +5395,28 @@ function _numField(layer, key, lbl, unit, min, max, step){
   wrap.appendChild(s); wrap.appendChild(inp); wrap.appendChild(u);
   return wrap;
 }
-function _colorField(layer, key, lbl){
+function _colorField(layer, key, lbl, onChangeCb){
   var wrap = document.createElement('label');
   wrap.className = 'rt-cfg-field';
   var s = document.createElement('span'); s.textContent = lbl;
   var inp = document.createElement('input'); inp.type = 'color'; inp.value = layer.cfg[key];
-  (function(l,k){ inp.addEventListener('input', function(){ l.cfg[k] = this.value; }); })(layer,key);
+  (function(l,k){ inp.addEventListener('input', function(){ l.cfg[k] = this.value; if(onChangeCb) onChangeCb(this.value); }); })(layer,key);
   wrap.appendChild(s); wrap.appendChild(inp);
+  return wrap;
+}
+function _solidToggle(layer){
+  var wrap = document.createElement('label');
+  wrap.className = 'rt-cfg-field';
+  var sel = document.createElement('select');
+  sel.className = 'rt-marking-sel';
+  ['實線','虛線'].forEach(function(t,i){
+    var o=document.createElement('option');
+    o.value=i===0?'solid':'dashed'; o.textContent=t;
+    if((i===0)===layer.cfg.solid) o.selected=true;
+    sel.appendChild(o);
+  });
+  (function(l){ sel.addEventListener('change',function(){ l.cfg.solid=(this.value==='solid'); _renderList(); }); })(layer);
+  wrap.appendChild(sel);
   return wrap;
 }
 
@@ -5409,9 +5439,20 @@ function _renderList(){
     lbl.textContent = _labels[layer.type];
     item.appendChild(lbl);
 
+    if(layer.type==='marking') item.style.borderLeftColor = layer.cfg.color;
+
     var cfg = document.createElement('div');
     cfg.className = 'rt-layer-cfg';
-    if(layer.type==='lane'||layer.type==='shoulder'){
+    if(layer.type==='marking'){
+      var colorFld = _colorField(layer,'color','色', (function(el){ return function(v){ el.style.borderLeftColor=v; }; })(item));
+      cfg.appendChild(colorFld);
+      cfg.appendChild(_numField(layer,'width','寬','m',0.05,0.5,0.05));
+      cfg.appendChild(_solidToggle(layer));
+      if(!layer.cfg.solid){
+        cfg.appendChild(_numField(layer,'dashLen','線','m',0.5,50,0.5));
+        cfg.appendChild(_numField(layer,'dashGap','空','m',0.5,50,0.5));
+      }
+    } else if(layer.type==='lane'||layer.type==='shoulder'){
       cfg.appendChild(_numField(layer,'width','寬','m',0.1,20,0.25));
     } else if(layer.type==='guardrail'){
       cfg.appendChild(_numField(layer,'height','高','m',0.1,5,0.1));
@@ -5465,17 +5506,17 @@ function _renderList(){
 // ---------- 截面幾何 ----------
 function _getCrossSection(layers){
   var total = 0;
-  layers.forEach(function(l){
-    total += (l.type==='yellowLine') ? 0.20 : (l.cfg.width||0);
-  });
+  layers.forEach(function(l){ total += (l.cfg.width||0); });
   var pos = -(total/2), result = [];
   layers.forEach(function(l){
-    var w, color, h;
-    if(l.type==='yellowLine'){ w=0.20; color='#FFD700'; h=0.28; }
-    else if(l.type==='lane'){  w=l.cfg.width; color='#3A3A42'; h=0.20; }
+    var w, color, h, dashed=false, dashLen=4, dashGap=6;
+    if(l.type==='marking'){
+      w=l.cfg.width; color=l.cfg.color; h=0.28;
+      dashed=!l.cfg.solid; dashLen=l.cfg.dashLen||4; dashGap=l.cfg.dashGap||6;
+    } else if(l.type==='lane'){ w=l.cfg.width; color='#3A3A42'; h=0.20; }
     else if(l.type==='shoulder'){ w=l.cfg.width; color='#4A4A52'; h=0.18; }
     else { w=l.cfg.width; color=l.cfg.color; h=l.cfg.height; }
-    result.push({off0:pos, off1:pos+w, color:color, h:h});
+    result.push({off0:pos, off1:pos+w, color:color, h:h, dashed:dashed, dashLen:dashLen, dashGap:dashGap});
     pos += w;
   });
   return result;
@@ -5487,16 +5528,26 @@ function _buildSegFeatures(A, B, layers){
   var len = Math.sqrt(dx*dx+dy*dy);
   if(len < 0.01) return [];
   var pLng = -dy/len/(111320*cosLat), pLat = dx/len/111320;
-
-  return _getCrossSection(layers).map(function(e){
-    var A0=[A[0]+e.off0*pLng, A[1]+e.off0*pLat];
-    var A1=[A[0]+e.off1*pLng, A[1]+e.off1*pLat];
-    var B0=[B[0]+e.off0*pLng, B[1]+e.off0*pLat];
-    var B1=[B[0]+e.off1*pLng, B[1]+e.off1*pLat];
-    return {type:'Feature',
-            geometry:{type:'Polygon', coordinates:[[A0,A1,B1,B0,A0]]},
-            properties:{color:e.color, h:e.h, b:0}};
+  var uLng =  dx/len/(111320*cosLat), uLat = dy/len/111320;
+  var feats = [];
+  _getCrossSection(layers).forEach(function(e){
+    if(!e.dashed){
+      var A0=[A[0]+e.off0*pLng,A[1]+e.off0*pLat], A1=[A[0]+e.off1*pLng,A[1]+e.off1*pLat];
+      var B0=[B[0]+e.off0*pLng,B[1]+e.off0*pLat], B1=[B[0]+e.off1*pLng,B[1]+e.off1*pLat];
+      feats.push({type:'Feature',geometry:{type:'Polygon',coordinates:[[A0,A1,B1,B0,A0]]},properties:{color:e.color,h:e.h,b:0}});
+    } else {
+      var pat=e.dashLen+e.dashGap, t=0;
+      while(t<len){
+        var t1=Math.min(t+e.dashLen,len);
+        var S=[A[0]+t*uLng,A[1]+t*uLat], E=[A[0]+t1*uLng,A[1]+t1*uLat];
+        var S0=[S[0]+e.off0*pLng,S[1]+e.off0*pLat], S1=[S[0]+e.off1*pLng,S[1]+e.off1*pLat];
+        var E0=[E[0]+e.off0*pLng,E[1]+e.off0*pLat], E1=[E[0]+e.off1*pLng,E[1]+e.off1*pLat];
+        feats.push({type:'Feature',geometry:{type:'Polygon',coordinates:[[S0,S1,E1,E0,S0]]},properties:{color:e.color,h:e.h,b:0}});
+        t+=pat;
+      }
+    }
   });
+  return feats;
 }
 
 function _refreshMap(){
@@ -5534,7 +5585,7 @@ function _bindUI(){
     addMenu.style.display = _menuOpen ? 'block' : 'none';
   });
   addMenu.querySelectorAll('.rt-add-opt').forEach(function(btn){
-    btn.addEventListener('click', function(){ _addLayer(this.dataset.type); });
+    btn.addEventListener('click', function(){ _addLayer(this.dataset.type, this.dataset.variant); });
   });
   document.addEventListener('click', function(e){
     if(_menuOpen && !addMenu.contains(e.target) && e.target !== addBtn) _closeMenu();
