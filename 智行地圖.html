@@ -2755,7 +2755,6 @@ if (navigator.geolocation) {
 
     if (minDist > OFF_ROUTE_THRESHOLD) {
       offRouteCount++;
-      console.log('[偏航] 距路線' + Math.round(minDist) + '公尺,連續' + offRouteCount + '次');
 
       if (offRouteCount >= OFF_ROUTE_CONFIRM) {
         // 確認偏航，開始重新規劃
@@ -5421,8 +5420,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     var data = window.familyMartData;
     if(!m || !data){ setTimeout(tryInit, 300); return; }
-    if(m.loaded() || m.isStyleLoaded()){ initFamilyMart(m); }
-    else { m.once('style.load', function(){ initFamilyMart(m); }); }
+    if(m.isStyleLoaded()){ initFamilyMart(m); }
+    else { m.once('styledata', function(){ initFamilyMart(m); }); }
   }
   window._reloadFamilyMartLayer = tryInit;
   tryInit();
