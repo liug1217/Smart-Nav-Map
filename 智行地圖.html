@@ -5576,6 +5576,7 @@ function _onMapClick(e){
   if(!_drawActive) return;
   var pt = [e.lngLat.lng, e.lngLat.lat];
   _clickBuf.push(pt);
+  _refreshPreview();
   if(_clickBuf.length >= 4){
     var snap = JSON.parse(JSON.stringify(_layers));
     for(var i=0; i<_clickBuf.length-1; i++){
@@ -5583,6 +5584,7 @@ function _onMapClick(e){
     }
     _clickBuf = [_clickBuf[_clickBuf.length-1]];
     _refreshMap();
+    _refreshPreview();
   }
 }
 
@@ -5610,6 +5612,7 @@ function _bindUI(){
   document.getElementById('rtDrawBtn').addEventListener('click', function(){
     _drawActive = !_drawActive;
     _clickBuf = [];
+    _clearPreview();
     this.textContent = _drawActive ? '⏹ 停止繪畫' : '▶ 開始繪畫';
     this.style.background = _drawActive ? '#E53935' : '#1E88E5';
     map.getCanvas().style.cursor = _drawActive ? 'crosshair' : '';
@@ -5618,6 +5621,21 @@ function _bindUI(){
 }
 
 // ---------- 初始化 MapLibre 圖層 ----------
+function _refreshPreview(){
+  if(!map.getSource('rt-preview')) return;
+  var feats = [];
+  if(_clickBuf.length > 1)
+    feats.push({type:'Feature', geometry:{type:'LineString', coordinates:_clickBuf}});
+  _clickBuf.forEach(function(pt){
+    feats.push({type:'Feature', geometry:{type:'Point', coordinates:pt}});
+  });
+  map.getSource('rt-preview').setData({type:'FeatureCollection', features:feats});
+}
+function _clearPreview(){
+  if(!map.getSource('rt-preview')) return;
+  map.getSource('rt-preview').setData({type:'FeatureCollection', features:[]});
+}
+
 function _initLayers(){
   map.addSource('rt-data', {type:'geojson', data:{type:'FeatureCollection', features:[]}});
   map.addLayer({
@@ -5628,6 +5646,18 @@ function _initLayers(){
       'fill-extrusion-base':    ['get','b'],
       'fill-extrusion-opacity': 1
     }
+  });
+
+  map.addSource('rt-preview', {type:'geojson', data:{type:'FeatureCollection', features:[]}});
+  map.addLayer({
+    id:'rt-preview-line', type:'line', source:'rt-preview',
+    filter:['==',['geometry-type'],'LineString'],
+    paint:{'line-color':'#29B6F6','line-width':2,'line-dasharray':[5,4]}
+  });
+  map.addLayer({
+    id:'rt-preview-dots', type:'circle', source:'rt-preview',
+    filter:['==',['geometry-type'],'Point'],
+    paint:{'circle-radius':5,'circle-color':'#29B6F6','circle-stroke-width':2,'circle-stroke-color':'#fff'}
   });
 }
 
