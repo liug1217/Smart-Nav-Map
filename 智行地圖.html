@@ -5452,7 +5452,7 @@ function _renderList(){
 
     var lbl = document.createElement('span');
     lbl.className = 'rt-layer-label';
-    lbl.textContent = _labels[layer.type];
+    lbl.textContent = layer.type==='shoulder' ? '路肩⇔' : _labels[layer.type];
     item.appendChild(lbl);
 
     if(layer.type==='marking') item.style.borderLeftColor = layer.cfg.color;
@@ -5519,19 +5519,33 @@ function _renderList(){
 
 // ---------- 截面幾何 ----------
 function _getCrossSection(layers){
-  var total = 0;
-  layers.forEach(function(l){ total += (l.cfg.width||0); });
-  var pos = -(total/2), result = [];
-  layers.forEach(function(l){
+  // Shoulders always appear at both outer edges (one entry = left + right pair)
+  var shoulders = layers.filter(function(l){ return l.type==='shoulder'; });
+  var inner     = layers.filter(function(l){ return l.type!=='shoulder'; });
+
+  function toEntry(l){
     var w, color, h, dashed=false, dashLen=4, dashGap=6;
     if(l.type==='marking'){
       w=l.cfg.width; color=l.cfg.color; h=0.28;
       dashed=!l.cfg.solid; dashLen=l.cfg.dashLen||4; dashGap=l.cfg.dashGap||6;
-    } else if(l.type==='lane'){ w=l.cfg.width; color='#3A3A42'; h=0.20; }
-    else if(l.type==='shoulder'){ w=l.cfg.width; color='#4A4A52'; h=0.18; }
+    } else if(l.type==='lane'){    w=l.cfg.width; color='#3A3A42'; h=0.20; }
+    else if(l.type==='shoulder'){  w=l.cfg.width; color='#4A4A52'; h=0.18; }
     else { w=l.cfg.width; color=l.cfg.color; h=l.cfg.height; }
-    result.push({off0:pos, off1:pos+w, color:color, h:h, dashed:dashed, dashLen:dashLen, dashGap:dashGap});
-    pos += w;
+    return {w:w, color:color, h:h, dashed:dashed, dashLen:dashLen, dashGap:dashGap};
+  }
+
+  // Build ordered list: [shoulders...] [inner...] [shoulders reversed...]
+  var ordered = [];
+  shoulders.forEach(function(l){ ordered.push(toEntry(l)); });
+  inner.forEach(function(l){     ordered.push(toEntry(l)); });
+  for(var i=shoulders.length-1; i>=0; i--){ ordered.push(toEntry(shoulders[i])); }
+
+  var total = 0;
+  ordered.forEach(function(e){ total += e.w; });
+  var pos = -(total/2), result = [];
+  ordered.forEach(function(e){
+    result.push({off0:pos, off1:pos+e.w, color:e.color, h:e.h, dashed:e.dashed, dashLen:e.dashLen, dashGap:e.dashGap});
+    pos += e.w;
   });
   return result;
 }
