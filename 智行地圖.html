@@ -4035,6 +4035,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       applyStyle(styleIdx);
       if (typeof window._coinStyleSwitch === 'function') window._coinStyleSwitch();
     });
+
+    /* --- AI 助理（佔位，功能開發中）--- */
+    var aiBtn = document.getElementById('aiBtn');
+    if(aiBtn) aiBtn.addEventListener('click', function(){
+      var t = document.createElement('div');
+      t.className = 'coinToast';
+      t.textContent = '🤖 AI 助理即將上線，敬請期待！';
+      document.body.appendChild(t);
+      setTimeout(function(){ t.remove(); }, 2000);
+    });
   }
   init();
 })();
