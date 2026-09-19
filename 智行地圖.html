@@ -5162,6 +5162,89 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   requestAnimationFrame(tick);
 })();
 </script>
+
+<script src="family_mart_data.js"></script>
+<script>
+/* ===== 🏪 全家便利商店圖層 ===== */
+(function(){
+  var ICON_ID = 'fm-icon';
+  var ICON_URL = 'https://www.family.com.tw/Marketing/images/qrcode/fm_app.png';
+  var _popup = null;
+
+  function initFamilyMart(m){
+    if(m.getSource('family-mart')) return;
+    var data = window.familyMartData;
+    if(!data) return;
+
+    // 載入全家圖示
+    m.loadImage(ICON_URL, function(err, img){
+      if(err || !img) return;
+      if(!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 3 });
+
+      m.addSource('family-mart', { type:'geojson', data:data, cluster:true, clusterMaxZoom:14, clusterRadius:40 });
+
+      // 叢集圓圈
+      m.addLayer({ id:'fm-clusters', type:'circle', source:'family-mart',
+        filter:['has','point_count'],
+        paint:{ 'circle-color':'#00a651', 'circle-radius':['step',['get','point_count'],14,5,18,20,22], 'circle-opacity':0.9 }
+      });
+      m.addLayer({ id:'fm-cluster-count', type:'symbol', source:'family-mart',
+        filter:['has','point_count'],
+        layout:{ 'text-field':'{point_count_abbreviated}', 'text-size':12, 'text-font':['Open Sans Bold','Arial Unicode MS Bold'] },
+        paint:{ 'text-color':'#fff' }
+      });
+
+      // 單點圖示
+      m.addLayer({ id:'fm-points', type:'symbol', source:'family-mart',
+        filter:['!',['has','point_count']],
+        layout:{
+          'icon-image': ICON_ID,
+          'icon-size': 0.06,
+          'icon-allow-overlap': true,
+          'text-field': '全家',
+          'text-size': 10,
+          'text-offset': [0, 1.8],
+          'text-anchor': 'top',
+          'text-allow-overlap': false
+        },
+        paint:{ 'text-color':'#fff', 'text-halo-color':'#00a651', 'text-halo-width':1.5 }
+      });
+
+      // 點擊單點 → popup
+      m.on('click', 'fm-points', function(e){
+        var props = e.features[0].properties;
+        var coords = e.features[0].geometry.coordinates.slice();
+        if(_popup) _popup.remove();
+        _popup = new maplibregl.Popup({ offset:20, closeButton:true })
+          .setLngLat(coords)
+          .setHTML('<div style="font-size:14px;font-weight:600;color:#00a651">🏪 ' + (props.name||'全家便利商店') + '</div>')
+          .addTo(m);
+      });
+      // 點擊叢集 → 放大
+      m.on('click', 'fm-clusters', function(e){
+        var f = e.features[0];
+        m.getSource('family-mart').getClusterExpansionZoom(f.properties.cluster_id, function(err, zoom){
+          if(err) return;
+          m.easeTo({ center:f.geometry.coordinates, zoom:zoom });
+        });
+      });
+      m.on('mouseenter','fm-points', function(){ m.getCanvas().style.cursor='pointer'; });
+      m.on('mouseleave','fm-points', function(){ m.getCanvas().style.cursor=''; });
+      m.on('mouseenter','fm-clusters', function(){ m.getCanvas().style.cursor='pointer'; });
+      m.on('mouseleave','fm-clusters', function(){ m.getCanvas().style.cursor=''; });
+    });
+  }
+
+  function tryInit(){
+    var m = window.map;
+    var data = window.familyMartData;
+    if(!m || !data){ setTimeout(tryInit, 300); return; }
+    if(m.loaded()){ initFamilyMart(m); }
+    else { m.once('style.load', function(){ initFamilyMart(m); }); }
+  }
+  tryInit();
+})();
+</script>
 </body>
 </html>
   
