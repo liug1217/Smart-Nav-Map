@@ -1498,6 +1498,7 @@ if (navigator.geolocation) {
       window.navRouteSource.setData({ type: 'FeatureCollection', features: [] });
     }
     window.plannedRouteCoordinates = [];
+    window._navRouteGeometry = null;
     plannedRouteCoordinates = [];
     if (destMarker) { destMarker.remove(); destMarker = null; }
     selectedDest = null;
@@ -1637,6 +1638,10 @@ if (navigator.geolocation) {
           'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
           'icon-keep-upright':false,'icon-allow-overlap':true,'icon-ignore-placement':true } });
       window.navRouteSource = map.getSource('navRoute');
+      if (window._navRouteGeometry) {
+        window.navRouteSource.setData({ type:'FeatureCollection',
+          features:[{ type:'Feature', geometry:window._navRouteGeometry }] });
+      }
     }
     if (typeof window._reloadCarLayer === 'function') window._reloadCarLayer();
     if (typeof window._reloadCctvLayer === 'function') window._reloadCctvLayer();
@@ -2851,6 +2856,7 @@ if (navigator.geolocation) {
       const route = data.routes[0];
       plannedRouteCoordinates = route.geometry.coordinates;
       window.plannedRouteCoordinates = plannedRouteCoordinates;
+      window._navRouteGeometry = route.geometry; // 供樣式切換後重建圖層用
 
       if (window.navRouteSource) {
         window.navRouteSource.setData({
