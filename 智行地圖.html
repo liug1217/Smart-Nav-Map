@@ -3030,7 +3030,6 @@ if (navigator.geolocation) {
       const state = speedCameraVoiceState[idx] || 'idle';
 
       // 測速照相：1000m→900→...→200→100m→通過
-      const limTxt = p.limit ? ('限速' + p.limit + '公里') : '';
       const overTxt = (currentSpeedKmh && p.limit && currentSpeedKmh > Number(p.limit)) ? '您已超速' : '';
       const CAM_THRESHOLDS = [1000,900,800,700,600,500,400,300,200,100]; // 公尺
 
@@ -3052,11 +3051,11 @@ if (navigator.geolocation) {
           if (d*1000 > th) continue;
           if (i <= camCurIdx) continue;
           speedCameraVoiceState[idx] = 'w' + th;
-          const distPart = th >= 1000 ? '1 公里' : th + ' 公尺';
-          const camVoice = p.limit
-            ? (distPart + '後有測速照相，限速' + p.limit + '公里。')
-            : (distPart + '後有測速照相。');
-          speakText(camVoice);
+          // 使用與語音包相容的 items 格式，讓 VP.parse 能比對到錄音 clip
+          const camItems = ['前方' + th + '公尺', '有固定', '測速照相'];
+          if (p.limit) camItems.push('限速' + p.limit + '公里');
+          if (overTxt) camItems.push(overTxt);
+          speakQueue(camItems);
           if (th <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
           break;
         }
