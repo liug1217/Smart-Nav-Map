@@ -1268,6 +1268,8 @@ html, body {
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
   <!-- AI 助理 -->
   <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
+  <!-- 對講 PTT -->
+  <button class="mapCtrlBtn" id="pttBtn" title="對講 (PTT)" style="font-size:18px;">🎙</button>
 </div>
 
 <div class="bottomBar">
@@ -1347,9 +1349,57 @@ html, body {
         <div style="display:flex;justify-content:space-between;font-size:11px;color:#aaa;"><span>低沉</span><span id="voicePitchLabel">1.05</span><span>清亮</span></div>
       </div>
       <button id="voiceTestBtn" style="margin-top:12px;width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:600;">🔊 試聽</button>
+
+      <!-- ── 音量控制 ── -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🎚 音量控制</div>
+
+        <div style="font-size:12px;color:#666;">導航語音
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <input type="range" id="amNavVolSlider" min="0" max="1" step="0.05" style="flex:1;accent-color:#2F80FF;">
+            <span id="amNavVolLabel" style="font-size:11px;color:#aaa;width:36px;text-align:right;"></span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;font-size:12px;color:#666;">廣播音量
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <input type="range" id="amRadioVolSlider" min="0" max="1" step="0.05" style="flex:1;accent-color:#2F80FF;">
+            <span id="amRadioVolLabel" style="font-size:11px;color:#aaa;width:36px;text-align:right;"></span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;font-size:12px;color:#666;">音樂音量
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <input type="range" id="amMusicVolSlider" min="0" max="1" step="0.05" style="flex:1;accent-color:#2F80FF;">
+            <span id="amMusicVolLabel" style="font-size:11px;color:#aaa;width:36px;text-align:right;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 音樂播放器 ── -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🎵 音樂播放</div>
+        <div style="display:flex;align-items:center;gap:8px;background:#f5f5f7;border-radius:12px;padding:10px 12px;">
+          <button id="amMusicPlay" style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3d8ef8,#1a6de8);border:none;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(47,128,255,.45);">
+            <svg width="11" height="13" viewBox="0 0 11 13"><path d="M1 1L10 6.5L1 12V1Z" fill="#fff"/></svg>
+          </button>
+          <div style="flex:1;min-width:0;">
+            <div id="amMusicName" style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111;">未選擇音樂</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+              <input type="range" id="amMusicBar" min="0" max="100" value="0" step="0.1" style="flex:1;height:4px;accent-color:#2F80FF;">
+              <span id="amMusicTime" style="font-size:10px;color:#aaa;flex-shrink:0;">00:00 / 00:00</span>
+            </div>
+          </div>
+          <label style="cursor:pointer;flex-shrink:0;" title="選擇音樂檔案">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <input type="file" id="amMusicFile" accept="audio/*" style="display:none;">
+          </label>
+        </div>
+      </div>
     </div>
   </div><!-- /rect1 -->
 
+<script src="audio-manager.js"></script>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
@@ -1696,14 +1746,18 @@ if (navigator.geolocation) {
   const SPEED_CAM_RESET_KM = 1.2;  // 離開後重置
   const speedCameraVoiceState = {}; // key: 該支測速照相在陣列裡的索引
 
-  // 語音播報時把廣播音量降到 15%，播完後還原；同時設 flag 讓 mediaSession pause 不干擾
+  // 語音播報時平滑降低廣播/音樂音量，播完後平滑還原
   function _duckRadio(){
+    if(window.AudioManager) { window.AudioManager.onNavTTSStart(); return; }
+    // Fallback if AudioManager not yet loaded
     window._ttsActive = true;
     var v = window.radioVjs;
     if(v && !v.paused()){ window._radioWasPlaying = true; v.volume(0.15); }
     else { window._radioWasPlaying = false; }
   }
   function _unduckRadio(){
+    if(window.AudioManager) { window.AudioManager.onNavTTSEnd(); return; }
+    // Fallback if AudioManager not yet loaded
     window._ttsActive = false;
     var v = window.radioVjs;
     if(v){
@@ -1811,6 +1865,64 @@ if (navigator.geolocation) {
   if (_voiceTestBtn) {
     _voiceTestBtn.addEventListener('click', () => speakText('前方200公尺，請右轉，進入忠孝東路'));
   }
+
+  // ===== 🎚 AudioManager 音量滑桿 =====
+  (function _initAudioManagerUI() {
+    const AM = window.AudioManager;
+    if (!AM) return;
+
+    function _initVolSlider(id, labelId, getter, setter) {
+      var sl = document.getElementById(id);
+      var lb = document.getElementById(labelId);
+      if (!sl) return;
+      sl.value = getter();
+      if (lb) lb.textContent = Math.round(getter() * 100) + '%';
+      sl.addEventListener('input', function () {
+        var v = parseFloat(sl.value);
+        setter(v);
+        if (lb) lb.textContent = Math.round(v * 100) + '%';
+      });
+    }
+
+    _initVolSlider('amNavVolSlider',   'amNavVolLabel',   function(){ return AM.vol.nav;   }, function(v){ AM.setNavVol(v);   });
+    _initVolSlider('amRadioVolSlider', 'amRadioVolLabel', function(){ return AM.vol.radio; }, function(v){ AM.setRadioVol(v); });
+    _initVolSlider('amMusicVolSlider', 'amMusicVolLabel', function(){ return AM.vol.music; }, function(v){ AM.setMusicVol(v); });
+
+    // Music player controls
+    var playBtn  = document.getElementById('amMusicPlay');
+    var fileInput = document.getElementById('amMusicFile');
+    var seekBar  = document.getElementById('amMusicBar');
+
+    if (playBtn)  playBtn.addEventListener('click',  function() { AM.musicToggle(); });
+    if (seekBar)  seekBar.addEventListener('input',  function() {
+      var el = window._amMusicEl;
+      if (el && el.duration) el.currentTime = (parseFloat(seekBar.value) / 100) * el.duration;
+    });
+    if (fileInput) fileInput.addEventListener('change', function() {
+      var file = fileInput.files[0];
+      if (!file) return;
+      var url = URL.createObjectURL(file);
+      AM.musicLoad(url, file.name.replace(/\.[^.]+$/, ''));
+    });
+  })();
+
+  // ===== 🎙 PTT 對講按鈕 =====
+  (function _initPTT() {
+    var btn = document.getElementById('pttBtn');
+    if (!btn) return;
+    var AM = window.AudioManager;
+    if (!AM) return;
+
+    function startPTT(e) { e.preventDefault(); AM.pttStart(); }
+    function stopPTT(e)  { e.preventDefault(); AM.pttStop();  }
+
+    btn.addEventListener('mousedown',  startPTT);
+    btn.addEventListener('touchstart', startPTT, { passive: false });
+    btn.addEventListener('mouseup',    stopPTT);
+    btn.addEventListener('mouseleave', stopPTT);
+    btn.addEventListener('touchend',   stopPTT);
+    btn.addEventListener('touchcancel',stopPTT);
+  })();
 
   // ===== 面板狀態管理（導航收合/展開）=====
   function _setPanelState(h, animated) {
@@ -3952,6 +4064,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   var vjs      = videojs('bgMusic', { controls:false, autoplay:false, muted:false, preload:'auto' });
   window.radioVjs = vjs; // 供語音播報做音量閃避
+  // 套用使用者設定的廣播音量
+  if (window.AudioManager) vjs.ready(function(){ vjs.volume(window.AudioManager.vol.radio); });
   var nameEl   = document.getElementById('radioName');
   var freqEl   = document.getElementById('radioFreq');
   var statusEl = document.getElementById('radioStatus');
