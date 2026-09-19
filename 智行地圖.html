@@ -4030,15 +4030,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
     function getOffset(i){ return getDialCenter() - i * TICK_W - TICK_W / 2; }
 
-    function onDown(e){
-      var mat = window.getComputedStyle(track).transform;
-      baseOffset = (mat && mat !== 'none') ? new DOMMatrix(mat).m41 : getOffset(idx);
-      track.style.transition = 'none';
-      track.style.transform = 'translateX(' + baseOffset + 'px)';
-      dragStart = e.touches ? e.touches[0].clientX : e.clientX;
-      dragging = true;
-      e.stopPropagation();
-    }
     function onMove(e){
       if(!dragging) return;
       var x = e.touches ? e.touches[0].clientX : e.clientX;
@@ -4068,12 +4059,27 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       track.style.transform = 'translateX(' + getOffset(idx) + 'px)';
       if(!playing) setStatus('點擊收聽');
     }
+    function onDown(e){
+      dragging = true;
+      dragStart = e.touches ? e.touches[0].clientX : e.clientX;
+      baseOffset = getOffset(idx);
+      track.style.transition = 'none';
+      e.preventDefault();
+      // 只在拖曳期間掛全域 listener，避免常駐 passive:false 影響地圖操作
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('touchmove', onMove, { passive:false });
+      window.addEventListener('mouseup',  onUpCleanup);
+      window.addEventListener('touchend', onUpCleanup);
+    }
+    function onUpCleanup(){
+      onUp();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup',  onUpCleanup);
+      window.removeEventListener('touchend', onUpCleanup);
+    }
     dial.addEventListener('mousedown',  onDown);
     dial.addEventListener('touchstart', onDown, { passive:false });
-    window.addEventListener('mousemove',  onMove);
-    window.addEventListener('touchmove',  onMove, { passive:false });
-    window.addEventListener('mouseup',  onUp);
-    window.addEventListener('touchend', onUp);
   }
 
   vjs.on('playing', function(){ setPlaying(true); setStatus('直播中'); });
