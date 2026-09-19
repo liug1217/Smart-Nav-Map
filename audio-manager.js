@@ -32,8 +32,6 @@
     this._radioWasPlaying = false;
     this._musicWasPlaying = false;
     this._intercomStream = null;
-    this._intercomCtx = null;
-    this._intercomSrc = null;
   }
 
   // ── Nav TTS hooks (called by speakQueue) ──────────────────────────────────
@@ -130,41 +128,25 @@
   AudioManager.prototype.pttStart = function () {
     if (this._intercomStream) return;
     var self = this;
-    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false })
       .then(function (stream) {
         self._intercomStream = stream;
         self.state.intercomActive = true;
         _setPttUI(true);
-        // Local monitor — route mic to speaker so driver can hear themselves or
-        // a nearby passenger can hear over the car's speakers.
-        var ctx = (window.VP && window.VP._getCtx) ? window.VP._getCtx() : new AudioContext();
-        ctx.resume();
-        self._intercomCtx = ctx;
-        var src = ctx.createMediaStreamSource(stream);
-        var gain = ctx.createGain();
-        gain.gain.value = 0.9;
-        src.connect(gain);
-        gain.connect(ctx.destination);
-        self._intercomSrc = src;
-        self._intercomGain = gain;
+        // 注意：不把麥克風直接接回喇叭，避免行車環境造成回音/回授。
+        // 真實對講需後端 WebRTC 才能讓對方聽到；目前僅顯示視覺回饋。
       })
       .catch(function (err) {
         console.warn('[PTT] 麥克風授權失敗:', err);
         _setPttUI(false);
-        alert('請允許麥克風存取權限。\n（真實對講需後端 WebRTC，目前為本機監聽模式）');
+        alert('請允許麥克風存取權限。\n（真實多方對講需後端 WebRTC 支援）');
       });
   };
 
   AudioManager.prototype.pttStop = function () {
     if (!this._intercomStream) return;
-    try {
-      this._intercomSrc.disconnect();
-      this._intercomGain.disconnect();
-    } catch (e) {}
     this._intercomStream.getTracks().forEach(function (t) { t.stop(); });
     this._intercomStream = null;
-    this._intercomSrc = null;
-    this._intercomGain = null;
     this.state.intercomActive = false;
     _setPttUI(false);
   };
