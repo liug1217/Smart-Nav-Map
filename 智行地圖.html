@@ -1649,6 +1649,8 @@ if (navigator.geolocation) {
     if (typeof window._reloadEqLayer === 'function') window._reloadEqLayer();
     if (typeof window._reloadSignalLayer === 'function') window._reloadSignalLayer();
     if (typeof window._reloadFamilyMartLayer === 'function') window._reloadFamilyMartLayer();
+    // 導航中重建圖層後，補回 POI 隱藏狀態；延遲讓非同步圖層（全家 loadImage）也有機會先加進來
+    if (isNavigating) setTimeout(() => togglePoiLayers(false), 300);
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
