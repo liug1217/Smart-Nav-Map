@@ -5283,6 +5283,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   background:rgba(255,80,80,0.15);color:#ff6b6b;font-size:14px;line-height:1;cursor:pointer;
 }
 .rt-layer-del:hover{background:rgba(255,80,80,0.3);}
+.rt-drag-handle{color:#555;font-size:15px;cursor:grab;user-select:none;flex-shrink:0;padding:0 1px;}
+.rt-drag-handle:active{cursor:grabbing;}
+.rt-layer-item.rt-drag-over{border-top:2px solid #29B6F6;margin-top:-2px;}
 
 /* 新增選單 */
 #rtAddWrap{position:relative;}
@@ -5325,8 +5328,9 @@ var _menuOpen   = false;
 var _drawActive = false;
 var _layers     = [];
 var _nextId     = 1;
-var _clickBuf   = [];   // [lng,lat] 等待配對
-var _roads      = [];   // 已提交的路段
+var _clickBuf   = [];
+var _roads      = [];
+var _dragId     = null;
 
 var _defaults = {
   yellowLine: {},
@@ -5393,6 +5397,12 @@ function _renderList(){
     var item = document.createElement('div');
     item.className = 'rt-layer-item';
     item.dataset.type = layer.type;
+    item.draggable = true;
+
+    var handle = document.createElement('span');
+    handle.className = 'rt-drag-handle';
+    handle.textContent = '⠿';
+    item.appendChild(handle);
 
     var lbl = document.createElement('span');
     lbl.className = 'rt-layer-label';
@@ -5401,12 +5411,12 @@ function _renderList(){
 
     var cfg = document.createElement('div');
     cfg.className = 'rt-layer-cfg';
-    if(layer.type === 'lane' || layer.type === 'shoulder'){
-      cfg.appendChild(_numField(layer, 'width', '寬', 'm', 0.1, 20, 0.25));
-    } else if(layer.type === 'guardrail'){
-      cfg.appendChild(_numField(layer, 'height', '高', 'm', 0.1, 5, 0.1));
-      cfg.appendChild(_numField(layer, 'width',  '寬', 'm', 0.1, 5, 0.1));
-      cfg.appendChild(_colorField(layer, 'color', '色'));
+    if(layer.type==='lane'||layer.type==='shoulder'){
+      cfg.appendChild(_numField(layer,'width','寬','m',0.1,20,0.25));
+    } else if(layer.type==='guardrail'){
+      cfg.appendChild(_numField(layer,'height','高','m',0.1,5,0.1));
+      cfg.appendChild(_numField(layer,'width','寬','m',0.1,5,0.1));
+      cfg.appendChild(_colorField(layer,'color','色'));
     }
     item.appendChild(cfg);
 
@@ -5414,6 +5424,39 @@ function _renderList(){
     del.className = 'rt-layer-del'; del.textContent = '×';
     (function(id){ del.addEventListener('click', function(){ _removeLayer(id); }); })(layer.id);
     item.appendChild(del);
+
+    // 拖動排序
+    (function(lid){
+      item.addEventListener('dragstart', function(e){
+        _dragId = lid;
+        e.dataTransfer.effectAllowed = 'move';
+        var el = this;
+        setTimeout(function(){ el.style.opacity='0.4'; }, 0);
+      });
+      item.addEventListener('dragend', function(){
+        this.style.opacity = '1';
+        list.querySelectorAll('.rt-layer-item').forEach(function(el){ el.classList.remove('rt-drag-over'); });
+        _dragId = null;
+      });
+      item.addEventListener('dragover', function(e){
+        e.preventDefault();
+        list.querySelectorAll('.rt-layer-item').forEach(function(el){ el.classList.remove('rt-drag-over'); });
+        this.classList.add('rt-drag-over');
+      });
+      item.addEventListener('dragleave', function(){ this.classList.remove('rt-drag-over'); });
+      item.addEventListener('drop', function(e){
+        e.preventDefault();
+        if(_dragId===null||_dragId===lid) return;
+        var fromIdx=_layers.findIndex(function(l){ return l.id===_dragId; });
+        var toIdx  =_layers.findIndex(function(l){ return l.id===lid; });
+        if(fromIdx!==-1&&toIdx!==-1){
+          var moved=_layers.splice(fromIdx,1)[0];
+          _layers.splice(toIdx,0,moved);
+          _renderList();
+        }
+        _dragId=null;
+      });
+    })(layer.id);
 
     list.appendChild(item);
   });
