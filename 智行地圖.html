@@ -4560,6 +4560,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var _popup = null;
 
   function makeEmojiImage(m, id, emoji, size){
+    if(m.hasImage(id)) return;
     var c = document.createElement('canvas');
     c.width = c.height = size;
     var ctx = c.getContext('2d');
@@ -4571,6 +4572,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function initSignals(m){
     if(!window.SIGNAL_DATA) return;
+    if(m.getSource(SOURCE)) return;
     makeEmojiImage(m, 'signal-icon', '🚦', 48);
 
     m.addSource(SOURCE, {
