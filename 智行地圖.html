@@ -5309,10 +5309,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   <div id="rtAddWrap" style="margin-bottom:10px">
     <button class="rt-btn rt-btn-secondary" id="rtAddBtn">＋ 新增截面元素</button>
     <div id="rtAddMenu">
-      <button class="rt-add-opt" data-type="marking" data-variant="whiteSolid">— 白實線</button>
-      <button class="rt-add-opt" data-type="marking" data-variant="whiteDash">╌ 白虛線</button>
-      <button class="rt-add-opt" data-type="marking" data-variant="yellowSolid">— 黃實線</button>
-      <button class="rt-add-opt" data-type="marking" data-variant="yellowDash">╌ 黃虛線</button>
+      <button class="rt-add-opt" data-type="marking">— 標線</button>
       <button class="rt-add-opt" data-type="lane">　 車道</button>
       <button class="rt-add-opt" data-type="shoulder">　 路肩</button>
       <button class="rt-add-opt" data-type="guardrail">　 護欄</button>
@@ -5335,14 +5332,14 @@ var _clickBuf   = [];
 var _roads      = [];
 var _dragId     = null;
 
-var _markingVariants = {
-  whiteSolid:  {color:'#ffffff', width:0.15, solid:true,  dashLen:4, dashGap:6},
-  whiteDash:   {color:'#ffffff', width:0.15, solid:false, dashLen:4, dashGap:6},
-  yellowSolid: {color:'#FFD700', width:0.15, solid:true,  dashLen:4, dashGap:6},
-  yellowDash:  {color:'#FFD700', width:0.15, solid:false, dashLen:4, dashGap:6},
-};
+var _markingSubTypes = [
+  {key:'whiteSolid',  label:'白實線', color:'#ffffff', solid:true },
+  {key:'whiteDash',   label:'白虛線', color:'#ffffff', solid:false},
+  {key:'yellowSolid', label:'黃實線', color:'#FFD700', solid:true },
+  {key:'yellowDash',  label:'黃虛線', color:'#FFD700', solid:false},
+];
 var _defaults = {
-  marking:  {color:'#ffffff', width:0.15, solid:true, dashLen:4, dashGap:6},
+  marking:  {subType:'whiteSolid', color:'#ffffff', width:0.15, solid:true, dashLen:4, dashGap:6},
   lane:     {width:3.75},
   shoulder: {width:2.50},
   guardrail:{height:1.0, width:0.5, color:'#ffffff'}
@@ -5367,16 +5364,35 @@ function _closeMenu(){
 }
 
 // ---------- 截面元素清單 ----------
-function _addLayer(type, variant){
-  var cfg;
-  if(type==='marking' && variant && _markingVariants[variant]){
-    cfg = JSON.parse(JSON.stringify(_markingVariants[variant]));
-  } else {
-    cfg = JSON.parse(JSON.stringify(_defaults[type]));
-  }
-  _layers.push({id:_nextId++, type:type, cfg:cfg});
+function _addLayer(type){
+  _layers.push({id:_nextId++, type:type, cfg:JSON.parse(JSON.stringify(_defaults[type]))});
   _renderList();
   _closeMenu();
+}
+function _subTypeDropdown(layer){
+  var wrap = document.createElement('label');
+  wrap.className = 'rt-cfg-field';
+  var sel = document.createElement('select');
+  sel.className = 'rt-marking-sel';
+  _markingSubTypes.forEach(function(st){
+    var o = document.createElement('option');
+    o.value = st.key; o.textContent = st.label;
+    if(st.key === layer.cfg.subType) o.selected = true;
+    sel.appendChild(o);
+  });
+  (function(l){ sel.addEventListener('change', function(){
+    for(var i=0; i<_markingSubTypes.length; i++){
+      if(_markingSubTypes[i].key === this.value){
+        l.cfg.subType = _markingSubTypes[i].key;
+        l.cfg.color   = _markingSubTypes[i].color;
+        l.cfg.solid   = _markingSubTypes[i].solid;
+        break;
+      }
+    }
+    _renderList();
+  }); })(layer);
+  wrap.appendChild(sel);
+  return wrap;
 }
 function _removeLayer(id){
   _layers = _layers.filter(function(l){ return l.id !== id; });
@@ -5444,10 +5460,8 @@ function _renderList(){
     var cfg = document.createElement('div');
     cfg.className = 'rt-layer-cfg';
     if(layer.type==='marking'){
-      var colorFld = _colorField(layer,'color','色', (function(el){ return function(v){ el.style.borderLeftColor=v; }; })(item));
-      cfg.appendChild(colorFld);
+      cfg.appendChild(_subTypeDropdown(layer));
       cfg.appendChild(_numField(layer,'width','寬','m',0.05,0.5,0.05));
-      cfg.appendChild(_solidToggle(layer));
       if(!layer.cfg.solid){
         cfg.appendChild(_numField(layer,'dashLen','線','m',0.5,50,0.5));
         cfg.appendChild(_numField(layer,'dashGap','空','m',0.5,50,0.5));
@@ -5561,11 +5575,13 @@ function _refreshMap(){
 function _onMapClick(e){
   if(!_drawActive) return;
   var pt = [e.lngLat.lng, e.lngLat.lat];
-  if(_clickBuf.length === 0){
-    _clickBuf = [pt];
-  } else {
-    _roads.push({A:_clickBuf[0], B:pt, layers:JSON.parse(JSON.stringify(_layers))});
-    _clickBuf = [pt];
+  _clickBuf.push(pt);
+  if(_clickBuf.length >= 4){
+    var snap = JSON.parse(JSON.stringify(_layers));
+    for(var i=0; i<_clickBuf.length-1; i++){
+      _roads.push({A:_clickBuf[i], B:_clickBuf[i+1], layers:snap});
+    }
+    _clickBuf = [_clickBuf[_clickBuf.length-1]];
     _refreshMap();
   }
 }
@@ -5585,7 +5601,7 @@ function _bindUI(){
     addMenu.style.display = _menuOpen ? 'block' : 'none';
   });
   addMenu.querySelectorAll('.rt-add-opt').forEach(function(btn){
-    btn.addEventListener('click', function(){ _addLayer(this.dataset.type, this.dataset.variant); });
+    btn.addEventListener('click', function(){ _addLayer(this.dataset.type); });
   });
   document.addEventListener('click', function(e){
     if(_menuOpen && !addMenu.contains(e.target) && e.target !== addBtn) _closeMenu();
