@@ -1403,13 +1403,14 @@ if (navigator.geolocation) {
   });
   window.map = map;
 
-  map.on('load', () => {
+  // style.load 只等 style 解析完（~0.3s），不等圖磚；互動立即可用
+  map.once('style.load', () => {
     map.dragRotate.enable();
     map.touchZoomRotate.enableRotation();
     map.boxZoom.disable();
     map.scrollZoom.enable();
     map.dragPan.enable();
-    // 地圖載入完成 → 進度條衝到100% → 淡出 splash
+    // style 就緒即淡出 splash，圖磚繼續在背景載入
     const sp = document.getElementById('splashScreen');
     const spBar = document.getElementById('splashProgress');
     if(sp){
