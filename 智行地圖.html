@@ -1246,6 +1246,8 @@ html, body {
 
 <!-- 自訂地圖控制按鈕群 -->
 <div class="mapCtrlGroup">
+  <!-- 對講 PTT -->
+  <button class="mapCtrlBtn" id="pttBtn" title="對講 (PTT)" style="font-size:18px;">🎙</button>
   <!-- 指南針 -->
   <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
@@ -1268,8 +1270,6 @@ html, body {
   <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
   <!-- AI 助理 -->
   <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
-  <!-- 對講 PTT -->
-  <button class="mapCtrlBtn" id="pttBtn" title="對講 (PTT)" style="font-size:18px;">🎙</button>
 </div>
 
 <div class="bottomBar">
@@ -1668,7 +1668,7 @@ if (navigator.geolocation) {
         paint:{ 'fill-extrusion-color':'#888888','fill-extrusion-height':0.1,'fill-extrusion-base':0,'fill-extrusion-opacity':1 } });
       map.addLayer({ id:'route-outline', type:'line', source:'route',
         layout:{ 'line-join':'round','line-cap':'round' },
-        paint:{ 'line-color':'#ffffff','line-width':4,'line-opacity':1 } });
+        paint:{ 'line-color':'#ffffff','line-width':4,'line-opacity':0 } });
       routeSource = map.getSource('route');
       if (routeCoordinates.length > 1) {
         routeSource.setData({ type:'FeatureCollection', features:[{ type:'Feature',
@@ -1913,15 +1913,137 @@ if (navigator.geolocation) {
     var AM = window.AudioManager;
     if (!AM) return;
 
-    function startPTT(e) { e.preventDefault(); AM.pttStart(); }
-    function stopPTT(e)  { e.preventDefault(); AM.pttStop();  }
+    var _pressTimer = null;
+    var _longPressActive = false;
+    var LONG_PRESS_MS = 500;
 
-    btn.addEventListener('mousedown',  startPTT);
-    btn.addEventListener('touchstart', startPTT, { passive: false });
-    btn.addEventListener('mouseup',    stopPTT);
-    btn.addEventListener('mouseleave', stopPTT);
-    btn.addEventListener('touchend',   stopPTT);
-    btn.addEventListener('touchcancel',stopPTT);
+    function onPressStart(e) {
+      e.preventDefault();
+      _longPressActive = false;
+      _pressTimer = setTimeout(function () {
+        _longPressActive = true;
+        AM.pttStart();
+      }, LONG_PRESS_MS);
+    }
+
+    function onPressEnd(e) {
+      e.preventDefault();
+      clearTimeout(_pressTimer);
+      _pressTimer = null;
+      if (_longPressActive) {
+        AM.pttStop();
+        _longPressActive = false;
+      } else {
+        // 短按 → 開啟對講室
+        if (typeof window._openPttRoom === 'function') window._openPttRoom();
+      }
+    }
+
+    function onPressCancel(e) {
+      clearTimeout(_pressTimer);
+      _pressTimer = null;
+      if (_longPressActive) { AM.pttStop(); _longPressActive = false; }
+    }
+
+    btn.addEventListener('mousedown',  onPressStart);
+    btn.addEventListener('touchstart', onPressStart, { passive: false });
+    btn.addEventListener('mouseup',    onPressEnd);
+    btn.addEventListener('touchend',   onPressEnd);
+    btn.addEventListener('mouseleave', onPressCancel);
+    btn.addEventListener('touchcancel',onPressCancel);
+  })();
+
+  // ===== 🎙 對講室模態邏輯 =====
+  (function _initPttRoom() {
+    var modal = document.getElementById('pttRoomModal');
+    if (!modal) return;
+    var AM = window.AudioManager;
+    var _scanStream = null;
+    var _scanInterval = null;
+    var scanCanvas = document.createElement('canvas');
+    var scanCtx = scanCanvas.getContext('2d');
+
+    function updatePeerList(peers) {
+      var el = document.getElementById('pttPeerList');
+      if (!el) return;
+      if (!peers || peers.length === 0) {
+        el.textContent = '尚未有人連線';
+      } else {
+        el.textContent = '已連線：' + peers.length + ' 人';
+      }
+    }
+
+    function stopScan() {
+      clearInterval(_scanInterval);
+      _scanInterval = null;
+      if (_scanStream) {
+        _scanStream.getTracks().forEach(function (t) { t.stop(); });
+        _scanStream = null;
+      }
+      var scanArea = document.getElementById('pttScanArea');
+      if (scanArea) scanArea.style.display = 'none';
+      var scanBtn = document.getElementById('pttScanBtn');
+      if (scanBtn) scanBtn.textContent = '📷 掃描 QR 碼加入';
+    }
+
+    window._openPttRoom = function () {
+      modal.style.display = 'flex';
+      AM.initRoom(function (code) {
+        var codeEl = document.getElementById('pttMyCode');
+        if (codeEl) codeEl.textContent = code;
+        var canvas = document.getElementById('pttQrCanvas');
+        if (canvas && typeof QRCode !== 'undefined') {
+          QRCode.toCanvas(canvas, code, { width: 160, margin: 1 }, function () {});
+        }
+      }, updatePeerList);
+    };
+
+    // 關閉按鈕
+    document.getElementById('pttRoomClose').addEventListener('click', function () {
+      modal.style.display = 'none';
+      stopScan();
+    });
+
+    // 點擊背景關閉
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) { modal.style.display = 'none'; stopScan(); }
+    });
+
+    // 加入按鈕
+    document.getElementById('pttJoinBtn').addEventListener('click', function () {
+      var code = (document.getElementById('pttJoinInput').value || '').trim();
+      if (!code) return;
+      AM.joinRoom(code, updatePeerList);
+      document.getElementById('pttJoinInput').value = '';
+    });
+
+    // 掃描 QR 碼
+    document.getElementById('pttScanBtn').addEventListener('click', function () {
+      if (_scanStream) { stopScan(); return; }
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .then(function (stream) {
+          _scanStream = stream;
+          var video = document.getElementById('pttScanVideo');
+          video.srcObject = stream;
+          document.getElementById('pttScanArea').style.display = 'block';
+          document.getElementById('pttScanBtn').textContent = '⏹ 停止掃描';
+          _scanInterval = setInterval(function () {
+            if (!_scanStream || video.videoWidth === 0) return;
+            scanCanvas.width = video.videoWidth;
+            scanCanvas.height = video.videoHeight;
+            scanCtx.drawImage(video, 0, 0);
+            var imgData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+            if (typeof jsQR === 'undefined') return;
+            var result = jsQR(imgData.data, imgData.width, imgData.height);
+            if (result && result.data) {
+              stopScan();
+              document.getElementById('pttJoinInput').value = result.data;
+              AM.joinRoom(result.data, updatePeerList);
+            }
+          }, 250);
+        })
+        .catch(function (err) { alert('無法存取相機：' + err.message); });
+    });
   })();
 
   // ===== 面板狀態管理（導航收合/展開）=====
@@ -3346,12 +3468,35 @@ if (navigator.geolocation) {
       }
 
       // 更新車子目標位置（rAF 插值迴圈會平滑插值到此）
-      window._vehicleTarget = {
-        lng: currentLon,
-        lat: currentLat,
-        bearing: window.compassHeading != null ? window.compassHeading : 0,
-        timestamp: Date.now()
-      };
+      {
+        const prevTgt = window._vehicleTarget;
+        let gpsBearing = window.compassHeading != null ? window.compassHeading : 0;
+        if (prevTgt) {
+          const dist = calculateDistance(prevTgt.lat, prevTgt.lng, currentLat, currentLon);
+          if (dist > 0.003) { // > 3 公尺才計算方位角
+            const dLng = (currentLon - prevTgt.lng) * Math.PI / 180;
+            const lat1R = prevTgt.lat * Math.PI / 180;
+            const lat2R = currentLat * Math.PI / 180;
+            const y = Math.sin(dLng) * Math.cos(lat2R);
+            const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
+            gpsBearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+          }
+          const dt = now - prevTgt.timestamp;
+          if (dt > 0 && dt < 5000) {
+            window._vehicleVelocity = {
+              dlng: (currentLon - prevTgt.lng) / dt,
+              dlat: (currentLat - prevTgt.lat) / dt,
+              speed: currentSpeed
+            };
+          }
+        }
+        window._vehicleTarget = {
+          lng: currentLon,
+          lat: currentLat,
+          bearing: gpsBearing,
+          timestamp: now
+        };
+      }
 
       if (typeof checkTurnByTurn === 'function') {
         checkTurnByTurn(currentLat, currentLon);
@@ -3544,6 +3689,7 @@ if (navigator.geolocation) {
 
   function _rafLoop() {
     requestAnimationFrame(_rafLoop);
+    const now = Date.now();
     const tgt = window._vehicleTarget;
     if (!tgt) return;
 
@@ -3552,9 +3698,19 @@ if (navigator.geolocation) {
       _dispLat = tgt.lat;
       _dispBearing = tgt.bearing;
     } else {
-      const alpha = 0.15; // 插值係數：0 = 不動，1 = 瞬間到位
-      _dispLng = _dispLng + (_dispLng !== tgt.lng ? (tgt.lng - _dispLng) * alpha : 0);
-      _dispLat = _dispLat + (_dispLat !== tgt.lat ? (tgt.lat - _dispLat) * alpha : 0);
+      const alpha = 0.12;
+      // 航位推算（dead-reckoning）：根據速度向量持續推算下一個位置，
+      // 讓車子在兩次 GPS 更新之間也能持續平滑移動，不會停頓。
+      const vel = window._vehicleVelocity;
+      let targetLng = tgt.lng;
+      let targetLat = tgt.lat;
+      if (vel && vel.speed > 0.5) { // 速度 > 0.5 m/s 才推算
+        const dt = Math.min(now - tgt.timestamp, 2000); // 最多推算 2 秒
+        targetLng = tgt.lng + vel.dlng * dt;
+        targetLat = tgt.lat + vel.dlat * dt;
+      }
+      _dispLng = _dispLng + (targetLng - _dispLng) * alpha;
+      _dispLat = _dispLat + (targetLat - _dispLat) * alpha;
       _dispBearing = _lerpAngle(_dispBearing, tgt.bearing, alpha);
     }
 
@@ -5426,6 +5582,42 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   tryInit();
 })();
 </script>
+
+<!-- PeerJS WebRTC -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- QRCode.js -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<!-- jsQR (QR 掃描) -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<!-- 對講室模態 -->
+<div id="pttRoomModal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,0.72);justify-content:center;align-items:flex-end;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);">
+  <div style="background:#1c1c1e;border-radius:20px 20px 12px 12px;padding:20px 20px 24px;width:min(92vw,400px);color:#fff;font-family:-apple-system,sans-serif;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <span style="font-size:17px;font-weight:600;">🎙 對講室</span>
+      <button id="pttRoomClose" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
+    </div>
+    <!-- 我的代碼 + QR -->
+    <div style="text-align:center;background:#2c2c2e;border-radius:14px;padding:16px;margin-bottom:12px;">
+      <div style="font-size:11px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">我的代碼</div>
+      <div id="pttMyCode" style="font-size:22px;font-weight:700;letter-spacing:5px;font-family:monospace;color:#fff;word-break:break-all;">初始化中…</div>
+      <canvas id="pttQrCanvas" style="margin-top:12px;border-radius:8px;display:block;margin-left:auto;margin-right:auto;max-width:160px;"></canvas>
+    </div>
+    <!-- 已連線人數 -->
+    <div id="pttPeerList" style="min-height:24px;margin-bottom:12px;font-size:13px;color:#888;text-align:center;">尚未有人連線</div>
+    <!-- 輸入代碼加入 -->
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input id="pttJoinInput" placeholder="輸入對方代碼" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid #3a3a3c;background:#2c2c2e;color:#fff;font-size:14px;outline:none;" />
+      <button id="pttJoinBtn" style="padding:10px 16px;border-radius:10px;background:#007AFF;color:#fff;border:none;font-size:14px;cursor:pointer;font-weight:500;white-space:nowrap;">加入</button>
+    </div>
+    <!-- 掃描 QR 碼 -->
+    <button id="pttScanBtn" style="width:100%;padding:11px;border-radius:10px;background:#2c2c2e;color:#fff;border:1px solid #3a3a3c;font-size:14px;cursor:pointer;">📷 掃描 QR 碼加入</button>
+    <div id="pttScanArea" style="display:none;margin-top:10px;border-radius:10px;overflow:hidden;position:relative;">
+      <video id="pttScanVideo" style="width:100%;display:block;background:#000;" autoplay muted playsinline></video>
+      <div style="position:absolute;bottom:6px;right:0;left:0;text-align:center;font-size:12px;color:#eee;text-shadow:0 1px 3px #000;">對準 QR 碼</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
   

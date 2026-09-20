@@ -32,6 +32,12 @@
     this._radioWasPlaying = false;
     this._musicWasPlaying = false;
     this._intercomStream = null;
+    // 對講室 (WebRTC)
+    this._peer = null;
+    this._roomCode = null;
+    this._peerCalls = {};
+    this._remoteAudios = {};
+    this._micStream = null;
   }
 
   // ── Nav TTS hooks (called by speakQueue) ──────────────────────────────────
@@ -126,6 +132,14 @@
 
   // ── Intercom (PTT) ────────────────────────────────────────────────────────
   AudioManager.prototype.pttStart = function () {
+    if (this._micStream) {
+      // WebRTC 模式：開啟麥克風軌道
+      this._micStream.getTracks().forEach(function (t) { t.enabled = true; });
+      this.state.intercomActive = true;
+      _setPttUI(true);
+      return;
+    }
+    // 後備模式（未建立對講室時）
     if (this._intercomStream) return;
     var self = this;
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false })
@@ -133,22 +147,110 @@
         self._intercomStream = stream;
         self.state.intercomActive = true;
         _setPttUI(true);
-        // 注意：不把麥克風直接接回喇叭，避免行車環境造成回音/回授。
-        // 真實對講需後端 WebRTC 才能讓對方聽到；目前僅顯示視覺回饋。
       })
       .catch(function (err) {
         console.warn('[PTT] 麥克風授權失敗:', err);
         _setPttUI(false);
-        alert('請允許麥克風存取權限。\n（真實多方對講需後端 WebRTC 支援）');
+        alert('請允許麥克風存取權限。');
       });
   };
 
   AudioManager.prototype.pttStop = function () {
+    if (this._micStream) {
+      // WebRTC 模式：靜音麥克風軌道（保持串流不中斷）
+      this._micStream.getTracks().forEach(function (t) { t.enabled = false; });
+      this.state.intercomActive = false;
+      _setPttUI(false);
+      return;
+    }
     if (!this._intercomStream) return;
     this._intercomStream.getTracks().forEach(function (t) { t.stop(); });
     this._intercomStream = null;
     this.state.intercomActive = false;
     _setPttUI(false);
+  };
+
+  // ── 對講室 (PeerJS WebRTC) ────────────────────────────────────────────────
+  AudioManager.prototype._getMic = function (cb) {
+    if (this._micStream) { cb(null, this._micStream); return; }
+    var self = this;
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false })
+      .then(function (stream) {
+        stream.getTracks().forEach(function (t) { t.enabled = false; }); // 靜音等待 PTT
+        self._micStream = stream;
+        cb(null, stream);
+      })
+      .catch(function (err) { cb(err); });
+  };
+
+  AudioManager.prototype.initRoom = function (onReady, onPeerChange) {
+    if (this._peer) { if (onReady) onReady(this._roomCode); return; }
+    var self = this;
+    this._getMic(function (err) {
+      if (err) { alert('無法取得麥克風：' + err.message); return; }
+      if (typeof Peer === 'undefined') { alert('PeerJS 尚未載入，請稍後再試。'); return; }
+      var peer = new Peer({ debug: 0 });
+      self._peer = peer;
+      self._peerCalls = {};
+      self._remoteAudios = {};
+      peer.on('open', function (id) {
+        self._roomCode = id;
+        if (onReady) onReady(id);
+      });
+      peer.on('call', function (call) {
+        call.answer(self._micStream);
+        self._setupCall(call, onPeerChange);
+      });
+      peer.on('error', function (err) { console.warn('[PTT Room] peer error:', err.type, err); });
+    });
+  };
+
+  AudioManager.prototype._setupCall = function (call, onPeerChange) {
+    var self = this;
+    var peerId = call.peer;
+    self._peerCalls[peerId] = call;
+    call.on('stream', function (remoteStream) {
+      var audio = self._remoteAudios[peerId];
+      if (!audio) {
+        audio = document.createElement('audio');
+        audio.autoplay = true;
+        document.body.appendChild(audio);
+        self._remoteAudios[peerId] = audio;
+      }
+      audio.srcObject = remoteStream;
+      audio.play().catch(function () {});
+      if (onPeerChange) onPeerChange(Object.keys(self._peerCalls));
+    });
+    call.on('close', function () {
+      delete self._peerCalls[peerId];
+      var audio = self._remoteAudios[peerId];
+      if (audio) { audio.srcObject = null; try { document.body.removeChild(audio); } catch (e) {} delete self._remoteAudios[peerId]; }
+      if (onPeerChange) onPeerChange(Object.keys(self._peerCalls));
+    });
+    call.on('error', function (err) { console.warn('[PTT Room] call error:', err); });
+  };
+
+  AudioManager.prototype.joinRoom = function (targetId, onPeerChange) {
+    if (!this._peer) { alert('請先開啟對講室'); return; }
+    if (!this._micStream) { alert('麥克風尚未準備好'); return; }
+    if (targetId === this._roomCode) { alert('不能加入自己的房間'); return; }
+    if (this._peerCalls[targetId]) return;
+    var call = this._peer.call(targetId, this._micStream);
+    this._setupCall(call, onPeerChange);
+  };
+
+  AudioManager.prototype.destroyRoom = function () {
+    var self = this;
+    Object.keys(this._peerCalls || {}).forEach(function (id) { try { self._peerCalls[id].close(); } catch (e) {} });
+    Object.keys(this._remoteAudios || {}).forEach(function (id) {
+      var a = self._remoteAudios[id];
+      try { a.srcObject = null; document.body.removeChild(a); } catch (e) {}
+    });
+    if (this._peer) { try { this._peer.destroy(); } catch (e) {} this._peer = null; }
+    if (this._micStream) { this._micStream.getTracks().forEach(function (t) { t.stop(); }); this._micStream = null; }
+    this._peerCalls = {};
+    this._remoteAudios = {};
+    this._roomCode = null;
   };
 
   // ── UI helpers ────────────────────────────────────────────────────────────
