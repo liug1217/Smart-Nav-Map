@@ -5683,66 +5683,87 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script>
 /* ===== 🚾 公共廁所圖層 ===== */
 (function(){
+  var ICON_ID = 'toilet-icon';
   var _popup = null;
+
+  // MapLibre 用 SDF 字型不支援 emoji text-field，改用 canvas 畫 emoji 轉圖片
+  function _addToiletIcon(m) {
+    if (m.hasImage(ICON_ID)) return;
+    var sz = 64;
+    var c = document.createElement('canvas');
+    c.width = sz; c.height = sz;
+    var ctx = c.getContext('2d');
+    ctx.font = '44px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚾', sz / 2, sz / 2);
+    var img = new Image(sz, sz);
+    img.onload = function() {
+      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 });
+    };
+    img.src = c.toDataURL('image/png');
+  }
 
   function initToilets(m) {
     if (m.getSource('toilets')) return;
     var data = window.toiletData;
     if (!data) return;
 
-    m.addSource('toilets', { type:'geojson', data:data });
+    _addToiletIcon(m);
 
-    m.addLayer({
-      id: 'toilet-points',
-      type: 'symbol',
-      source: 'toilets',
-      layout: {
-        'text-field': '🚾',
-        'text-size': 18,
-        'text-allow-overlap': false,
-        'text-ignore-placement': false,
-      },
-      paint: {
-        'text-halo-color': '#fff',
-        'text-halo-width': 1,
-      }
-    });
+    function _setup() {
+      if (m.getSource('toilets')) return;
+      m.addSource('toilets', { type:'geojson', data:data });
+      m.addLayer({
+        id: 'toilet-points',
+        type: 'symbol',
+        source: 'toilets',
+        layout: {
+          'icon-image': ICON_ID,
+          'icon-size': 0.5,
+          'icon-allow-overlap': false,
+        }
+      });
 
-    m.on('click', 'toilet-points', function(e) {
-      var props = e.features[0].properties;
-      var coords = e.features[0].geometry.coordinates.slice();
-      var lon = coords[0], lat = coords[1];
+      m.on('click', 'toilet-points', function(e) {
+        var props = e.features[0].properties;
+        var coords = e.features[0].geometry.coordinates.slice();
+        var lon = coords[0], lat = coords[1];
 
-      if (_popup) { _popup.remove(); _popup = null; }
-      if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
-      document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
+        if (_popup) { _popup.remove(); _popup = null; }
+        if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
+        document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
 
-      var container = document.createElement('div');
-      container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;';
-      container.innerHTML =
-        '<div style="font-weight:600;font-size:14px;margin-bottom:8px;">🚾 ' + (props.name || '公共廁所') + '</div>' +
-        '<button id="toiletNavBtn" style="width:100%;padding:7px 0;background:#007aff;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">🧭 導航前往</button>';
+        var container = document.createElement('div');
+        container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;';
+        container.innerHTML =
+          '<div style="font-weight:600;font-size:14px;margin-bottom:8px;">🚾 ' + (props.name || '公共廁所') + '</div>' +
+          '<button id="toiletNavBtn" style="width:100%;padding:7px 0;background:#007aff;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">🧭 導航前往</button>';
 
-      _popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: '220px' })
-        .setLngLat([lon, lat])
-        .setDOMContent(container)
-        .addTo(m);
+        _popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: '220px' })
+          .setLngLat([lon, lat])
+          .setDOMContent(container)
+          .addTo(m);
 
-      _popup.on('close', function(){ _popup = null; });
+        _popup.on('close', function(){ _popup = null; });
 
-      setTimeout(function(){
-        var btn = document.getElementById('toiletNavBtn');
-        if (btn) btn.addEventListener('click', function(){
-          _popup.remove(); _popup = null;
-          if (typeof window.planRouteTo === 'function') {
-            window.planRouteTo(lat, lon, props.name || '公共廁所');
-          }
-        });
-      }, 0);
-    });
+        setTimeout(function(){
+          var btn = document.getElementById('toiletNavBtn');
+          if (btn) btn.addEventListener('click', function(){
+            _popup.remove(); _popup = null;
+            if (typeof window.planRouteTo === 'function') {
+              window.planRouteTo(lat, lon, props.name || '公共廁所');
+            }
+          });
+        }, 0);
+      });
 
-    m.on('mouseenter', 'toilet-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
-    m.on('mouseleave', 'toilet-points', function(){ m.getCanvas().style.cursor = ''; });
+      m.on('mouseenter', 'toilet-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
+      m.on('mouseleave', 'toilet-points', function(){ m.getCanvas().style.cursor = ''; });
+    }
+
+    if (m.hasImage(ICON_ID)) { _setup(); }
+    else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
   }
 
   function tryInit() {
