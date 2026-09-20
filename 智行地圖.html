@@ -3329,7 +3329,7 @@ if (navigator.geolocation) {
         speedCameraVoiceState[idx] = 'passed';
       } else if (state !== 'passed') {
         const camCurIdx = state === 'idle' ? -1 : CAM_THRESHOLDS.indexOf(parseInt(state.slice(1)));
-        for (let i = 0; i < CAM_THRESHOLDS.length; i++) {
+        for (let i = CAM_THRESHOLDS.length - 1; i >= 0; i--) {
           const th = CAM_THRESHOLDS[i];
           if (d*1000 > th) continue;
           if (i <= camCurIdx) continue;
