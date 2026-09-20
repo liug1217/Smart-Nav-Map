@@ -2882,11 +2882,16 @@ if (navigator.geolocation) {
     }
 
     try {
-      await planRouteTo(selectedDest.lat, selectedDest.lon, { lat, lon });
+      const ok = await planRouteTo(selectedDest.lat, selectedDest.lon, { lat, lon });
       _navState = 'navigating';
-      speakText('路線已重新規劃。');
+      if (ok) {
+        speakText('路線已重新規劃。');
+      } else {
+        speakText('重新規劃失敗，請手動搜尋目的地');
+      }
     } catch (e) {
       console.error('[偏航] 重新規劃失敗:', e);
+      _navState = 'navigating';
       speakText('重新規劃失敗，請手動搜尋目的地');
     } finally {
       lastRerouteTime = Date.now(); // 無論成敗都套用冷卻，避免失敗時立刻重試
@@ -3039,7 +3044,7 @@ if (navigator.geolocation) {
       const data = await res.json();
 
       if (!data.routes || !data.routes.length) {
-        alert('找不到可行的路線');
+        if (!fromPosition) alert('找不到可行的路線');
         return;
       }
 
@@ -3184,6 +3189,7 @@ if (navigator.geolocation) {
           });
         }, 1800);
       }
+      return true;
     } catch (e) {
       console.error('路線規劃失敗:', e);
       if (!fromPosition) alert('路線規劃失敗,請檢查網路連線');
