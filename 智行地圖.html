@@ -1700,6 +1700,7 @@ if (navigator.geolocation) {
     if (typeof window._reloadSignalLayer === 'function') window._reloadSignalLayer();
     if (typeof window._reloadFamilyMartLayer === 'function') window._reloadFamilyMartLayer();
     if (typeof window._reloadToiletLayer === 'function') window._reloadToiletLayer();
+    if (typeof window._reloadPxmartLayer === 'function') window._reloadPxmartLayer();
     // 導航中重建圖層後，補回 POI 隱藏狀態；延遲讓非同步圖層（全家 loadImage）也有機會先加進來
     if (isNavigating) setTimeout(() => togglePoiLayers(false), 300);
   };
@@ -5773,6 +5774,120 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     else { m.once('styledata', function(){ initToilets(m); }); }
   }
   window._reloadToiletLayer = tryInit;
+  tryInit();
+})();
+</script>
+
+<script src="pxmart_data.js"></script>
+<script>
+/* ===== 🛒 大全聯圖層 ===== */
+(function(){
+  var ICON_ID = 'pxmart-icon';
+  var _popup = null;
+
+  function _addPxmartIcon(m) {
+    if (m.hasImage(ICON_ID)) return;
+    var raw = new Image();
+    raw.onload = function() {
+      var W = 60, H = 60;
+      var c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      c.getContext('2d').drawImage(raw, 0, 0, W, H);
+      var sized = new Image(W, H);
+      sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
+      sized.src = c.toDataURL('image/png');
+    };
+    raw.onerror = function() {
+      var c = document.createElement('canvas');
+      c.width = 60; c.height = 60;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#e60012';
+      ctx.beginPath(); ctx.roundRect(0, 0, 60, 60, 12); ctx.fill();
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('全聯', 30, 30);
+      var img = new Image(60, 60);
+      img.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 }); };
+      img.src = c.toDataURL('image/png');
+    };
+    raw.src = '圖片/pxmart.jpg';
+  }
+
+  function initPxmart(m) {
+    if (m.getSource('pxmart')) return;
+    var data = window.pxmartData;
+    if (!data) return;
+
+    _addPxmartIcon(m);
+
+    function _setup() {
+      if (m.getSource('pxmart')) return;
+      m.addSource('pxmart', { type:'geojson', data:data, cluster:false });
+      m.addLayer({
+        id: 'pxmart-points',
+        type: 'symbol',
+        source: 'pxmart',
+        layout: {
+          'icon-image': ICON_ID,
+          'icon-size': 1,
+          'icon-allow-overlap': true,
+        }
+      });
+
+      m.on('click', 'pxmart-points', function(e) {
+        var props = e.features[0].properties;
+        var coords = e.features[0].geometry.coordinates.slice();
+        var lon = coords[0], lat = coords[1];
+
+        if (_popup) { _popup.remove(); _popup = null; }
+        if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
+        document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
+
+        var container = document.createElement('div');
+        container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;display:flex;flex-direction:column;gap:8px;';
+        container.innerHTML =
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<img src="圖片/pxmart.jpg" style="width:28px;height:28px;object-fit:contain;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">' +
+            '<span style="font-weight:600;font-size:14px;">' + (props.name || '大全聯') + '</span>' +
+          '</div>' +
+          '<div class="addr">大全聯量販超市</div>' +
+          '<button id="pxmartNavBtn" style="width:100%;padding:7px 0;background:#e60012;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">🧭 導航前往</button>';
+
+        _popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: '220px' })
+          .setLngLat([lon, lat])
+          .setDOMContent(container)
+          .addTo(m);
+
+        _popup.on('close', function(){ _popup = null; });
+
+        setTimeout(function(){
+          var btn = document.getElementById('pxmartNavBtn');
+          if (btn) btn.addEventListener('click', function(){
+            _popup.remove(); _popup = null;
+            if (typeof window.planRouteTo === 'function') {
+              window.planRouteTo(lat, lon, props.name || '大全聯');
+            }
+          });
+        }, 0);
+      });
+
+      m.on('mouseenter', 'pxmart-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
+      m.on('mouseleave', 'pxmart-points', function(){ m.getCanvas().style.cursor = ''; });
+    }
+
+    if (m.hasImage(ICON_ID)) { _setup(); }
+    else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
+  }
+
+  function tryInit() {
+    var m = window.map;
+    var data = window.pxmartData;
+    if (!m || !data) { setTimeout(tryInit, 300); return; }
+    if (m.isStyleLoaded()) { initPxmart(m); }
+    else { m.once('styledata', function(){ initPxmart(m); }); }
+  }
+  window._reloadPxmartLayer = tryInit;
   tryInit();
 })();
 </script>
