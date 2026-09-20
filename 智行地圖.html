@@ -3211,6 +3211,34 @@ if (navigator.geolocation) {
     });
   }
 
+  // 供全家/長按 popup 呼叫：直接以座標為目的地開始導航
+  window._navigateToCoord = function(lat, lon, name) {
+    if (destMarker) { destMarker.remove(); destMarker = null; }
+    selectedDest = { lat: lat, lon: lon, name: name || '目的地', addr: '' };
+    planRouteTo(lat, lon);
+    // 關閉任何開著的 popup
+    document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
+  };
+
+  // 長按地圖（右鍵/contextmenu）→ 提示導航選項
+  (function() {
+    var _ctxPopup = null;
+    map.on('contextmenu', function(e) {
+      var lat = e.lngLat.lat, lon = e.lngLat.lng;
+      if (_ctxPopup) { _ctxPopup.remove(); _ctxPopup = null; }
+      var html = '<div style="text-align:center;padding:4px 0;min-width:140px">' +
+        '<div style="font-size:12px;color:#555;margin-bottom:8px">' +
+        lat.toFixed(5) + ', ' + lon.toFixed(5) + '</div>' +
+        '<button onclick="window._navigateToCoord(' + lat + ',' + lon + ',\'此處\')" ' +
+        'style="background:#0a84ff;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;width:100%">🗺 導航到此處</button>' +
+        '</div>';
+      _ctxPopup = new maplibregl.Popup({ offset:10, closeButton:true })
+        .setLngLat([lon, lat])
+        .setHTML(html)
+        .addTo(map);
+    });
+  })();
+
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
   window.plannedRouteCoordinates = plannedRouteCoordinates;
 
@@ -5510,15 +5538,43 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         paint:{}
       });
 
-      // 點擊單點 → popup
+      // 點擊單點 → popup（logo + 名稱 + 地址 + 導航按鈕）
       m.on('click', 'fm-points', function(e){
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
+        var lon = coords[0], lat = coords[1];
+        var storeName = props.name || '全家便利商店';
+        var addrId = 'fm-addr-' + Date.now();
+        var safeName = storeName.replace(/\\/g, '').replace(/'/g, '');
+        var html = '<div style="text-align:center;min-width:180px;padding:4px 2px">' +
+          '<img src="圖片/fm_app.png" style="width:48px;height:48px;object-fit:contain;display:block;margin:0 auto 6px" onerror="this.style.display=\'none\'">' +
+          '<div style="font-size:14px;font-weight:700;color:#00a651;margin-bottom:4px">' + storeName + '</div>' +
+          '<div id="' + addrId + '" style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.4">查詢地址中...</div>' +
+          '<button onclick="window._navigateToCoord(' + lat + ',' + lon + ',\'' + safeName + '\')" ' +
+          'style="background:#00a651;color:#fff;border:none;border-radius:8px;padding:8px 0;font-size:14px;cursor:pointer;width:100%;font-weight:600">🗺 導航到這裡</button>' +
+          '</div>';
         if(_popup) _popup.remove();
         _popup = new maplibregl.Popup({ offset:20, closeButton:true })
           .setLngLat(coords)
-          .setHTML('<div style="font-size:14px;font-weight:600;color:#00a651">🏪 ' + (props.name||'全家便利商店') + '</div>')
+          .setHTML(html)
           .addTo(m);
+        // 非同步查詢地址
+        fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&accept-language=zh-TW')
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            var el = document.getElementById(addrId);
+            if(!el) return;
+            var addr = data.address || {};
+            var road = addr.road || addr.pedestrian || addr.path || addr.suburb || '';
+            var district = addr.suburb || addr.quarter || addr.city_district || '';
+            var city = addr.city || addr.town || addr.county || '';
+            var line = [road, district !== road ? district : '', city].filter(Boolean).join('，');
+            el.textContent = line || (data.display_name || '').split(',').slice(0,2).join('，');
+          })
+          .catch(function(){
+            var el = document.getElementById(addrId);
+            if(el) el.textContent = '';
+          });
       });
       // 點擊叢集 → 放大
       m.on('click', 'fm-clusters', function(e){
