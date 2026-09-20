@@ -3490,63 +3490,19 @@ if (navigator.geolocation) {
 
 <script>
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
-// 車子圖示不需要等圖磚，style 解析完就能 addImage/addSource/addLayer
-(map.isStyleLoaded() ? Promise.resolve() : new Promise(r => map.once('style.load', r))).then(function() {
-  // 使用 PNG 車子圖片，canvas 縮放並去除純黑背景
-  function _setupCarIcon(src) {
-    const raw = new Image();
-    raw.crossOrigin = 'anonymous';
-    raw.onload = function() {
-      const W = 80, H = 120; // 2× → 顯示 40×60px
-      const c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(raw, 0, 0, W, H);
-      try {
-        const d = ctx.getImageData(0, 0, W, H);
-        for (let i = 0; i < d.data.length; i += 4) {
-          const r = d.data[i], g = d.data[i+1], b = d.data[i+2];
-          if (r < 20 && g < 20 && b < 20) d.data[i+3] = 0; // 去黑底
-        }
-        ctx.putImageData(d, 0, 0);
-      } catch(e) { /* CORS taint → 跳過去黑底，直接用原圖 */ }
-      const _carImg = new Image(W, H);
-      _carImg.onload = function() { _onCarReady(_carImg); };
-      _carImg.onerror = function() { _setupCarFallback(); };
-      _carImg.src = c.toDataURL();
-    };
-    raw.onerror = function() { _setupCarFallback(); };
-    raw.src = src;
-  }
-  function _setupCarFallback() {
-    // 若圖片載入失敗，退回 SVG 藍色車
-    const svg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
-      <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
-      <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
-    </svg>`;
-    const img = new Image(60, 96);
-    img.onload = function() { _onCarReady(img); };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-  }
-  function _onCarReady(_carImg) {
-    function _addCarLayers() {
-      if (map.getSource('user-pos')) return; // 防止重複
-      if (!map.hasImage('car-icon')) map.addImage('car-icon', _carImg, { pixelRatio: 2 });
+map.on('load', function() {
+  const _carImg = new Image();
+  _carImg.onload = function() {
+    if (map.getSource('user-pos')) return;
+    map.addImage('car-icon', _carImg, { pixelRatio: 2 });
 
-      // GeoJSON source：只有一個點（使用者位置）
-      map.addSource('user-pos', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
-      });
+    map.addSource('user-pos', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
 
-      // 藍色脈衝光暈（在車子下面，貼地面）
-      map.addLayer({
-        id: 'user-pulse',
+    map.addLayer({
+      id: 'user-pulse',
       type: 'circle',
       source: 'user-pos',
       paint: {
@@ -3561,7 +3517,6 @@ if (navigator.geolocation) {
       }
     });
 
-    // 車子 symbol layer（viewport 旋轉對齊無延遲，map pitch 對齊貼地面呈現扁平感）
     map.addLayer({
       id: 'user-car',
       type: 'symbol',
@@ -3577,17 +3532,15 @@ if (navigator.geolocation) {
       }
     });
 
-    // 原始繪製函式（由 rAF 插值迴圈呼叫）
     window._updateCarMarkerRaw = function(lng, lat, bearing) {
       const _src = map.getSource('user-pos');
-      if (!_src) return; // 樣式切換後 source 暫時不存在
+      if (!_src) return;
       _src.setData({
         type: 'FeatureCollection',
         features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { heading: bearing } }]
       });
     };
 
-    // 兼容舊呼叫：直接寫入 target，由 rAF 接手
     window.updateCarMarker = function(lng, lat) {
       window._vehicleTarget = {
         lng: lng, lat: lat,
@@ -3596,7 +3549,6 @@ if (navigator.geolocation) {
       };
     };
 
-    // 羅盤轉動時更新 target bearing
     window.updateUserMarkerHeading = function() {
       if (window.currentLon != null && window.currentLat != null) {
         if (window._vehicleTarget) {
@@ -3611,23 +3563,32 @@ if (navigator.geolocation) {
       }
     };
 
-      // 若已有定位立即顯示
-      if (window.currentLon != null && window.currentLat != null) {
-        window._updateCarMarkerRaw(window.currentLon, window.currentLat,
-          window.compassHeading != null ? window.compassHeading : 0);
-      }
-    } // end _addCarLayers
-
-    // 樣式定義已套用即可加 source/layer，不需等所有 tile 載完
-    // map.loaded() 在衛星/夜間樣式下要等 tile 下載完才 true，會造成長時間等待
-    if (map.isStyleLoaded()) {
-      _addCarLayers();
-    } else {
-      map.once('styledata', _addCarLayers);
+    if (window.currentLon != null && window.currentLat != null) {
+      window._updateCarMarkerRaw(window.currentLon, window.currentLat,
+        window.compassHeading != null ? window.compassHeading : 0);
     }
-  } // end _onCarReady
-  _setupCarIcon('圖片/導航車子1.png');
-  window._reloadCarLayer = function() { _setupCarIcon('圖片/導航車子1.png'); };
+  };
+  _carImg.onerror = function() {
+    const svg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
+      <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
+      <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
+      <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
+      <rect x="5" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
+      <rect x="19" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
+      <rect x="5" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
+      <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
+      <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
+    </svg>`;
+    const img = new Image(60, 96);
+    img.onload = function() { _carImg.onload.call(img); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  };
+  _carImg.src = '圖片/導航車子1.png';
+  window._reloadCarLayer = function() { _carImg.src = '圖片/導航車子1.png'; };
 });
 </script>
 
