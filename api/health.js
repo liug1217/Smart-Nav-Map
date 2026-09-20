@@ -1,35 +1,21 @@
 // GET /api/health
-// 快速健康檢查端點，確認 API 服務正常。
-// 可選擇性地 ping Redis，但不執行昂貴計算。
+// Quick connectivity check. Pings Redis; does not run expensive queries.
 
-async function checkRedis() {
-  const url   = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return 'not_configured';
-  try {
-    const r = await fetch(url, {
-      method:  'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body:    JSON.stringify(['PING']),
-    });
-    const d = await r.json();
-    return d.result === 'PONG' ? 'ok' : 'error';
-  } catch {
-    return 'error';
-  }
-}
+const { corsHeaders, methodNotAllowed } = require('../lib/response');
+const { redisPing } = require('../lib/redis');
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method !== 'GET') { res.status(405).end(); return; }
+  corsHeaders(res);
+  if (req.method !== 'GET') return methodNotAllowed(res);
 
-  const redis = await checkRedis().catch(() => 'error');
-  const ok = redis === 'ok' || redis === 'not_configured';
+  const redis = await redisPing();
+  const configured = !!process.env.UPSTASH_REDIS_REST_URL;
+  const ok = redis === 'ok' || (!configured && redis === 'error');
 
   res.status(ok ? 200 : 503).json({
     ok,
     service:   'smart-nav-api',
-    redis,
+    redis:     configured ? redis : 'not_configured',
     timestamp: new Date().toISOString(),
   });
 };

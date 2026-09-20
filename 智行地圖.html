@@ -6192,9 +6192,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         '智行地圖即時狀態\n\n' +
         '🟢 在線：' + d.online + ' 人\n' +
         '🚗 移動中：' + (d.moving || 0) + ' 人\n' +
-        '🚦 提供路況：' + (d.trafficContributors || 0) + ' 人\n\n' +
+        '📡 即時交通來源：' + (d.trafficSources || d.trafficContributors || 0) + '\n\n' +
         '資料更新：' + ts + '\n' +
-        '（在線 ≠ 台車；代表目前開啟智行地圖的 session 數）'
+        '（在線人數 ≠ 車輛數；即時交通來源由系統自動判斷）'
       );
     });
   }
