@@ -1368,33 +1368,6 @@ html, body {
           </div>
         </div>
 
-        <div style="margin-top:10px;font-size:12px;color:#666;">音樂音量
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-            <input type="range" id="amMusicVolSlider" min="0" max="1" step="0.05" style="flex:1;accent-color:#2F80FF;">
-            <span id="amMusicVolLabel" style="font-size:11px;color:#aaa;width:36px;text-align:right;"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── 音樂播放器 ── -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
-        <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🎵 音樂播放</div>
-        <div style="display:flex;align-items:center;gap:8px;background:#f5f5f7;border-radius:12px;padding:10px 12px;">
-          <button id="amMusicPlay" style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3d8ef8,#1a6de8);border:none;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(47,128,255,.45);">
-            <svg width="11" height="13" viewBox="0 0 11 13"><path d="M1 1L10 6.5L1 12V1Z" fill="#fff"/></svg>
-          </button>
-          <div style="flex:1;min-width:0;">
-            <div id="amMusicName" style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111;">未選擇音樂</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-              <input type="range" id="amMusicBar" min="0" max="100" value="0" step="0.1" style="flex:1;height:4px;accent-color:#2F80FF;">
-              <span id="amMusicTime" style="font-size:10px;color:#aaa;flex-shrink:0;">00:00 / 00:00</span>
-            </div>
-          </div>
-          <label style="cursor:pointer;flex-shrink:0;" title="選擇音樂檔案">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <input type="file" id="amMusicFile" accept="audio/*" style="display:none;">
-          </label>
-        </div>
       </div>
     </div>
   </div><!-- /rect1 -->
@@ -1886,24 +1859,6 @@ if (navigator.geolocation) {
 
     _initVolSlider('amNavVolSlider',   'amNavVolLabel',   function(){ return AM.vol.nav;   }, function(v){ AM.setNavVol(v);   });
     _initVolSlider('amRadioVolSlider', 'amRadioVolLabel', function(){ return AM.vol.radio; }, function(v){ AM.setRadioVol(v); });
-    _initVolSlider('amMusicVolSlider', 'amMusicVolLabel', function(){ return AM.vol.music; }, function(v){ AM.setMusicVol(v); });
-
-    // Music player controls
-    var playBtn  = document.getElementById('amMusicPlay');
-    var fileInput = document.getElementById('amMusicFile');
-    var seekBar  = document.getElementById('amMusicBar');
-
-    if (playBtn)  playBtn.addEventListener('click',  function() { AM.musicToggle(); });
-    if (seekBar)  seekBar.addEventListener('input',  function() {
-      var el = window._amMusicEl;
-      if (el && el.duration) el.currentTime = (parseFloat(seekBar.value) / 100) * el.duration;
-    });
-    if (fileInput) fileInput.addEventListener('change', function() {
-      var file = fileInput.files[0];
-      if (!file) return;
-      var url = URL.createObjectURL(file);
-      AM.musicLoad(url, file.name.replace(/\.[^.]+$/, ''));
-    });
   })();
 
   // ===== 🎙 PTT 對講按鈕 =====
