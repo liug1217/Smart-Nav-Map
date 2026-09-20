@@ -1013,6 +1013,24 @@ html, body {
   display:none;
 }
 
+/* iOS Home Bar 遮擋：覆蓋底部安全區讓地圖不響應誤觸 */
+#ios-home-guard {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-bottom, 20px);
+  height: max(env(safe-area-inset-bottom, 0px), 20px);
+  z-index: 2;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  #ios-home-guard { display: block; }
+}
+
 </style>
 </head>
 <body>
@@ -1598,17 +1616,20 @@ if (navigator.geolocation) {
   }
 
   // nav-arrow 圖示遺失時重建（once 在 load 外，不會因重複 load 而疊加）
+  function _buildNavArrow() {
+    const _c = document.createElement('canvas');
+    _c.width = 80; _c.height = 80;
+    const _x = _c.getContext('2d');
+    _x.strokeStyle = 'rgba(255,255,255,0.92)'; _x.lineWidth = 13;
+    _x.lineCap = 'round'; _x.lineJoin = 'round';
+    _x.beginPath(); _x.moveTo(16, 8); _x.lineTo(64, 40); _x.lineTo(16, 72); _x.stroke();
+    const _d = _x.getImageData(0, 0, 80, 80);
+    if (!map.hasImage('nav-arrow'))
+      map.addImage('nav-arrow', { width: 80, height: 80, data: new Uint8Array(_d.data.buffer) }, { pixelRatio: 2 });
+  }
   map.on('styleimagemissing', (e) => {
     if (e.id !== 'nav-arrow') return;
-    const _c = document.createElement('canvas');
-    _c.width = 40; _c.height = 40;
-    const _x = _c.getContext('2d');
-    _x.strokeStyle = 'white'; _x.lineWidth = 7;
-    _x.lineCap = 'round'; _x.lineJoin = 'round';
-    _x.beginPath(); _x.moveTo(8, 4); _x.lineTo(32, 20); _x.lineTo(8, 36); _x.stroke();
-    const _d = _x.getImageData(0, 0, 40, 40);
-    if (!map.hasImage('nav-arrow'))
-      map.addImage('nav-arrow', { width: 40, height: 40, data: new Uint8Array(_d.data.buffer) });
+    _buildNavArrow();
   });
 
   map.once('load', () => {
@@ -1645,13 +1666,19 @@ if (navigator.geolocation) {
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
       });
+      _buildNavArrow();
       map.addLayer({
         id: 'navRoute-arrows', type: 'symbol', source: 'navRoute',
         layout: {
-          'symbol-placement': 'line', 'symbol-spacing': 100,
-          'icon-image': 'nav-arrow', 'icon-size': 0.275,
+          'symbol-placement': 'line',
+          'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 13, 70, 17, 120],
+          'icon-image': 'nav-arrow',
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.18, 15, 0.28, 18, 0.36],
           'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
           'icon-keep-upright': false, 'icon-allow-overlap': true, 'icon-ignore-placement': true
+        },
+        paint: {
+          'icon-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 0, 13, 1]
         }
       });
     }
@@ -1683,10 +1710,15 @@ if (navigator.geolocation) {
       map.addLayer({ id:'navRoute-line', type:'line', source:'navRoute',
         layout:{ 'line-join':'round','line-cap':'round' },
         paint:{ 'line-color':'#4783fe','line-width':11,'line-opacity':0.95 } });
+      _buildNavArrow();
       map.addLayer({ id:'navRoute-arrows', type:'symbol', source:'navRoute',
-        layout:{ 'symbol-placement':'line','symbol-spacing':100,'icon-image':'nav-arrow','icon-size':0.275,
+        layout:{ 'symbol-placement':'line',
+          'symbol-spacing':['interpolate',['linear'],['zoom'],13,70,17,120],
+          'icon-image':'nav-arrow',
+          'icon-size':['interpolate',['linear'],['zoom'],12,0.18,15,0.28,18,0.36],
           'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
-          'icon-keep-upright':false,'icon-allow-overlap':true,'icon-ignore-placement':true } });
+          'icon-keep-upright':false,'icon-allow-overlap':true,'icon-ignore-placement':true },
+        paint:{ 'icon-opacity':['interpolate',['linear'],['zoom'],11.5,0,13,1] } });
       window.navRouteSource = map.getSource('navRoute');
       if (window._navRouteGeometry) {
         window.navRouteSource.setData({ type:'FeatureCollection',
@@ -6036,6 +6068,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     </div>
   </div>
 </div>
+
+<div id="ios-home-guard"></div>
 </body>
 </html>
   
