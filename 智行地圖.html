@@ -2460,7 +2460,10 @@ if (navigator.geolocation) {
       fmMatches.forEach(function(item) {
         const el = document.createElement('div');
         el.className = 'searchResultItem';
-        el.innerHTML = '<div class="name" style="color:#00a651">' + item.name + '</div><div class="addr">全家便利商店</div>';
+        el.style.cssText = 'display:flex;align-items:center;gap:10px';
+        el.innerHTML =
+          '<img src="圖片/fm_app.png" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;border-radius:6px" onerror="this.style.display=\'none\'">' +
+          '<div><div class="name">' + item.name + '</div><div class="addr">全家便利商店</div></div>';
         el.addEventListener('click', function() {
           selectDestination(item.lat, item.lon, item.name, '全家便利商店');
         });
@@ -2977,10 +2980,8 @@ if (navigator.geolocation) {
     style.layers.forEach(layer => {
       // 隱藏所有 symbol 類型圖層（包含 POI marker、地名、圖示）
       // 只保留 line（道路）、fill（區域填色）、background，以及車子圖層
-      // 另外也隱藏 fm-clusters（circle 類型，全家叢集圓圈）
       const isPoiSymbol = layer.type === 'symbol' && layer.id !== 'user-car' && layer.id !== 'navRoute-arrows';
-      const isPoiCircle = layer.id === 'fm-clusters';
-      if (isPoiSymbol || isPoiCircle) {
+      if (isPoiSymbol) {
         try {
           map.setLayoutProperty(layer.id, 'visibility', visibility);
         } catch(e) {}
@@ -5577,20 +5578,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     function _setup() {
       if(m.getSource('family-mart')) return;
 
-      m.addSource('family-mart', { type:'geojson', data:data, cluster:true, clusterMaxZoom:14, clusterRadius:40 });
+      m.addSource('family-mart', { type:'geojson', data:data, cluster:false });
 
-      // 叢集圓圈
-      m.addLayer({ id:'fm-clusters', type:'circle', source:'family-mart',
-        filter:['has','point_count'],
-        paint:{ 'circle-color':'#00a651', 'circle-radius':['step',['get','point_count'],14,5,18,20,22], 'circle-opacity':0.9 }
-      });
-      m.addLayer({ id:'fm-cluster-count', type:'symbol', source:'family-mart',
-        filter:['has','point_count'],
-        layout:{ 'text-field':'{point_count_abbreviated}', 'text-size':12, 'text-font':['Open Sans Bold','Arial Unicode MS Bold'] },
-        paint:{ 'text-color':'#fff' }
-      });
-
-      // 單點圖示
+      // 單點圖示（不叢集，所有門市直接顯示 logo）
       m.addLayer({ id:'fm-points', type:'symbol', source:'family-mart',
         filter:['!',['has','point_count']],
         layout:{
@@ -5641,18 +5631,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
             if(el) el.textContent = '';
           });
       });
-      // 點擊叢集 → 放大
-      m.on('click', 'fm-clusters', function(e){
-        var f = e.features[0];
-        m.getSource('family-mart').getClusterExpansionZoom(f.properties.cluster_id, function(err, zoom){
-          if(err) return;
-          m.easeTo({ center:f.geometry.coordinates, zoom:zoom });
-        });
-      });
       m.on('mouseenter','fm-points', function(){ m.getCanvas().style.cursor='pointer'; });
       m.on('mouseleave','fm-points', function(){ m.getCanvas().style.cursor=''; });
-      m.on('mouseenter','fm-clusters', function(){ m.getCanvas().style.cursor='pointer'; });
-      m.on('mouseleave','fm-clusters', function(){ m.getCanvas().style.cursor=''; });
     }
     if (m.hasImage(ICON_ID)) { _setup(); }
     else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
