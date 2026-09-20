@@ -5438,9 +5438,17 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var ICON_URL = '圖片/fm_app.png';
   function _addFmIcon(m) {
     if (m.hasImage(ICON_ID)) return;
-    var img = new Image();
-    img.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 3 }); };
-    img.onerror = function() {
+    var raw = new Image();
+    raw.onload = function() {
+      var W = 60, H = 60;
+      var c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      c.getContext('2d').drawImage(raw, 0, 0, W, H);
+      var sized = new Image(W, H);
+      sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
+      sized.src = c.toDataURL('image/png');
+    };
+    raw.onerror = function() {
       var svg = '<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">' +
         '<rect width="60" height="60" rx="12" fill="#00a651"/>' +
         '<rect x="8" y="28" width="44" height="24" rx="4" fill="#fff"/>' +
@@ -5449,10 +5457,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         '<rect x="22" y="34" width="16" height="12" rx="2" fill="#00a651"/>' +
         '</svg>';
       var fb = new Image(60, 60);
-      fb.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, fb, { pixelRatio: 3 }); };
+      fb.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, fb, { pixelRatio: 2 }); };
       fb.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     };
-    img.src = ICON_URL;
+    raw.src = ICON_URL;
   }
 
   function initFamilyMart(m){
@@ -5483,7 +5491,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         filter:['!',['has','point_count']],
         layout:{
           'icon-image': ICON_ID,
-          'icon-size': 0.18,
+          'icon-size': 1,
           'icon-allow-overlap': true
         },
         paint:{}
