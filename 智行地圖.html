@@ -3493,8 +3493,17 @@ if (navigator.geolocation) {
 map.on('load', function() {
   const _carImg = new Image();
   _carImg.onload = function() {
+    const W = 80, H = 120;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    c.getContext('2d').drawImage(_carImg, 0, 0, W, H);
+    const sized = new Image(W, H);
+    sized.onload = function() { _addCarLayers(sized); };
+    sized.src = c.toDataURL('image/png');
+  };
+  function _addCarLayers(_img) {
     if (map.getSource('user-pos')) return;
-    map.addImage('car-icon', _carImg, { pixelRatio: 2 });
+    map.addImage('car-icon', _img, { pixelRatio: 2 });
 
     map.addSource('user-pos', {
       type: 'geojson',
@@ -3584,7 +3593,7 @@ map.on('load', function() {
       <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
     </svg>`;
     const img = new Image(60, 96);
-    img.onload = function() { _carImg.onload.call(img); };
+    img.onload = function() { _addCarLayers(img); };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   };
   _carImg.src = '圖片/導航車子1.png';
