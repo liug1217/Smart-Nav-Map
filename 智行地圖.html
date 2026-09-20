@@ -5433,19 +5433,31 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 /* ===== 🏪 全家便利商店圖層 ===== */
 (function(){
   var ICON_ID = 'fm-icon';
-  var ICON_URL = 'https://www.family.com.tw/Marketing/images/qrcode/fm_app.png';
   var _popup = null;
+
+  function _addFmIcon(m) {
+    if (m.hasImage(ICON_ID)) return;
+    var svg = '<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect width="60" height="60" rx="12" fill="#00a651"/>' +
+      '<rect x="8" y="28" width="44" height="24" rx="4" fill="#fff"/>' +
+      '<rect x="14" y="10" width="10" height="18" rx="2" fill="#fff"/>' +
+      '<rect x="36" y="10" width="10" height="18" rx="2" fill="#fff"/>' +
+      '<rect x="22" y="34" width="16" height="12" rx="2" fill="#00a651"/>' +
+      '</svg>';
+    var img = new Image(60, 60);
+    img.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 3 }); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
 
   function initFamilyMart(m){
     if(m.getSource('family-mart')) return;
     var data = window.familyMartData;
     if(!data) return;
 
-    // 載入全家圖示
-    m.loadImage(ICON_URL, function(err, img){
-      if(err || !img) return;
-      if(m.getSource('family-mart')) return; // 防快速切換樣式導致 addSource 重複
-      if(!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 3 });
+    _addFmIcon(m);
+    // 等 icon 非同步載入後再加圖層
+    function _setup() {
+      if(m.getSource('family-mart')) return;
 
       m.addSource('family-mart', { type:'geojson', data:data, cluster:true, clusterMaxZoom:14, clusterRadius:40 });
 
@@ -5498,7 +5510,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       m.on('mouseleave','fm-points', function(){ m.getCanvas().style.cursor=''; });
       m.on('mouseenter','fm-clusters', function(){ m.getCanvas().style.cursor='pointer'; });
       m.on('mouseleave','fm-clusters', function(){ m.getCanvas().style.cursor=''; });
-    });
+    }
+    if (m.hasImage(ICON_ID)) { _setup(); }
+    else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
   }
 
   function tryInit(){
