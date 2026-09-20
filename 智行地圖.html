@@ -2401,37 +2401,90 @@ if (navigator.geolocation) {
   const navigateBtn = document.getElementById('navigateBtn');
   const closeDestBtn = document.getElementById('closeDestBtn');
 
+  // 搜尋本地全家資料
+  function getFmMatches(query) {
+    if (!window.familyMartData || !window.familyMartData.features) return [];
+    const q = query.trim().toLowerCase();
+    const matchAll = q === '全家' || q === '全家便利商店' || q === 'family mart';
+    return window.familyMartData.features.filter(function(f) {
+      const n = (f.properties.name || '').toLowerCase();
+      return matchAll || n.includes(q) || q.includes('全家') && n.includes(q.replace(/全家便利商店\s*/,'').replace(/全家\s*/,''));
+    }).map(function(f) {
+      return {
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+        name: f.properties.name || '全家便利商店',
+        isFM: true
+      };
+    });
+  }
+
   async function searchPlaces(query){
     if (!query || !query.trim()) return;
     searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋中...</div>';
     searchResultsList.style.display = 'block';
+
+    // 先比對本地全家資料
+    const fmMatches = getFmMatches(query);
+
     try {
       const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=tw&accept-language=zh-TW&q=' + encodeURIComponent(query);
       const res = await fetch(url);
       const list = await res.json();
-      renderSearchResults(list);
+      renderSearchResults(list, fmMatches);
     } catch (e) {
       console.error('搜尋地點失敗:', e);
-      searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋失敗,請檢查網路連線</div>';
+      if (fmMatches.length) {
+        renderSearchResults([], fmMatches);
+      } else {
+        searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋失敗,請檢查網路連線</div>';
+      }
     }
   }
 
-  function renderSearchResults(list){
-    if (!list || !list.length) {
+  function renderSearchResults(list, fmMatches){
+    fmMatches = fmMatches || [];
+    if ((!list || !list.length) && !fmMatches.length) {
       searchResultsList.innerHTML = '<div class="searchResultsEmpty">找不到符合的地點</div>';
       return;
     }
     searchResultsList.innerHTML = '';
-    list.forEach(item => {
-      const el = document.createElement('div');
-      el.className = 'searchResultItem';
-      const mainName = (item.display_name || '').split(',')[0];
-      el.innerHTML = '<div class="name">' + mainName + '</div><div class="addr">' + (item.display_name || '') + '</div>';
-      el.addEventListener('click', () => {
-        selectDestination(parseFloat(item.lat), parseFloat(item.lon), mainName, item.display_name);
+
+    // 全家結果優先顯示
+    if (fmMatches.length) {
+      const label = document.createElement('div');
+      label.style.cssText = 'padding:6px 14px 3px;font-size:11px;color:#00a651;font-weight:700;letter-spacing:.5px;';
+      label.textContent = '🏪 全家便利商店';
+      searchResultsList.appendChild(label);
+      fmMatches.forEach(function(item) {
+        const el = document.createElement('div');
+        el.className = 'searchResultItem';
+        el.innerHTML = '<div class="name" style="color:#00a651">' + item.name + '</div><div class="addr">全家便利商店</div>';
+        el.addEventListener('click', function() {
+          selectDestination(item.lat, item.lon, item.name, '全家便利商店');
+        });
+        searchResultsList.appendChild(el);
       });
-      searchResultsList.appendChild(el);
-    });
+    }
+
+    if (list && list.length) {
+      if (fmMatches.length) {
+        const sep = document.createElement('div');
+        sep.style.cssText = 'padding:6px 14px 3px;font-size:11px;color:#999;font-weight:700;letter-spacing:.5px;';
+        sep.textContent = '🔍 地圖搜尋';
+        searchResultsList.appendChild(sep);
+      }
+      list.forEach(function(item) {
+        const el = document.createElement('div');
+        el.className = 'searchResultItem';
+        const mainName = (item.display_name || '').split(',')[0];
+        el.innerHTML = '<div class="name">' + mainName + '</div><div class="addr">' + (item.display_name || '') + '</div>';
+        el.addEventListener('click', function() {
+          selectDestination(parseFloat(item.lat), parseFloat(item.lon), mainName, item.display_name);
+        });
+        searchResultsList.appendChild(el);
+      });
+    }
   }
 
   window.selectDestination = function selectDestination(lat, lon, name, addr){
@@ -3530,6 +3583,7 @@ if (navigator.geolocation) {
 <script>
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
 map.on('load', function() {
+  let _cachedCarImg = null; // 快取已處理好的圖，樣式切換不需重新下載
   const _carImg = new Image();
   _carImg.onload = function() {
     const W = 80, H = 120;
@@ -3537,7 +3591,7 @@ map.on('load', function() {
     c.width = W; c.height = H;
     c.getContext('2d').drawImage(_carImg, 0, 0, W, H);
     const sized = new Image(W, H);
-    sized.onload = function() { _addCarLayers(sized); };
+    sized.onload = function() { _cachedCarImg = sized; _addCarLayers(sized); };
     sized.src = c.toDataURL('image/png');
   };
   function _addCarLayers(_img) {
@@ -3637,9 +3691,14 @@ map.on('load', function() {
   };
   _carImg.src = '圖片/導航車子1.png';
   window._reloadCarLayer = function() {
-    // 清空 src 再重設，確保快取圖片也能重觸發 onload
-    _carImg.src = '';
-    _carImg.src = '圖片/導航車子1.png';
+    if (_cachedCarImg) {
+      // 已處理過的圖直接重用，不需再下載
+      _addCarLayers(_cachedCarImg);
+    } else {
+      // 首次或圖片載入失敗時才重新下載
+      _carImg.src = '';
+      _carImg.src = '圖片/導航車子1.png';
+    }
   };
 });
 </script>
