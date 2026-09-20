@@ -3597,7 +3597,11 @@ map.on('load', function() {
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   };
   _carImg.src = '圖片/導航車子1.png';
-  window._reloadCarLayer = function() { _carImg.src = '圖片/導航車子1.png'; };
+  window._reloadCarLayer = function() {
+    // 清空 src 再重設，確保快取圖片也能重觸發 onload
+    _carImg.src = '';
+    _carImg.src = '圖片/導航車子1.png';
+  };
 });
 </script>
 
