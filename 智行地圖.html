@@ -1954,7 +1954,8 @@ if (navigator.geolocation) {
   })();
 
   // ===== 🎙 對講室模態邏輯 =====
-  (function _initPttRoom() {
+  // DOMContentLoaded 確保模態 div 與 CDN scripts 均已就緒
+  document.addEventListener('DOMContentLoaded', function _initPttRoom() {
     var modal = document.getElementById('pttRoomModal');
     if (!modal) return;
     var AM = window.AudioManager;
@@ -2044,7 +2045,7 @@ if (navigator.geolocation) {
         })
         .catch(function (err) { alert('無法存取相機：' + err.message); });
     });
-  })();
+  });
 
   // ===== 面板狀態管理（導航收合/展開）=====
   function _setPanelState(h, animated) {
@@ -3704,10 +3705,12 @@ if (navigator.geolocation) {
       const vel = window._vehicleVelocity;
       let targetLng = tgt.lng;
       let targetLat = tgt.lat;
-      if (vel && vel.speed > 0.5) { // 速度 > 0.5 m/s 才推算
+      if (vel && vel.speed > 0.5 && tgt.timestamp) { // 速度 > 0.5 m/s 且有時間戳才推算
         const dt = Math.min(now - tgt.timestamp, 2000); // 最多推算 2 秒
-        targetLng = tgt.lng + vel.dlng * dt;
-        targetLat = tgt.lat + vel.dlat * dt;
+        if (dt >= 0) { // 防止時鐘跳動造成負數 dt
+          targetLng = tgt.lng + vel.dlng * dt;
+          targetLat = tgt.lat + vel.dlat * dt;
+        }
       }
       _dispLng = _dispLng + (targetLng - _dispLng) * alpha;
       _dispLat = _dispLat + (targetLat - _dispLat) * alpha;
@@ -5469,7 +5472,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     lng += (dist*Math.sin(rad))/(111320*cosLat);
 
     // 寫入車輛目標（rAF插值迴圈會接手平滑移動）
-    window._vehicleTarget = {lng:lng, lat:lat, bearing:bearing};
+    window._vehicleTarget = {lng:lng, lat:lat, bearing:bearing, timestamp:now};
     window.currentLon = lng;
     window.currentLat = lat;
 
