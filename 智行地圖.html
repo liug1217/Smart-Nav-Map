@@ -356,6 +356,40 @@ html,body{
   transition:transform 0.2s linear;
 }
 
+/* ===== 在線人數膠囊 ===== */
+.onlineCapsule{
+  position:fixed;
+  top:56px;
+  left:8px;
+  z-index:10;
+  background:rgba(255,255,255,0.82);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border:0.5px solid rgba(0,0,0,0.08);
+  box-shadow:0 2px 8px rgba(0,0,0,0.15);
+  border-radius:16px;
+  padding:5px 11px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;
+  font-size:12px;
+  font-weight:500;
+  color:#333;
+  cursor:pointer;
+  user-select:none;
+  transition:top 0.38s cubic-bezier(0.32,0.72,0,1);
+}
+.onlineDot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#30D158;
+  flex-shrink:0;
+  transition:background 0.3s;
+}
+body.navigating .onlineCapsule{ top:77px; }
+
 /* ===== 時鐘 ===== */
 .mapClock{
   position:fixed;
@@ -386,7 +420,7 @@ html,body{
   display:flex;
   align-items:center;
   gap:5px;
-  z-index:15;
+  z-index:9;
   cursor:pointer;
   user-select:none;
   box-shadow:0 2px 8px rgba(0,0,0,0.3);
@@ -1234,6 +1268,12 @@ html, body {
 <!-- 時鐘 -->
 <div class="mapClock" id="mapClock">00:00:00</div>
 
+<!-- 在線人數膠囊 -->
+<div class="onlineCapsule" id="onlineCapsule">
+  <div class="onlineDot" id="onlineDot"></div>
+  <span id="onlineCountText">-- 人在線</span>
+</div>
+
 <!-- 金幣顯示 -->
 <div class="coinDisplay" id="coinDisplay">
   <div class="coinDisplayRow">
@@ -1264,6 +1304,8 @@ html, body {
 
 <!-- 自訂地圖控制按鈕群 -->
 <div class="mapCtrlGroup">
+  <!-- 即時路況 -->
+  <button class="mapCtrlBtn" id="trafficBtn" title="即時路況" style="font-size:17px;">🚦</button>
   <!-- 對講 PTT -->
   <button class="mapCtrlBtn" id="pttBtn" title="對講 (PTT)" style="font-size:18px;">🎙</button>
   <!-- 指南針 -->
@@ -6041,6 +6083,358 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 </div>
 
 <div id="ios-home-guard"></div>
+
+<!-- ===== Smart Nav Traffic Engine ===== -->
+<script>
+(function () {
+  'use strict';
+
+  // ── 設定集中管理 ─────────────────────────────────────────────────────────
+  var TCFG = {
+    // API 基礎 URL：部署在 Vercel 時用相對路徑即可；
+    // 如果前端在 GitHub Pages、API 在 Vercel，需設定：
+    //   window.SNM_API_BASE = 'https://your-project.vercel.app/api'
+    API_BASE:                  window.SNM_API_BASE || '/api',
+    HEARTBEAT_INTERVAL_MS:     15000,  // 15 秒 heartbeat
+    ONLINE_COUNT_INTERVAL_MS:  30000,  // 30 秒更新在線人數
+    GPS_POLL_INTERVAL_MS:      3000,   // 每 3 秒輪詢一次（內部有自己的節流）
+    GPS_MIN_INTERVAL_MS:       10000,  // GPS 上傳最短間隔 10 秒
+    GPS_MIN_DISTANCE_M:        30,     // 移動超過 30 公尺也觸發上傳
+    TRAFFIC_FETCH_INTERVAL_MS: 30000,  // 30 秒更新路況
+    MOVING_SPEED_KMH:          5,      // 低於此速度視為靜止
+    ANNOUNCE_COOLDOWN_MS:      5 * 60 * 1000,  // 同事件播報冷卻 5 分鐘
+  };
+
+  // ── Session ID（匿名，存於 localStorage）──────────────────────────────────
+  var _sid = '';
+  try {
+    _sid = localStorage.getItem('snm_sid') || '';
+    if (!_sid || _sid.length < 8) {
+      _sid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'sid_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      localStorage.setItem('snm_sid', _sid);
+    }
+  } catch (e) {
+    _sid = 'sid_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  }
+
+  // ── API 工具 ─────────────────────────────────────────────────────────────
+  function apiPost(path, body) {
+    return fetch(TCFG.API_BASE + path, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    }).then(function (r) { return r.json(); });
+  }
+
+  function apiGet(path) {
+    return fetch(TCFG.API_BASE + path)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+  }
+
+  // ── Haversine 距離（公尺）────────────────────────────────────────────────
+  function haversineM(la1, ln1, la2, ln2) {
+    var R = 6371000, d2r = Math.PI / 180;
+    var dLa = (la2 - la1) * d2r, dLn = (ln2 - ln1) * d2r;
+    var a = Math.sin(dLa/2)*Math.sin(dLa/2) +
+            Math.cos(la1*d2r)*Math.cos(la2*d2r)*Math.sin(dLn/2)*Math.sin(dLn/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRESENCE（在線心跳）
+  // ═══════════════════════════════════════════════════════════════════════════
+  function sendHeartbeat() {
+    var speedKmh = Number(window.currentSpeedKmh) || 0;
+    var moving   = speedKmh > TCFG.MOVING_SPEED_KMH;
+    var navActive = document.body.classList.contains('navigating');
+    apiPost('/presence/heartbeat', {
+      sessionId:       _sid,
+      timestamp:       Date.now(),
+      moving:          moving,
+      navigationActive: navActive,
+    }).catch(function () {}); // 靜默失敗，不影響導航
+  }
+
+  sendHeartbeat();
+  setInterval(sendHeartbeat, TCFG.HEARTBEAT_INTERVAL_MS);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ONLINE COUNT UI
+  // ═══════════════════════════════════════════════════════════════════════════
+  var _lastOnlineData = null;
+
+  function updateOnlineUI(data) {
+    var el  = document.getElementById('onlineCountText');
+    var dot = document.getElementById('onlineDot');
+    if (!el) return;
+    if (!data || typeof data.online !== 'number') {
+      el.textContent = '-- 人在線';
+      return;
+    }
+    _lastOnlineData = data;
+    el.textContent  = data.online + ' 人在線';
+    if (dot) dot.style.background = data.online > 0 ? '#30D158' : '#8E8E93';
+  }
+
+  // 點擊膠囊顯示詳細資訊
+  var _capsule = document.getElementById('onlineCapsule');
+  if (_capsule) {
+    _capsule.addEventListener('click', function () {
+      var d = _lastOnlineData;
+      if (!d) { alert('正在取得在線資料…'); return; }
+      var ts = d.updatedAt ? new Date(d.updatedAt).toLocaleTimeString('zh-TW') : '--';
+      alert(
+        '智行地圖即時狀態\n\n' +
+        '🟢 在線：' + d.online + ' 人\n' +
+        '🚗 移動中：' + (d.moving || 0) + ' 人\n' +
+        '🚦 提供路況：' + (d.trafficContributors || 0) + ' 人\n\n' +
+        '資料更新：' + ts + '\n' +
+        '（在線 ≠ 台車；代表目前開啟智行地圖的 session 數）'
+      );
+    });
+  }
+
+  function fetchOnlineCount() {
+    apiGet('/presence/count')
+      .then(updateOnlineUI)
+      .catch(function () {}); // API 不可用時靜默
+  }
+
+  fetchOnlineCount();
+  setInterval(fetchOnlineCount, TCFG.ONLINE_COUNT_INTERVAL_MS);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GPS 上傳（匿名路況資料貢獻）
+  // ═══════════════════════════════════════════════════════════════════════════
+  var _lastUpLat = null, _lastUpLng = null, _lastUpTime = 0;
+
+  function tryUploadGps() {
+    var lat = window.currentLat, lng = window.currentLon;
+    if (lat == null || lng == null) return;
+
+    var speedKmh = Number(window.currentSpeedKmh) || 0;
+    if (speedKmh < TCFG.MOVING_SPEED_KMH) return;
+
+    var now = Date.now();
+    var timeSince = now - _lastUpTime;
+    var distM = (_lastUpLat !== null)
+      ? haversineM(_lastUpLat, _lastUpLng, lat, lng)
+      : Infinity;
+
+    var shouldUpload = (_lastUpTime === 0)
+      || timeSince >= TCFG.GPS_MIN_INTERVAL_MS
+      || distM    >= TCFG.GPS_MIN_DISTANCE_M;
+
+    if (!shouldUpload) return;
+
+    _lastUpLat  = lat;
+    _lastUpLng  = lng;
+    _lastUpTime = now;
+
+    apiPost('/traffic/position', {
+      sessionId:       _sid,
+      timestamp:       now,
+      latitude:        lat,
+      longitude:       lng,
+      speed:           speedKmh / 3.6,            // 轉回 m/s
+      heading:         window.compassHeading,      // 或 null
+      accuracy:        null,                       // 目前 window 沒有 accuracy
+      navigationActive: document.body.classList.contains('navigating'),
+    }).catch(function () {});
+  }
+
+  setInterval(tryUploadGps, TCFG.GPS_POLL_INTERVAL_MS);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRAFFIC MAP LAYER（MapLibre 路況圓點）
+  // ═══════════════════════════════════════════════════════════════════════════
+  var TRAFFIC_SOURCE = 'snm-traffic-src';
+  var TRAFFIC_LAYER  = 'snm-traffic-circles';
+  var _trafficOn     = false;
+  var _trafficData   = null;
+
+  function initTrafficLayer() {
+    if (!window.map) { setTimeout(initTrafficLayer, 600); return; }
+    if (!window.map.isStyleLoaded()) {
+      window.map.once('styledata', initTrafficLayer); return;
+    }
+    if (window.map.getSource(TRAFFIC_SOURCE)) return;
+
+    window.map.addSource(TRAFFIC_SOURCE, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+
+    window.map.addLayer({
+      id:     TRAFFIC_LAYER,
+      type:   'circle',
+      source: TRAFFIC_SOURCE,
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'],
+          11, 5, 14, 10, 17, 18
+        ],
+        'circle-color':        ['get', 'color'],
+        'circle-opacity':      0.72,
+        'circle-stroke-color': 'rgba(255,255,255,0.6)',
+        'circle-stroke-width': 1.2,
+      },
+    });
+
+    // 點擊路況圓點顯示資訊
+    window.map.on('click', TRAFFIC_LAYER, function (e) {
+      if (!e.features || !e.features[0]) return;
+      var p = e.features[0].properties;
+      new maplibregl.Popup({ offset: 12, closeButton: true })
+        .setLngLat(e.lngLat)
+        .setHTML(
+          '<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
+          '<strong>' + (p.label || '路況') + '</strong><br>' +
+          '平均速度：' + p.averageSpeed + ' km/h<br>' +
+          '基準速度：' + p.baselineSpeed + ' km/h<br>' +
+          '速度比：' + Math.round(p.speedRatio * 100) + '%<br>' +
+          '樣本數：' + p.sampleCount + '（' + p.uniqueContributors + ' 人）<br>' +
+          '可信度：' + (p.confidence === 'high' ? '高' : p.confidence === 'medium' ? '中' : '低') +
+          '</div>'
+        )
+        .addTo(window.map);
+    });
+
+    window.map.on('mouseenter', TRAFFIC_LAYER, function () {
+      window.map.getCanvas().style.cursor = 'pointer';
+    });
+    window.map.on('mouseleave', TRAFFIC_LAYER, function () {
+      window.map.getCanvas().style.cursor = '';
+    });
+  }
+
+  // 等待 map 初始化
+  if (window.map) { initTrafficLayer(); }
+  else { setTimeout(initTrafficLayer, 1500); }
+
+  // ── 取得路況資料 ──────────────────────────────────────────────────────────
+  function fetchTrafficSegments() {
+    if (!_trafficOn) return;
+    if (!window.map) return;
+    var b = window.map.getBounds();
+    var q = '?n=' + b.getNorth().toFixed(5) +
+            '&s=' + b.getSouth().toFixed(5) +
+            '&e=' + b.getEast().toFixed(5)  +
+            '&w=' + b.getWest().toFixed(5);
+    apiGet('/traffic/segments' + q)
+      .then(function (data) {
+        _trafficData = data;
+        var src = window.map && window.map.getSource(TRAFFIC_SOURCE);
+        if (src) src.setData(data);
+        checkRouteTrafficAlert();
+      })
+      .catch(function () {}); // API 不可用時不影響導航
+  }
+
+  setInterval(fetchTrafficSegments, TCFG.TRAFFIC_FETCH_INTERVAL_MS);
+
+  // ── 路況切換按鈕 ─────────────────────────────────────────────────────────
+  var _trafficBtn = document.getElementById('trafficBtn');
+  function toggleTraffic() {
+    _trafficOn = !_trafficOn;
+    if (!window.map || !window.map.getLayer(TRAFFIC_LAYER)) {
+      initTrafficLayer();
+      return;
+    }
+    window.map.setLayoutProperty(
+      TRAFFIC_LAYER, 'visibility', _trafficOn ? 'visible' : 'none'
+    );
+    if (_trafficBtn) {
+      _trafficBtn.style.background = _trafficOn
+        ? 'rgba(0,122,255,0.15)' : '';
+      _trafficBtn.style.boxShadow  = _trafficOn
+        ? 'inset 0 0 0 2px rgba(0,122,255,0.4)' : '';
+    }
+    if (_trafficOn) fetchTrafficSegments();
+  }
+  if (_trafficBtn) _trafficBtn.addEventListener('click', toggleTraffic);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 導航路況播報（前方壅塞提示）
+  // ═══════════════════════════════════════════════════════════════════════════
+  var _lastAnnounceSegId = null;
+  var _lastAnnounceTime  = 0;
+
+  function checkRouteTrafficAlert() {
+    if (!_trafficData || !_trafficData.features) return;
+    if (!window.currentLat || !window.currentLon) return;
+    if (!document.body.classList.contains('navigating')) return;
+
+    var now = Date.now();
+    if (now - _lastAnnounceTime < TCFG.ANNOUNCE_COOLDOWN_MS) return;
+
+    var myLat = window.currentLat, myLng = window.currentLon;
+
+    var congested = _trafficData.features.filter(function (f) {
+      return f.properties.confidence !== 'low' &&
+        (f.properties.trafficLevel === 'congested' ||
+         f.properties.trafficLevel === 'severe');
+    });
+
+    for (var i = 0; i < congested.length; i++) {
+      var f    = congested[i];
+      var sLng = f.geometry.coordinates[0];
+      var sLat = f.geometry.coordinates[1];
+      var distM = haversineM(myLat, myLng, sLat, sLng);
+      var distKm = distM / 1000;
+
+      if (distKm < 0.1 || distKm > 3.0) continue; // 只播報 100m~3km 前方
+      if (f.properties.segmentId === _lastAnnounceSegId) continue;
+
+      _lastAnnounceSegId = f.properties.segmentId;
+      _lastAnnounceTime  = now;
+
+      var distTxt = distKm < 1
+        ? Math.round(distM) + '公尺'
+        : distKm.toFixed(1) + '公里';
+      var msg = '前方約' + distTxt + '路況' + (f.properties.label || '壅塞') + '。';
+
+      if (typeof window.speakQueue === 'function') {
+        window.speakQueue(msg, false);
+      }
+      break;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 地圖移動時自動更新路況（只有開啟路況時）
+  // ═══════════════════════════════════════════════════════════════════════════
+  var _mapMoveTimer = null;
+  function onMapMoveEnd() {
+    clearTimeout(_mapMoveTimer);
+    _mapMoveTimer = setTimeout(fetchTrafficSegments, 1000);
+  }
+
+  if (window.map) {
+    window.map.on('moveend', onMapMoveEnd);
+  } else {
+    setTimeout(function () {
+      if (window.map) window.map.on('moveend', onMapMoveEnd);
+    }, 2000);
+  }
+
+  // 開放給外部使用（例如測試面板）
+  window._snmTraffic = {
+    sessionId:    _sid,
+    toggleTraffic: toggleTraffic,
+    fetchTraffic:  fetchTrafficSegments,
+    getOnlineData: function () { return _lastOnlineData; },
+    getTrafficData: function () { return _trafficData; },
+  };
+
+})();
+</script>
+
 </body>
 </html>
   
