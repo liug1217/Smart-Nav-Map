@@ -3492,9 +3492,28 @@ if (navigator.geolocation) {
 // ===== 🚗 車子圖示（Symbol Layer，GPU 原生旋轉）=====
 // 車子圖示不需要等圖磚，style 解析完就能 addImage/addSource/addLayer
 (map.isStyleLoaded() ? Promise.resolve() : new Promise(r => map.once('style.load', r))).then(function() {
-  // 立刻用 SVG 備用車子建立圖層（不等 PNG），PNG 載好後替換圖示
-  function _makeSvgCarImg(cb) {
-    const svg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  const CAR_W = 80, CAR_H = 120; // 2× → 顯示 40×60px
+
+  // 將任意來源圖（Image/canvas）縮放到 CAR_W×CAR_H 並去黑底，回傳 ImageData
+  function _toCarImageData(src, cb) {
+    const c = document.createElement('canvas');
+    c.width = CAR_W; c.height = CAR_H;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(src, 0, 0, CAR_W, CAR_H);
+    try {
+      const d = ctx.getImageData(0, 0, CAR_W, CAR_H);
+      for (let i = 0; i < d.data.length; i += 4) {
+        if (d.data[i] < 20 && d.data[i+1] < 20 && d.data[i+2] < 20) d.data[i+3] = 0;
+      }
+      cb(d); // ImageData
+    } catch(e) {
+      cb(ctx.getImageData(0, 0, CAR_W, CAR_H));
+    }
+  }
+
+  // 立刻生成 SVG 備用車（同尺寸），不等 PNG
+  function _makeSvgImageData(cb) {
+    const svg = `<svg width="${CAR_W}" height="${CAR_H}" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
       <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
       <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
@@ -3503,38 +3522,24 @@ if (navigator.geolocation) {
       <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
       <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
     </svg>`;
-    const img = new Image(60, 96);
-    img.onload = function() { cb(img); };
+    const img = new Image(CAR_W, CAR_H);
+    img.onload = function() { _toCarImageData(img, cb); };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
-  function _loadPngIcon(src, cb) {
+  // 載入 PNG 並轉成 ImageData（同尺寸）
+  function _loadPngImageData(src, cb) {
     const raw = new Image();
     raw.crossOrigin = 'anonymous';
-    raw.onload = function() {
-      const W = 80, H = 120;
-      const c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(raw, 0, 0, W, H);
-      try {
-        const d = ctx.getImageData(0, 0, W, H);
-        for (let i = 0; i < d.data.length; i += 4) {
-          const r = d.data[i], g = d.data[i+1], b = d.data[i+2];
-          if (r < 20 && g < 20 && b < 20) d.data[i+3] = 0;
-        }
-        ctx.putImageData(d, 0, 0);
-      } catch(e) {}
-      cb({ width: W, height: H, data: new Uint8Array(ctx.getImageData(0, 0, W, H).data.buffer) });
-    };
+    raw.onload = function() { _toCarImageData(raw, cb); };
     raw.onerror = function() { cb(null); };
     raw.src = src;
   }
 
-  function _onCarReady(_carImg) {
+  function _onCarReady(imageData) {
     function _addCarLayers() {
       if (map.getSource('user-pos')) return; // 防止重複
-      if (!map.hasImage('car-icon')) map.addImage('car-icon', _carImg, { pixelRatio: 2 });
+      if (!map.hasImage('car-icon')) map.addImage('car-icon', imageData, { pixelRatio: 2 });
 
       // GeoJSON source：只有一個點（使用者位置）
       map.addSource('user-pos', {
@@ -3624,19 +3629,19 @@ if (navigator.geolocation) {
       map.once('styledata', _addCarLayers);
     }
   } // end _onCarReady
-  // 立刻用 SVG 顯示車子，PNG 背景載入好後替換
-  _makeSvgCarImg(function(svgImg) {
-    _onCarReady(svgImg);
-    _loadPngIcon('圖片/導航車子1.png', function(pngData) {
+  // 立刻用 SVG 顯示車子，PNG 背景載入好後用 updateImage 替換（尺寸相同不閃爍）
+  _makeSvgImageData(function(svgData) {
+    _onCarReady(svgData);
+    _loadPngImageData('圖片/導航車子1.png', function(pngData) {
       if (!pngData) return; // PNG 載入失敗，保留 SVG
-      try {
-        map.updateImage('car-icon', pngData);
-      } catch(e) {}
+      if (map.hasImage('car-icon')) {
+        try { map.updateImage('car-icon', pngData); } catch(e) {}
+      }
     });
   });
   window._reloadCarLayer = function() {
-    _loadPngIcon('圖片/導航車子1.png', function(pngData) {
-      if (!pngData) return;
+    _loadPngImageData('圖片/導航車子1.png', function(pngData) {
+      if (!pngData || !map.hasImage('car-icon')) return;
       try { map.updateImage('car-icon', pngData); } catch(e) {}
     });
   };
