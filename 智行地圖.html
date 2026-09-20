@@ -3132,6 +3132,7 @@ if (navigator.geolocation) {
   window.compassHeading = null;
   let _smoothedHeading = null;
   const _COMPASS_ALPHA = 0.18; // 指數平滑係數：越小越穩，越大越靈敏
+  var _hasAbsoluteCompass = false; // 是否已取得絕對方位（真北）
 
   function _angleDiff(a, b){
     // 回傳從 b 到 a 的最短角差（-180~180）
@@ -3144,11 +3145,16 @@ if (navigator.geolocation) {
     if (typeof event.webkitCompassHeading === 'number') {
       // iOS Safari：webkitCompassHeading 直接是真北方位角
       heading = event.webkitCompassHeading;
+      _hasAbsoluteCompass = true;
     } else if (event.absolute && typeof event.alpha === 'number') {
       // Android deviceorientationabsolute：alpha 為真北修正過的絕對方位角
-      heading = 360 - event.alpha;
+      heading = (360 - event.alpha + 360) % 360;
+      _hasAbsoluteCompass = true;
+    } else if (!_hasAbsoluteCompass && typeof event.alpha === 'number') {
+      // Fallback：裝置不支援絕對羅盤時，用相對方向讓地圖跟著手機轉
+      // 角度是相對基準而非真北，但旋轉感測仍然有效
+      heading = (360 - event.alpha + 360) % 360;
     }
-    // 非絕對的 deviceorientation（event.absolute===false）的 alpha 是相對任意基準，忽略
     if (heading == null || isNaN(heading)) return;
 
     // 指數平滑 + 正確繞圈處理
