@@ -5519,6 +5519,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
 
   document.addEventListener('keydown', function(e){
+    var tag = (e.target.tagName||'').toUpperCase();
+    if(tag==='INPUT'||tag==='TEXTAREA'||e.target.isContentEditable) return;
     var k=e.key.toLowerCase();
     if(['w','a','s','d'].includes(k)){
       e.preventDefault();
