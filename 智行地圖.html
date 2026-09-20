@@ -702,7 +702,7 @@ body.navigating .earthquakeAlert{ top:218px; }
   width:59px;
   height:60px;
   flex-shrink:0;
-  background:url('https://upload.wikimedia.org/wikipedia/zh/thumb/d/d1/ROC_Police_Broadcasting_Service_Seal.svg/1280px-ROC_Police_Broadcasting_Service_Seal.svg.png') center/contain no-repeat #FFFFFF;
+  background:url('圖片/police_radio.png') center/contain no-repeat #FFFFFF;
   border-radius:29.5px 0 0 29.5px;
 }
 
@@ -2872,7 +2872,7 @@ if (navigator.geolocation) {
     const left = S('<path d="M22,27 L22,15 Q22,7 15,7 L8,7" fill="none"/><polyline points="15,3 8,7 15,11"/>');
     const sR   = S('<polyline points="10,27 10,7 24,7"/><polyline points="17,2 24,7 17,12"/>');
     const sL   = S('<polyline points="22,27 22,7 8,7"/><polyline points="15,2 8,7 15,12"/>');
-    const uturn= S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,20" fill="none"/><polyline points="17,15 23,20 17,25"/>');
+    const uturn= S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,27"/><polyline points="19,21 23,27 27,21"/>');
     const round= S('<path d="M23,16 A7,7 0 1,1 16,9" fill="none"/><polyline points="14,5 16,9 20,9"/>');
     const dest = S('<circle cx="16" cy="11" r="5"/><line x1="16" y1="16" x2="16" y2="27"/>');
     if (maneuver.type==='arrive') return dest;
@@ -2908,16 +2908,6 @@ if (navigator.geolocation) {
         distText = Math.round(distanceMeters) + ' 公尺後';
         rect8Distance.innerText = distText;
       }
-    }
-    // ── MediaSession → 靈動島 / 鎖定畫面 ──
-    if ('mediaSession' in navigator) {
-      const icon = iconForManeuver(step.maneuver);
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: icon + ' ' + text + (roadName ? ' ' + step.name : ''),
-        artist: distText || '導航中',
-        album: '智行地圖',
-        artwork: [{ src: _navArtwork(), sizes: '512x512', type: 'image/png' }]
-      });
     }
   }
 
@@ -3373,7 +3363,7 @@ if (navigator.geolocation) {
           const etaH = startupEta.getHours();
           const etaM = startupEta.getMinutes();
           const durText = '大約需要' + (startH > 0 ? startH + '小時' : '') + startM + '分鐘';
-          const etaText = '預計' + etaH + '點' + etaM + '分到達';
+          const etaText = '預計' + etaH + '點' + (etaM < 10 ? '零' : '') + etaM + '分到達';
           const items = ['開始導航', '全程' + distKmInt + '公里', durText, etaText];
           if (firstStepDistanceMeters != null) {
             const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
@@ -4462,7 +4452,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(freqEl)  freqEl.textContent  = STATIONS[idx].freq + ' MHz';
   }
 
-  var PBS_ART = 'https://upload.wikimedia.org/wikipedia/zh/thumb/d/d1/ROC_Police_Broadcasting_Service_Seal.svg/1280px-ROC_Police_Broadcasting_Service_Seal.svg.png';
+  var PBS_ART = '圖片/police_radio.png';
 
   function setStatus(t){ if(statusEl) statusEl.textContent = t; }
   function setPlaying(v){
