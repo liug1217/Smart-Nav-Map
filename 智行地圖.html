@@ -386,7 +386,7 @@ html,body{
   display:flex;
   align-items:center;
   gap:5px;
-  z-index:9;
+  z-index:15;
   cursor:pointer;
   user-select:none;
   box-shadow:0 2px 8px rgba(0,0,0,0.3);
@@ -1618,14 +1618,14 @@ if (navigator.geolocation) {
   // nav-arrow 圖示遺失時重建（once 在 load 外，不會因重複 load 而疊加）
   function _buildNavArrow() {
     const _c = document.createElement('canvas');
-    _c.width = 160; _c.height = 160;
+    _c.width = 80; _c.height = 80;
     const _x = _c.getContext('2d');
-    _x.strokeStyle = 'rgba(255,255,255,0.93)'; _x.lineWidth = 26;
+    _x.strokeStyle = 'rgba(255,255,255,0.92)'; _x.lineWidth = 13;
     _x.lineCap = 'round'; _x.lineJoin = 'round';
-    _x.beginPath(); _x.moveTo(32, 16); _x.lineTo(128, 80); _x.lineTo(32, 144); _x.stroke();
-    const _d = _x.getImageData(0, 0, 160, 160);
+    _x.beginPath(); _x.moveTo(16, 8); _x.lineTo(64, 40); _x.lineTo(16, 72); _x.stroke();
+    const _d = _x.getImageData(0, 0, 80, 80);
     if (!map.hasImage('nav-arrow'))
-      map.addImage('nav-arrow', { width: 160, height: 160, data: new Uint8Array(_d.data.buffer) }, { pixelRatio: 2 });
+      map.addImage('nav-arrow', { width: 80, height: 80, data: new Uint8Array(_d.data.buffer) }, { pixelRatio: 2 });
   }
   map.on('styleimagemissing', (e) => {
     if (e.id !== 'nav-arrow') return;
@@ -1671,14 +1671,14 @@ if (navigator.geolocation) {
         id: 'navRoute-arrows', type: 'symbol', source: 'navRoute',
         layout: {
           'symbol-placement': 'line',
-          'symbol-spacing': 100,
+          'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 13, 70, 17, 120],
           'icon-image': 'nav-arrow',
-          'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.08, 13, 0.14, 16, 0.19, 19, 0.26],
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.18, 15, 0.28, 18, 0.36],
           'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
           'icon-keep-upright': false, 'icon-allow-overlap': true, 'icon-ignore-placement': true
         },
         paint: {
-          'icon-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 12.5, 1]
+          'icon-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 0, 13, 1]
         }
       });
     }
@@ -1713,12 +1713,12 @@ if (navigator.geolocation) {
       _buildNavArrow();
       map.addLayer({ id:'navRoute-arrows', type:'symbol', source:'navRoute',
         layout:{ 'symbol-placement':'line',
-          'symbol-spacing':100,
+          'symbol-spacing':['interpolate',['linear'],['zoom'],13,70,17,120],
           'icon-image':'nav-arrow',
-          'icon-size':['interpolate',['linear'],['zoom'],10,0.08,13,0.14,16,0.19,19,0.26],
+          'icon-size':['interpolate',['linear'],['zoom'],12,0.18,15,0.28,18,0.36],
           'icon-rotation-alignment':'map','icon-pitch-alignment':'map',
           'icon-keep-upright':false,'icon-allow-overlap':true,'icon-ignore-placement':true },
-        paint:{ 'icon-opacity':['interpolate',['linear'],['zoom'],11,0,12.5,1] } });
+        paint:{ 'icon-opacity':['interpolate',['linear'],['zoom'],11.5,0,13,1] } });
       window.navRouteSource = map.getSource('navRoute');
       if (window._navRouteGeometry) {
         window.navRouteSource.setData({ type:'FeatureCollection',
@@ -3188,7 +3188,11 @@ if (navigator.geolocation) {
     }
     window.compassHeading = _smoothedHeading;
     if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
-    // 地圖旋轉由 _rafLoop 統一處理，避免與 GPS 跟隨的 easeTo 衝突
+
+    // 即時更新地圖旋轉（只在跟隨模式下，duration 短讓畫面跟得上）
+    if (followUser && map) {
+      map.easeTo({ bearing: _smoothedHeading, duration: 150, easing: t => t });
+    }
   }
 
   function requestOrientationPermission(){
@@ -3906,20 +3910,14 @@ map.on('load', function() {
       window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
     }
 
-    // 羅盤旋轉（不論跟隨模式，只要有羅盤就讓地圖轉）
-    const _mapBearing = window.compassHeading != null ? window.compassHeading : _dispBearing;
-    if (typeof map !== 'undefined') {
-      if (window._cameraFollow) {
-        map.easeTo({
-          center: [_dispLng, _dispLat],
-          bearing: _mapBearing,
-          duration: 0,
-          padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
-        });
-      } else {
-        // 未跟隨時只旋轉，不移動地圖中心
-        map.easeTo({ bearing: _mapBearing, duration: 0 });
-      }
+    // 地圖鏡頭跟隨
+    if (window._cameraFollow && typeof map !== 'undefined') {
+      map.easeTo({
+        center: [_dispLng, _dispLat],
+        bearing: _dispBearing,
+        duration: 0,
+        padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
+      });
     }
   }
 
