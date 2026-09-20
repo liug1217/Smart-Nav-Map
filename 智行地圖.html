@@ -1510,6 +1510,7 @@ if (navigator.geolocation) {
     _navState = 'idle';
     navSteps = [];
     currentStepIndex = 0;
+    offRouteCount = 0;
     Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
     document.body.classList.remove('navigating');
     _setPanelState(160, true);
@@ -3152,6 +3153,7 @@ if (navigator.geolocation) {
       // ===== 🧭 啟動逐步轉彎導航模式 =====
       navSteps = (route.legs && route.legs[0] && route.legs[0].steps) ? route.legs[0].steps : [];
       currentStepIndex = 0;
+      offRouteCount = 0;
       Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
       isNavigating = true;
       _navState = 'navigating';
