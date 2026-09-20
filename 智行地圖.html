@@ -5683,33 +5683,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script>
 /* ===== 🚾 公共廁所圖層 ===== */
 (function(){
-  var ICON_ID = 'toilet-icon';
   var _popup = null;
-
-  // MapLibre 用 SDF 字型不支援 emoji text-field，改用 canvas 畫 emoji 轉圖片
-  function _addToiletIcon(m) {
-    if (m.hasImage(ICON_ID)) return;
-    var sz = 64;
-    var c = document.createElement('canvas');
-    c.width = sz; c.height = sz;
-    var ctx = c.getContext('2d');
-    ctx.font = '44px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🚾', sz / 2, sz / 2);
-    var img = new Image(sz, sz);
-    img.onload = function() {
-      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 });
-    };
-    img.src = c.toDataURL('image/png');
-  }
 
   function initToilets(m) {
     if (m.getSource('toilets')) return;
     var data = window.toiletData;
     if (!data) return;
-
-    _addToiletIcon(m);
 
     function _setup() {
       if (m.getSource('toilets')) return;
@@ -5719,9 +5698,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         type: 'symbol',
         source: 'toilets',
         layout: {
-          'icon-image': ICON_ID,
-          'icon-size': 0.5,
-          'icon-allow-overlap': false,
+          'text-field': '🚾',
+          'text-size': 20,
+          'text-allow-overlap': false,
         }
       });
 
@@ -5762,8 +5741,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       m.on('mouseleave', 'toilet-points', function(){ m.getCanvas().style.cursor = ''; });
     }
 
-    if (m.hasImage(ICON_ID)) { _setup(); }
-    else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
+    _setup();
   }
 
   function tryInit() {
