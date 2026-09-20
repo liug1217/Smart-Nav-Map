@@ -5483,15 +5483,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         filter:['!',['has','point_count']],
         layout:{
           'icon-image': ICON_ID,
-          'icon-size': 0.06,
-          'icon-allow-overlap': true,
-          'text-field': '全家',
-          'text-size': 10,
-          'text-offset': [0, 1.8],
-          'text-anchor': 'top',
-          'text-allow-overlap': false
+          'icon-size': 0.18,
+          'icon-allow-overlap': true
         },
-        paint:{ 'text-color':'#fff', 'text-halo-color':'#00a651', 'text-halo-width':1.5 }
+        paint:{}
       });
 
       // 點擊單點 → popup
