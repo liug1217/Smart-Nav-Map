@@ -3153,11 +3153,9 @@ if (navigator.geolocation) {
   // ===== 🧭 手機羅盤方向偵測,讓地圖跟著手機旋轉(360度)而不是固定北方朝上 =====
   window.compassHeading = null;
   let _smoothedHeading = null;
-  const _COMPASS_ALPHA = 0.18; // 指數平滑係數：越小越穩，越大越靈敏
-  var _hasAbsoluteCompass = false; // 是否已取得絕對方位（真北）
+  const _COMPASS_ALPHA = 0.18;
 
   function _angleDiff(a, b){
-    // 回傳從 b 到 a 的最短角差（-180~180）
     let d = ((a - b) % 360 + 360) % 360;
     return d > 180 ? d - 360 : d;
   }
@@ -3165,21 +3163,12 @@ if (navigator.geolocation) {
   function handleDeviceOrientation(event){
     let heading = null;
     if (typeof event.webkitCompassHeading === 'number') {
-      // iOS Safari：webkitCompassHeading 直接是真北方位角
       heading = event.webkitCompassHeading;
-      _hasAbsoluteCompass = true;
-    } else if (event.absolute && typeof event.alpha === 'number') {
-      // Android deviceorientationabsolute：alpha 為真北修正過的絕對方位角
-      heading = (360 - event.alpha + 360) % 360;
-      _hasAbsoluteCompass = true;
-    } else if (!_hasAbsoluteCompass && typeof event.alpha === 'number') {
-      // Fallback：裝置不支援絕對羅盤時，用相對方向讓地圖跟著手機轉
-      // 角度是相對基準而非真北，但旋轉感測仍然有效
-      heading = (360 - event.alpha + 360) % 360;
+    } else if (typeof event.alpha === 'number') {
+      heading = 360 - event.alpha;
     }
     if (heading == null || isNaN(heading)) return;
 
-    // 指數平滑 + 正確繞圈處理
     if (_smoothedHeading == null) {
       _smoothedHeading = heading;
     } else {
@@ -3189,16 +3178,13 @@ if (navigator.geolocation) {
     window.compassHeading = _smoothedHeading;
     if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
 
-    // 非跟隨模式才在這裡旋轉（duration:150 讓 MapLibre 在用戶拖動時可自動取消）
-    // 跟隨模式時由 _rafLoop 的 easeTo 統一處理（避免兩者衝突）
-    if (!window._cameraFollow && map) {
+    if (followUser && map) {
       map.easeTo({ bearing: _smoothedHeading, duration: 150, easing: t => t });
     }
   }
 
   function requestOrientationPermission(){
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+ 需要使用者手勢觸發才能要求羅盤權限
       DeviceOrientationEvent.requestPermission().then(state => {
         if (state === 'granted') {
           window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
@@ -3210,14 +3196,8 @@ if (navigator.geolocation) {
       window.addEventListener('deviceorientation', handleDeviceOrientation, true);
     }
   }
-  var _orientationRequested = false;
-  function _requestOrientationOnce() {
-    if (_orientationRequested) return;
-    _orientationRequested = true;
-    requestOrientationPermission();
-  }
-  document.addEventListener('click', _requestOrientationOnce, { once: true });
-  document.addEventListener('touchstart', _requestOrientationOnce, { once: true });
+  document.addEventListener('click', requestOrientationPermission, { once: true });
+  document.addEventListener('touchstart', requestOrientationPermission, { once: true });
 
 
   function getCurrentPositionPromise(){
@@ -3911,12 +3891,11 @@ map.on('load', function() {
       window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
     }
 
-    // 地圖鏡頭跟隨（跟隨時用羅盤旋轉，GPS 方位只用於車子圖示）
+    // 地圖鏡頭跟隨
     if (window._cameraFollow && typeof map !== 'undefined') {
-      const _mapBrg = window.compassHeading != null ? window.compassHeading : _dispBearing;
       map.easeTo({
         center: [_dispLng, _dispLat],
-        bearing: _mapBrg,
+        bearing: _dispBearing,
         duration: 0,
         padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
       });
