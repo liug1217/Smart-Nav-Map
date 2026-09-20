@@ -3189,8 +3189,9 @@ if (navigator.geolocation) {
     window.compassHeading = _smoothedHeading;
     if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
 
-    // 即時更新地圖旋轉（只在跟隨模式下，duration 短讓畫面跟得上）
-    if (followUser && map) {
+    // 非跟隨模式才在這裡旋轉（duration:150 讓 MapLibre 在用戶拖動時可自動取消）
+    // 跟隨模式時由 _rafLoop 的 easeTo 統一處理（避免兩者衝突）
+    if (!window._cameraFollow && map) {
       map.easeTo({ bearing: _smoothedHeading, duration: 150, easing: t => t });
     }
   }
@@ -3910,11 +3911,12 @@ map.on('load', function() {
       window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
     }
 
-    // 地圖鏡頭跟隨
+    // 地圖鏡頭跟隨（跟隨時用羅盤旋轉，GPS 方位只用於車子圖示）
     if (window._cameraFollow && typeof map !== 'undefined') {
+      const _mapBrg = window.compassHeading != null ? window.compassHeading : _dispBearing;
       map.easeTo({
         center: [_dispLng, _dispLat],
-        bearing: _dispBearing,
+        bearing: _mapBrg,
         duration: 0,
         padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
       });
