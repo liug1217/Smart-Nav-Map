@@ -1446,6 +1446,32 @@ if (navigator.geolocation) {
   let followUser = true;
   window._cameraFollow = true;
   window._setFollowUser = function(v){ followUser = v; window._cameraFollow = v; };
+
+  // bug45: touchstart/mousedown 時立即暫停鏡頭跟隨，讓 MapLibre 能正常辨識拖曳手勢。
+  // dragstart 觸發時機太晚（需要先移動一段距離），在那之前 _rafLoop 的 easeTo({duration:0})
+  // 每幀都把地圖拉回 GPS 位置，導致手勢門檻永遠跨不過去。
+  var _ptrDragged = false;
+  var _prevFollow = true;
+  function _onMapPointerDown() {
+    _ptrDragged = false;
+    _prevFollow = followUser;
+    followUser = false;
+    window._cameraFollow = false;
+  }
+  function _onMapPointerUp() {
+    setTimeout(function() {
+      if (!_ptrDragged && _prevFollow) {
+        followUser = true;
+        window._cameraFollow = true;
+      }
+      _ptrDragged = false;
+    }, 50);
+  }
+  map.getCanvas().addEventListener('mousedown', _onMapPointerDown);
+  map.getCanvas().addEventListener('touchstart', _onMapPointerDown, { passive: true });
+  map.getCanvas().addEventListener('mouseup', _onMapPointerUp);
+  map.getCanvas().addEventListener('touchend', _onMapPointerUp, { passive: true });
+  map.on('drag', function() { _ptrDragged = true; });
   map.on('dragstart', () => { followUser = false; window._cameraFollow = false; });
 
   map.on('load',()=>{

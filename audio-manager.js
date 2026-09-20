@@ -131,7 +131,17 @@
   };
 
   AudioManager.prototype.initRoom = function (onReady, onPeerChange) {
-    if (this._peer) { if (onReady) onReady(this._roomCode); return; }
+    if (this._peer) {
+      if (this._roomCode) {
+        // 連線已完成，直接回傳
+        if (onReady) onReady(this._roomCode);
+      } else {
+        // Peer 建立中，等 'open' 觸發後再回傳（避免回傳 null）
+        var _cb = function (id) { if (onReady) onReady(id); };
+        this._peer.once('open', _cb);
+      }
+      return;
+    }
     var self = this;
     this._getMic(function (err) {
       if (err) { alert('無法取得麥克風：' + err.message); return; }
@@ -148,7 +158,15 @@
         call.answer(self._micStream);
         self._setupCall(call, onPeerChange);
       });
-      peer.on('error', function (err) { console.warn('[PTT Room] peer error:', err.type, err); });
+      peer.on('error', function (err) {
+        console.warn('[PTT Room] peer error:', err.type, err);
+        // 連線失敗時重置 _peer，讓下次 initRoom 能重新建立
+        if (!self._roomCode) {
+          try { peer.destroy(); } catch (e) {}
+          self._peer = null;
+          alert('對講室連線失敗（' + err.type + '），請稍後再試。');
+        }
+      });
     });
   };
 

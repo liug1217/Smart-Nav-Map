@@ -1,6 +1,7 @@
 window.familyMartData = {
   type: 'FeatureCollection',
   features: [
+    // 高雄區
     { type:'Feature', geometry:{ type:'Point', coordinates:[120.31165853411491, 22.610621993724926] }, properties:{ name:'全家便利商店 高雄聖德店' } },
     { type:'Feature', geometry:{ type:'Point', coordinates:[120.30788422621058, 22.612359971326228] }, properties:{ name:'全家便利商店 高雄林心店' } },
     { type:'Feature', geometry:{ type:'Point', coordinates:[120.30177966816164, 22.61153909330925] }, properties:{ name:'全家便利商店 高雄真愛店' } },
@@ -14,6 +15,36 @@ window.familyMartData = {
     { type:'Feature', geometry:{ type:'Point', coordinates:[120.30458634773073, 22.613975641019767] }, properties:{ name:'全家便利商店 三多捷運店' } },
     { type:'Feature', geometry:{ type:'Point', coordinates:[120.30823088344249, 22.61633127341434] }, properties:{ name:'全家便利商店 森永店' } },
     { type:'Feature', geometry:{ type:'Point', coordinates:[120.30160945768293, 22.612849950147034] }, properties:{ name:'全家便利商店 高雄亞太店' } },
-    { type:'Feature', geometry:{ type:'Point', coordinates:[121.38400933327827, 24.948528817940762] }, properties:{ name:'全家便利商店 樹林學勤店' } }
+    // 樹林/三峽區
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.38400933327827, 24.948528817940762] }, properties:{ name:'全家便利商店 樹林學勤店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.38136045151013, 24.94641068748064] }, properties:{ name:'全家便利商店 樹林學園店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.38263785446226, 24.944829377917742] }, properties:{ name:'全家便利商店 樹林凱旋店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37861193902229, 24.950136586052828] }, properties:{ name:'全家便利商店 樹林大雅店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37942890187750, 24.947943468350093] }, properties:{ name:'全家便利商店 樹林藝術店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37805901577741, 24.946021234793754] }, properties:{ name:'全家便利商店 樹林學誠店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.38861513562371, 24.956217079327974] }, properties:{ name:'全家便利商店 樹林新柑園店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37890240678747, 24.943319293590715] }, properties:{ name:'全家便利商店 三峽三樹店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37426103562375, 24.947746088696250] }, properties:{ name:'全家便利商店 三峽大德店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37413228957791, 24.946393922801466] }, properties:{ name:'全家便利商店 三峽觀成店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37548948735980, 24.946213957157465] }, properties:{ name:'全家便利商店 三峽學勝店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37280120678749, 24.942459094541710] }, properties:{ name:'全家便利商店 三峽國寧店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37586763562372, 24.941605031358804] }, properties:{ name:'全家便利商店 三峽福容店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.36930845096578, 24.942096797450038] }, properties:{ name:'全家便利商店 三峽心湖店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.37575630678744, 24.940072104618220] }, properties:{ name:'全家便利商店 三峽龍恩店' } },
+    // 公館/台大區
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53677289747050, 25.013315461274086] }, properties:{ name:'全家便利商店 台大二活店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53462713021715, 25.013471022347370] }, properties:{ name:'全家便利商店 新水源店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53355394985279, 25.015461023380475] }, properties:{ name:'全家便利商店 公館捷運店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53440152778346, 25.013924879666150] }, properties:{ name:'全家便利商店 公館店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53249179492437, 25.015315192895290] }, properties:{ name:'全家便利商店 文盛店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53259908328683, 25.016092983642630] }, properties:{ name:'全家便利商店 館中店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53481362384319, 25.014725277038426] }, properties:{ name:'全家便利商店 台一宿舍店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.54072665890064, 25.012282329979840] }, properties:{ name:'全家便利商店 台科店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53083557976835, 25.016914701282264] }, properties:{ name:'全家便利商店 羅館店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.54475175890067, 25.015791021810433] }, properties:{ name:'全家便利商店 台興店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53139719448221, 25.018359375625900] }, properties:{ name:'全家便利商店 台盛店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53756522515329, 25.008040630678430] }, properties:{ name:'全家便利商店 師美店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53745919325958, 25.018063421484280] }, properties:{ name:'全家便利商店 台福店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[121.53347158834846, 25.018916328995058] }, properties:{ name:'全家便利商店 台新店' } },
   ]
 };
