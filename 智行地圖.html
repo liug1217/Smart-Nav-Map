@@ -2883,13 +2883,13 @@ if (navigator.geolocation) {
 
     try {
       await planRouteTo(selectedDest.lat, selectedDest.lon, { lat, lon });
-      lastRerouteTime = Date.now();
       _navState = 'navigating';
       speakText('路線已重新規劃。');
     } catch (e) {
       console.error('[偏航] 重新規劃失敗:', e);
       speakText('重新規劃失敗，請手動搜尋目的地');
     } finally {
+      lastRerouteTime = Date.now(); // 無論成敗都套用冷卻，避免失敗時立刻重試
       isRerouting = false;
     }
   }
