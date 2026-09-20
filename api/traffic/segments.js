@@ -8,7 +8,7 @@ const { parseBbox } = require('../../lib/validation');
 const { redisCmd, redisPipeline } = require('../../lib/redis');
 const { ghDecode } = require('../../lib/traffic/geohash');
 const { computeState } = require('../../lib/traffic/aggregator');
-const { ROLLING_WINDOW_MS } = require('../../lib/traffic/config');
+const { ROLLING_WINDOW_MS, BASELINE_KMH } = require('../../lib/traffic/config');
 const SEG_ACTIVE_WINDOW_MS  = 30 * 60 * 1000;
 
 module.exports = async (req, res) => {
@@ -69,6 +69,7 @@ module.exports = async (req, res) => {
           speedRatio:         state.speedRatio,
           sampleCount:        state.totalSamples,
           uniqueContributors: state.uniqueContributors,
+          baselineSpeed:      BASELINE_KMH,
           trafficLevel:       state.level.level,
           color:              state.level.color,
           label:              state.level.label,

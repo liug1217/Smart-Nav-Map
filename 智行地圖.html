@@ -6201,6 +6201,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function fetchOnlineCount() {
     apiGet('/presence/count')
+      .then(function (r) { return (r && r.data) ? r.data : r; })
       .then(updateOnlineUI)
       .catch(function () {}); // API 不可用時靜默
   }
@@ -6327,10 +6328,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
             '&e=' + b.getEast().toFixed(5)  +
             '&w=' + b.getWest().toFixed(5);
     apiGet('/traffic/segments' + q)
-      .then(function (data) {
-        _trafficData = data;
+      .then(function (r) { return (r && r.data) ? r.data : r; })
+      .then(function (geojson) {
+        _trafficData = geojson;
         var src = window.map && window.map.getSource(TRAFFIC_SOURCE);
-        if (src) src.setData(data);
+        if (src && geojson && geojson.type === 'FeatureCollection') src.setData(geojson);
         checkRouteTrafficAlert();
       })
       .catch(function () {}); // API 不可用時不影響導航
