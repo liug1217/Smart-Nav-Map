@@ -4095,7 +4095,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
     const compassBtn = document.getElementById('compassBtn');
     if(compassBtn) compassBtn.addEventListener('click', function(){
-      map.easeTo({ bearing: 0, pitch: 60, duration: 400 });
+      if(window._setFollowUser) window._setFollowUser(true);
+      window._cameraFollow = true;
+      map.easeTo({ bearing: window.compassHeading || 0, pitch: 60, duration: 400 });
     });
 
     /* --- 定位 --- */
