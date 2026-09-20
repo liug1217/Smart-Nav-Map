@@ -3094,7 +3094,7 @@ if (navigator.geolocation) {
       Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
       isNavigating = true;
       _navState = 'navigating';
-      window._navStats = {t0:Date.now(), coins0:+(localStorage.getItem('sn_coins')||0), km0:totalDistance, turns:0, cleanCams:0};
+      if (!fromPosition) window._navStats = {t0:Date.now(), coins0:+(localStorage.getItem('sn_coins')||0), km0:totalDistance, turns:0, cleanCams:0};
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
       if (typeof window._coinFirstNav === 'function') window._coinFirstNav();
       if (typeof window._hintCoinNav === 'function') setTimeout(window._hintCoinNav, 1500);
