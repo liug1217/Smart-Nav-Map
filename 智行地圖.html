@@ -2430,6 +2430,39 @@ if (navigator.geolocation) {
   const navigateBtn = document.getElementById('navigateBtn');
   const closeDestBtn = document.getElementById('closeDestBtn');
 
+  // ── 反向地理編碼佇列（遵守 Nominatim 1 req/s 限制）──
+  var _revCache = {};
+  var _revQueue = [];
+  var _revBusy = false;
+  function _processRevQueue() {
+    if (_revBusy || !_revQueue.length) return;
+    _revBusy = true;
+    var job = _revQueue.shift();
+    var key = job.lat.toFixed(4) + ',' + job.lon.toFixed(4);
+    if (_revCache[key]) {
+      if (job.el && job.el.isConnected) job.el.textContent = _revCache[key];
+      _revBusy = false;
+      setTimeout(_processRevQueue, 0);
+      return;
+    }
+    fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + job.lat + '&lon=' + job.lon + '&accept-language=zh-TW')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var addr = d.display_name || '';
+        _revCache[key] = addr;
+        if (job.el && job.el.isConnected) job.el.textContent = addr;
+        if (job.cb) job.cb(addr);
+      })
+      .catch(function(){})
+      .finally(function(){ _revBusy = false; setTimeout(_processRevQueue, 280); });
+  }
+  function _enqueueReverse(lat, lon, el) {
+    var key = lat.toFixed(4) + ',' + lon.toFixed(4);
+    if (_revCache[key]) { if (el) el.textContent = _revCache[key]; return; }
+    _revQueue.push({ lat:lat, lon:lon, el:el });
+    _processRevQueue();
+  }
+
   // 搜尋本地全家資料
   function getFmMatches(query) {
     if (!window.familyMartData || !window.familyMartData.features) return [];
@@ -2439,12 +2472,33 @@ if (navigator.geolocation) {
       const n = (f.properties.name || '').toLowerCase();
       return matchAll || n.includes(q) || q.includes('全家') && n.includes(q.replace(/全家便利商店\s*/,'').replace(/全家\s*/,''));
     }).map(function(f) {
-      return {
-        lat: f.geometry.coordinates[1],
-        lon: f.geometry.coordinates[0],
-        name: f.properties.name || '全家便利商店',
-        isFM: true
-      };
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || '全家便利商店' };
+    });
+  }
+
+  // 搜尋本地大全聯資料
+  function getPxmartMatches(query) {
+    if (!window.pxmartData || !window.pxmartData.features) return [];
+    const q = query.trim().toLowerCase();
+    const matchAll = q === '大全聯' || q === '全聯' || q.includes('大全聯') || q.includes('全聯');
+    return window.pxmartData.features.filter(function(f) {
+      const n = (f.properties.name || '').toLowerCase();
+      return matchAll || n.includes(q);
+    }).map(function(f) {
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || '大全聯' };
+    });
+  }
+
+  // 搜尋本地公共廁所資料
+  function getToiletMatches(query) {
+    if (!window.toiletData || !window.toiletData.features) return [];
+    const q = query.trim().toLowerCase();
+    const matchAll = q === '廁所' || q === '公廁' || q === '公共廁所' || q.includes('廁所') || q.includes('公廁');
+    return window.toiletData.features.filter(function(f) {
+      const n = (f.properties.name || '').toLowerCase();
+      return matchAll || n.includes(q);
+    }).map(function(f) {
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || '公共廁所' };
     });
   }
 
@@ -2453,54 +2507,103 @@ if (navigator.geolocation) {
     searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋中...</div>';
     searchResultsList.style.display = 'block';
 
-    // 先比對本地全家資料
     const fmMatches = getFmMatches(query);
+    const pxMatches = getPxmartMatches(query);
+    const toiMatches = getToiletMatches(query);
 
     try {
       const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=tw&accept-language=zh-TW&q=' + encodeURIComponent(query);
       const res = await fetch(url);
       const list = await res.json();
-      renderSearchResults(list, fmMatches);
+      renderSearchResults(list, fmMatches, pxMatches, toiMatches);
     } catch (e) {
       console.error('搜尋地點失敗:', e);
-      if (fmMatches.length) {
-        renderSearchResults([], fmMatches);
+      if (fmMatches.length || pxMatches.length || toiMatches.length) {
+        renderSearchResults([], fmMatches, pxMatches, toiMatches);
       } else {
         searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋失敗,請檢查網路連線</div>';
       }
     }
   }
 
-  function renderSearchResults(list, fmMatches){
-    fmMatches = fmMatches || [];
-    if ((!list || !list.length) && !fmMatches.length) {
+  function _makeLocalItem(item, iconHtml, nameColor, clickCb) {
+    const el = document.createElement('div');
+    el.className = 'searchResultItem';
+    el.style.cssText = 'display:flex;align-items:center;gap:10px';
+    const addrId = 'rev-' + Math.random().toString(36).slice(2);
+    el.innerHTML =
+      iconHtml +
+      '<div style="min-width:0"><div class="name" style="color:' + nameColor + '">' + item.name + '</div>' +
+      '<div class="addr" id="' + addrId + '">查詢地址中…</div></div>';
+    el.addEventListener('click', clickCb);
+    return { el, addrId };
+  }
+
+  function renderSearchResults(list, fmMatches, pxMatches, toiMatches){
+    fmMatches  = fmMatches  || [];
+    pxMatches  = pxMatches  || [];
+    toiMatches = toiMatches || [];
+    const hasLocal = fmMatches.length || pxMatches.length || toiMatches.length;
+    if ((!list || !list.length) && !hasLocal) {
       searchResultsList.innerHTML = '<div class="searchResultsEmpty">找不到符合的地點</div>';
       return;
     }
     searchResultsList.innerHTML = '';
 
-    // 全家結果優先顯示
+    function addLabel(text, color) {
+      const d = document.createElement('div');
+      d.style.cssText = 'padding:6px 14px 3px;font-size:11px;font-weight:700;letter-spacing:.5px;color:' + color;
+      d.textContent = text;
+      searchResultsList.appendChild(d);
+    }
+
+    // 全家（淺藍）
     if (fmMatches.length) {
-      const label = document.createElement('div');
-      label.style.cssText = 'padding:6px 14px 3px;font-size:11px;color:#00a651;font-weight:700;letter-spacing:.5px;';
-      label.textContent = '🏪 全家便利商店';
-      searchResultsList.appendChild(label);
+      addLabel('🏪 全家便利商店', '#5ac8fa');
       fmMatches.forEach(function(item) {
-        const el = document.createElement('div');
-        el.className = 'searchResultItem';
-        el.style.cssText = 'display:flex;align-items:center;gap:10px';
-        el.innerHTML =
-          '<img src="圖片/fm_app.png" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;border-radius:6px" onerror="this.style.display=\'none\'">' +
-          '<div><div class="name">' + item.name + '</div><div class="addr">全家便利商店</div></div>';
-        el.addEventListener('click', function() {
-          selectDestination(item.lat, item.lon, item.name, '全家便利商店');
-        });
+        const { el, addrId } = _makeLocalItem(
+          item,
+          '<img src="圖片/fm_app.png" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
+          '#5ac8fa',
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '全家便利商店'); }
+        );
         searchResultsList.appendChild(el);
+        _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
+      });
+    }
+
+    // 大全聯（紅色）
+    if (pxMatches.length) {
+      addLabel('🛒 大全聯', '#e60012');
+      pxMatches.forEach(function(item) {
+        const { el, addrId } = _makeLocalItem(
+          item,
+          '<img src="圖片/pxmart.jpg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
+          '#e60012',
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '大全聯'); }
+        );
+        searchResultsList.appendChild(el);
+        _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
+      });
+    }
+
+    // 公共廁所（深藍）
+    if (toiMatches.length) {
+      addLabel('🚾 公共廁所', '#1a4fa0');
+      toiMatches.forEach(function(item) {
+        const { el, addrId } = _makeLocalItem(
+          item,
+          '<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚾</span>',
+          '#1a4fa0',
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '公共廁所'); }
+        );
+        searchResultsList.appendChild(el);
+        _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
       });
     }
 
     if (list && list.length) {
-      if (fmMatches.length) {
+      if (hasLocal) {
         const sep = document.createElement('div');
         sep.style.cssText = 'padding:6px 14px 3px;font-size:11px;color:#999;font-weight:700;letter-spacing:.5px;';
         sep.textContent = '🔍 地圖搜尋';
