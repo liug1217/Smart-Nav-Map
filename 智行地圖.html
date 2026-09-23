@@ -120,7 +120,8 @@ html,body{
   bottom:109px;
   transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
   width:auto;
-  max-width:calc(100% - 16px);
+  /* 左右各讓出右側地圖按鈕欄(12px + 59px + 8px),長路名改用省略號,不會鑽到按鈕底下 */
+  max-width:calc(100% - 158px);
   height:33px;
   padding:0 13px;
   background:rgba(255,255,255,0.8);
@@ -388,7 +389,8 @@ html,body{
   flex-shrink:0;
   transition:background 0.3s;
 }
-body.navigating .onlineCapsule{ top:77px; }
+/* 導航中速度計(rect6)在 left:8px/top:77px,膠囊放到速度計右邊,避免蓋住車速 */
+body.navigating .onlineCapsule{ top:77px; left:92px; }
 
 /* ===== 時鐘 ===== */
 .mapClock{
@@ -1063,6 +1065,65 @@ html, body {
 }
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   #ios-home-guard { display: block; }
+}
+
+/* ===== 📱 手機橫式(Landscape):左欄放導航資訊,右下放地圖按鈕 =====
+   直式的單欄排版在橫式只有 ~390px 高,6 顆按鈕(約 394px)會往上爆出螢幕蓋住轉彎提示,
+   底部面板/轉彎條也被瀏海裁切。只在矮螢幕橫式套用,不影響直式與平板。
+   _setPanelState() 會用 inline style 設 left/right/bottom,所以這裡需要 !important 才蓋得過。 */
+@media (orientation: landscape) and (max-height: 500px){
+  :root{
+    --land-safe-l: env(safe-area-inset-left, 0px);
+    --land-safe-r: env(safe-area-inset-right, 0px);
+    --land-col-w: min(400px, calc(55vw - var(--land-safe-l)));
+  }
+
+  /* 左欄:轉彎提示條 + 底部導航面板 + 道路名稱 */
+  .rect8{
+    width:var(--land-col-w);
+    margin-left:var(--land-safe-l);
+  }
+  .rect1{
+    right:auto !important;
+    width:var(--land-col-w);
+    max-height:calc(100% - 16px);
+    margin-left:var(--land-safe-l);
+  }
+  .rect4{
+    left:16px;
+    transform:none;
+    max-width:calc(var(--land-col-w) - 16px);
+    margin-left:var(--land-safe-l);
+  }
+  .rect6,
+  .onlineCapsule{
+    margin-left:var(--land-safe-l);
+  }
+
+  /* 右欄:按鈕改成 3×2 格、靠右下角,不再往上蓋住時鐘/金幣/轉彎提示 */
+  .mapCtrlGroup{
+    bottom:12px !important;
+    margin-right:var(--land-safe-r);
+    flex-direction:row;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    width:160px;
+  }
+  .mapCtrlBtn{
+    width:48px;
+    height:48px;
+  }
+  .mapClock,
+  .coinDisplay,
+  .coinToast,
+  .weatherAlert,
+  .earthquakeAlert{
+    margin-right:var(--land-safe-r);
+  }
+  .weatherAlert,
+  .earthquakeAlert{
+    max-width:calc(45vw - 32px);
+  }
 }
 
 </style>
@@ -2951,7 +3012,15 @@ if (navigator.geolocation) {
         rect8Distance.innerText = distText;
       }
     }
+    if (typeof applyNavRoadNameIfPlaceholder === 'function') applyNavRoadNameIfPlaceholder();
   }
+
+  // 導航中目前所在道路 = 已經通過的上一個轉彎點那一段;還沒通過第一個轉彎前用出發路段
+  window._navCurrentRoadName = function(){
+    if (!isNavigating || !navSteps.length) return '';
+    const s = navSteps[Math.min(Math.max(currentStepIndex - 1, 0), navSteps.length - 1)];
+    return (s && s.name) || '';
+  };
 
   function _navArtwork(){
     if(window.__navArt) return window.__navArt;
@@ -3991,6 +4060,30 @@ function requestRoadNameUpdate(lng, lat){
   });
 }
 
+// ===== 🛣️ 道路名稱備援 =====
+// Overpass 常逾時/504/查不到,導航中改用路線目前路段名稱(OSRM step.name),避免一直停在「正在定位道路…」
+const ROAD_LABEL_PLACEHOLDERS = ["正在定位道路…", "未知道路"];
+
+function applyRoadNameFallback(){
+  const label = document.getElementById("roadLabel");
+  if(!label) return;
+  const navName = typeof window._navCurrentRoadName === "function" ? window._navCurrentRoadName() : "";
+  if(navName){
+    label.innerText = navName;
+  }else if(label.innerText === ROAD_LABEL_PLACEHOLDERS[0]){
+    label.innerText = ROAD_LABEL_PLACEHOLDERS[1];
+  }
+  // 其他情況保留上一次查到的道路名稱
+}
+
+// 導航中每次更新轉彎資訊時呼叫:標籤還是預設文字就先用路線路段名稱補上
+function applyNavRoadNameIfPlaceholder(){
+  const label = document.getElementById("roadLabel");
+  if(!label || !ROAD_LABEL_PLACEHOLDERS.includes(label.innerText)) return;
+  const navName = typeof window._navCurrentRoadName === "function" ? window._navCurrentRoadName() : "";
+  if(navName) label.innerText = navName;
+}
+
 async function updateRoadName(lng, lat, seq){
   try{
     const R = 6371e3;
@@ -4026,6 +4119,7 @@ async function updateRoadName(lng, lat, seq){
 
     if(!res.ok){
       console.log("road name http error", res.status);
+      applyRoadNameFallback();
       return;
     }
 
@@ -4071,7 +4165,12 @@ async function updateRoadName(lng, lat, seq){
     const label = document.getElementById("roadLabel");
     const icon = document.querySelector(".rect4 .icon");
 
-    if(label) label.innerText = best;
+    if(bestTags){
+      if(label) label.innerText = best;
+    }else{
+      // 10 公尺內查不到有名字的道路:不要直接蓋成「未知道路」,改用備援
+      applyRoadNameFallback();
+    }
 
     if(icon){
       icon.style.display = isFreeway ? "block" : "none";
@@ -4079,6 +4178,7 @@ async function updateRoadName(lng, lat, seq){
 
   }catch(e){
     console.log("road name error", e);
+    applyRoadNameFallback();
   }
 }
 </script>
