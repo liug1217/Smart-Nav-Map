@@ -1677,8 +1677,10 @@ if (navigator.geolocation) {
 
   // ===== 退出導航（不需重新載入頁面）=====
   function stopNavigation() {
+    _navSession++; // 作廢所有還在路上的路線規劃/重新規劃結果
     isNavigating = false;
     _navState = 'idle';
+    stopNavVoice(); // 停掉還在排隊/播放中的導航語音
     navSteps = [];
     currentStepIndex = 0;
     offRouteCount = 0;
@@ -2388,6 +2390,7 @@ if (navigator.geolocation) {
     base: 'voice_pack/',
     _bufs: {},  // name → AudioBuffer | null
     _ctx: null,
+    _active: [], // 目前排程中的錄音片段,stopAll() 用來中斷
 
     _getCtx() {
       if (!this._ctx) {
@@ -2509,12 +2512,21 @@ if (navigator.geolocation) {
         src.buffer = buf;
         src.connect(ctx.destination);
         src.start(when);
+        src.onended = () => { this._active = this._active.filter(s => s !== src); };
+        this._active.push(src);
         when += buf.duration;
         totalDur += buf.duration;
       }
       if (totalDur > 0) {
         await new Promise(r => setTimeout(r, totalDur * 1000 + 100));
       }
+    },
+
+    // 立即停止所有錄音片段與 TTS
+    stopAll() {
+      this._active.forEach(s => { try { s.stop(); } catch(e) {} });
+      this._active = [];
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     },
 
     async run(text) {
@@ -2593,6 +2605,14 @@ if (navigator.geolocation) {
   // 依序播放多段語音（序列化：同時只跑一個，新的等舊的跑完再播）
   let _sqBusy = false;
   let _sqPending = null;
+  let _sqGen = 0; // stopNavVoice() 時 +1,讓正在跑的佇列在下一段之前停下
+
+  // 退出導航時呼叫:丟掉排隊中的語音,並中斷正在播放的錄音片段/TTS
+  function stopNavVoice(){
+    _sqGen++;
+    _sqPending = null;
+    VP.stopAll();
+  }
 
   function speakQueue(items){
     if (_sqBusy) {
@@ -2602,9 +2622,11 @@ if (navigator.geolocation) {
     _sqBusy = true;
     _duckRadio();
     window.speechSynthesis.cancel(); // 清掉任何卡住的 TTS queue
+    const gen = _sqGen;
     (async () => {
       try {
         for (const item of items) {
+          if (gen !== _sqGen) break;
           if (item) await VP.run(item);
         }
       } finally {
@@ -2882,6 +2904,10 @@ if (navigator.geolocation) {
   // 導航狀態機：'idle'|'planning'|'navigating'|'rerouting'|'arriving'|'completed'
   let _navState = 'idle';
   window._getNavState = () => _navState;
+  // 導航場次編號:開始新導航或退出導航時 +1。
+  // 非同步的路線規劃(含偏航重新規劃)回來時若場次已變,代表使用者已退出/換了導航,結果直接丟棄,
+  // 避免「按退出後,晚回來的重新規劃又把導航模式打開」。
+  let _navSession = 0;
   // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
   // 回傳陣列由遠到近，最多 3 個值
   function getActiveThresholds(speedKmh) {
@@ -3151,6 +3177,7 @@ if (navigator.geolocation) {
       if (typeof window.earnCoin === 'function') window.earnCoin(2, '✅ 轉彎完成');
       navStepVoiceState[currentStepIndex] = navStepVoiceState[currentStepIndex] || 'idle';
       if (currentStepIndex >= navSteps.length) {
+        _navSession++; // 抵達後同樣作廢還在路上的重新規劃
         isNavigating = false;
         _navState = 'completed';
         window._cameraFollow = false;
@@ -3287,8 +3314,10 @@ if (navigator.geolocation) {
       rect8Distance.innerText = '';
     }
 
+    const mySession = _navSession;
     try {
       const ok = await planRouteTo(selectedDest.lat, selectedDest.lon, { lat, lon });
+      if (mySession !== _navSession) return; // 重新規劃期間已退出導航:不要改狀態、不要播報
       _navState = 'navigating';
       if (ok) {
         speakText('路線已重新規劃。');
@@ -3411,6 +3440,8 @@ if (navigator.geolocation) {
   }
 
   async function planRouteTo(destLat, destLon, fromPosition = null){
+    // 初始導航開新場次;偏航重新規劃沿用目前場次
+    const mySession = fromPosition ? _navSession : ++_navSession;
     let origin;
     try {
       if (fromPosition) {
@@ -3436,6 +3467,9 @@ if (navigator.geolocation) {
         '?overview=full&geometries=geojson&steps=true';
       const res = await fetch(url);
       const data = await res.json();
+
+      // 等待回應期間使用者已退出(或開始了另一次導航):不要套用這份路線
+      if (mySession !== _navSession) return false;
 
       if (!data.routes || !data.routes.length) {
         if (!fromPosition) alert('找不到可行的路線');
