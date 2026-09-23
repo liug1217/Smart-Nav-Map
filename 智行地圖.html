@@ -88,6 +88,29 @@ html,body{
   margin:19px 21px 0;
   flex-shrink:0;
 }
+/* rect1 左下角 App 圖示 + 名稱:固定在「退出」下方,
+   收合(83px)時剛好在左下角,展開時位於導航列與電台卡之間,不會互相重疊 */
+.rect1Brand{
+  position:absolute;
+  left:24px;
+  top:60px;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  pointer-events:none;
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  font-size:11px;
+  font-weight:600;
+  line-height:14px;
+  color:#404345;
+  white-space:nowrap;
+}
+.rect1Brand img{
+  width:14px;
+  height:14px;
+  border-radius:3.5px;
+  display:block;
+}
 
 
 .rect3{
@@ -1403,6 +1426,7 @@ html, body {
 </div>
 <div class="rect1" id="rect1">
     <div class="rect3" id="rect3Handle"></div>
+    <div class="rect1Brand"><img src="圖片/智行地圖.png" alt=""><span>智行地圖</span></div>
     <div class="rect1Body">
       <div class="rect1NavRow">
         <button type="button" class="navExitBtn" id="navExitBtn">退出</button>
@@ -2961,34 +2985,52 @@ if (navigator.geolocation) {
     if (maneuver.type === 'on ramp') return '⬆';
     if (maneuver.type === 'off ramp') return (maneuver.modifier||'').includes('left') ? '↖' : '↗';
     const mod = maneuver.modifier || '';
-    if (mod.includes('sharp left')) return '↰';
-    if (mod.includes('sharp right')) return '↱';
-    if (mod.includes('left')) return '↖';
-    if (mod.includes('right')) return '↗';
-    if (mod === 'uturn') return '↩';
+    if (mod === 'uturn') return maneuver.driving_side === 'left' ? '↪' : '↩';
+    if (mod === 'sharp left') return '↰';
+    if (mod === 'sharp right') return '↱';
+    if (mod === 'left') return '⬅';
+    if (mod === 'right') return '➡';
+    if (mod === 'slight left') return '↖';
+    if (mod === 'slight right') return '↗';
     return '↑';
   }
-  function svgForManeuver(maneuver){
+  // 轉彎箭頭 SVG:OSRM 的 8 種 modifier(直行/微彎/轉彎/急轉 × 左右 + 迴轉)各自有獨立圖示,
+  // 迴轉依行車方向決定左/右(台灣靠右行駛 → 向左迴轉);圓環出口也依 modifier 畫出方向
+  function svgForManeuver(maneuver, drivingSide){
     const S=(d)=>`<svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-    const up   = S('<line x1="16" y1="27" x2="16" y2="7"/><polyline points="9,14 16,7 23,14"/>');
-    const right= S('<path d="M10,27 L10,15 Q10,7 17,7 L24,7" fill="none"/><polyline points="17,3 24,7 17,11"/>');
-    const left = S('<path d="M22,27 L22,15 Q22,7 15,7 L8,7" fill="none"/><polyline points="15,3 8,7 15,11"/>');
-    const sR   = S('<polyline points="10,27 10,7 24,7"/><polyline points="17,2 24,7 17,12"/>');
-    const sL   = S('<polyline points="22,27 22,7 8,7"/><polyline points="15,2 8,7 15,12"/>');
-    const uturn= S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,27"/><polyline points="19,21 23,27 27,21"/>');
-    const round= S('<path d="M23,16 A7,7 0 1,1 16,9" fill="none"/><polyline points="14,5 16,9 20,9"/>');
+    const turn = {
+      'straight':     S('<line x1="16" y1="27" x2="16" y2="7"/><polyline points="9,14 16,7 23,14"/>'),
+      'right':        S('<path d="M10,27 L10,15 Q10,7 17,7 L24,7" fill="none"/><polyline points="17,3 24,7 17,11"/>'),
+      'left':         S('<path d="M22,27 L22,15 Q22,7 15,7 L8,7" fill="none"/><polyline points="15,3 8,7 15,11"/>'),
+      'slight right': S('<polyline points="12,27 12,17 22,7"/><polyline points="15,7 22,7 22,14"/>'),
+      'slight left':  S('<polyline points="20,27 20,17 10,7"/><polyline points="17,7 10,7 10,14"/>'),
+      'sharp right':  S('<polyline points="10,27 10,9 22,21"/><polyline points="22,13 22,21 14,21"/>'),
+      'sharp left':   S('<polyline points="22,27 22,9 10,21"/><polyline points="10,13 10,21 18,21"/>'),
+      'uturn right':  S('<path d="M9,27 L9,11 Q9,4 16,4 Q23,4 23,11 L23,23"/><polyline points="19,18 23,23 27,18"/>'),
+      'uturn left':   S('<path d="M23,27 L23,11 Q23,4 16,4 Q9,4 9,11 L9,23"/><polyline points="5,18 9,23 13,18"/>')
+    };
+    const ring = '<circle cx="16" cy="17" r="6"/><line x1="16" y1="30" x2="16" y2="23"/>';
+    const roundExit = {
+      'straight':     '<line x1="16" y1="11" x2="16" y2="3"/><polyline points="12,7 16,3 20,7"/>',
+      'right':        '<line x1="22" y1="17" x2="29" y2="17"/><polyline points="25,13 29,17 25,21"/>',
+      'left':         '<line x1="10" y1="17" x2="3" y2="17"/><polyline points="7,13 3,17 7,21"/>',
+      'slight right': '<line x1="20" y1="13" x2="26" y2="7"/><polyline points="21,7 26,7 26,12"/>',
+      'slight left':  '<line x1="12" y1="13" x2="6" y2="7"/><polyline points="11,7 6,7 6,12"/>',
+      'sharp right':  '<line x1="20" y1="21" x2="26" y2="27"/><polyline points="26,22 26,27 21,27"/>',
+      'sharp left':   '<line x1="12" y1="21" x2="6" y2="27"/><polyline points="6,22 6,27 11,27"/>'
+    };
     const dest = S('<circle cx="16" cy="11" r="5"/><line x1="16" y1="16" x2="16" y2="27"/>');
+    const mod = maneuver.modifier || '';
+    const uturn = drivingSide === 'left' ? turn['uturn right'] : turn['uturn left'];
     if (maneuver.type==='arrive') return dest;
-    if (maneuver.type==='roundabout'||maneuver.type==='rotary') return round;
-    if (maneuver.type==='on ramp') return up;
-    if (maneuver.type==='off ramp') return (maneuver.modifier||'').includes('left')?left:right;
-    const mod=maneuver.modifier||'';
-    if (mod.includes('sharp left')) return sL;
-    if (mod.includes('sharp right')) return sR;
-    if (mod.includes('left')) return left;
-    if (mod.includes('right')) return right;
-    if (mod==='uturn') return uturn;
-    return up;
+    if (maneuver.type==='roundabout'||maneuver.type==='rotary'||maneuver.type==='roundabout turn'){
+      const exitMod = mod === 'uturn' ? (drivingSide === 'left' ? 'sharp right' : 'sharp left') : mod;
+      return S(ring + (roundExit[exitMod] || roundExit['straight']));
+    }
+    if (mod === 'uturn') return uturn;
+    // 匝道/岔路沒給 modifier 時直行;下匝道只有左右時畫成微彎
+    if (maneuver.type==='off ramp' && (mod==='left'||mod==='right')) return turn['slight ' + mod];
+    return turn[mod] || turn['straight'];
   }
 
   // 更新Rectangle 8畫面顯示(圖示+距離+轉彎指示文字)
@@ -2999,7 +3041,7 @@ if (navigator.geolocation) {
     const text = maneuverToChinese(step.maneuver);
     const roadName = step.name ? ('進入' + step.name) : '';
     if (rect8Instruction) rect8Instruction.innerText = text + (roadName ? roadName : '');
-    if (rect8Icon) rect8Icon.innerHTML = svgForManeuver(step.maneuver);
+    if (rect8Icon) rect8Icon.innerHTML = svgForManeuver(step.maneuver, step.driving_side);
     let distText = '';
     if (rect8Distance) {
       if (distanceMeters == null) {
@@ -3924,34 +3966,28 @@ map.on('load', function() {
         window.compassHeading != null ? window.compassHeading : 0);
     }
   };
+  // 車子圖片載入失敗時不再顯示 SVG 替代車,改成稍後重試,直到自己的車子圖片載入成功
+  const CAR_IMG_SRC = '圖片/導航車子1.png';
+  let _carRetry = 0;
+  let _carRetryTimer = null;
+  function _loadCarImg() {
+    clearTimeout(_carRetryTimer);
+    // 重試時加上時間參數,避免拿到快取裡失敗的結果
+    _carImg.src = _carRetry ? (CAR_IMG_SRC + '?r=' + Date.now()) : CAR_IMG_SRC;
+  }
   _carImg.onerror = function() {
-    const svg = `<svg width="60" height="96" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="4" y="8" width="22" height="32" rx="6" fill="#1E88E5"/>
-      <rect x="0" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="25" y="10" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="0" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="25" y="28" width="5" height="10" rx="2.5" fill="#222"/>
-      <rect x="7" y="12" width="16" height="10" rx="3" fill="rgba(200,235,255,0.65)"/>
-      <rect x="7" y="28" width="16" height="8" rx="2" fill="rgba(200,235,255,0.3)"/>
-      <rect x="5" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
-      <rect x="19" y="8" width="6" height="3" rx="1.5" fill="#FFEE58"/>
-      <rect x="5" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
-      <rect x="19" y="37" width="6" height="3" rx="1.5" fill="#EF5350"/>
-      <rect x="13" y="23" width="4" height="5" rx="2" fill="rgba(255,255,255,0.18)"/>
-    </svg>`;
-    const img = new Image(60, 96);
-    img.onload = function() { _addCarLayers(img); };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    _carRetry++;
+    console.warn('車子圖片載入失敗,稍後重試(第 ' + _carRetry + ' 次)');
+    _carRetryTimer = setTimeout(_loadCarImg, Math.min(2000 * _carRetry, 15000));
   };
-  _carImg.src = '圖片/導航車子1.png';
+  _loadCarImg();
   window._reloadCarLayer = function() {
     if (_cachedCarImg) {
       // 已處理過的圖直接重用，不需再下載
       _addCarLayers(_cachedCarImg);
     } else {
-      // 首次或圖片載入失敗時才重新下載
-      _carImg.src = '';
-      _carImg.src = '圖片/導航車子1.png';
+      // 還沒載入成功就再試一次
+      _loadCarImg();
     }
   };
 });
