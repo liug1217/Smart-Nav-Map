@@ -128,14 +128,20 @@ html,body{
   touch-action:none;
   transition:background 0.15s, box-shadow 0.2s, opacity 0.2s;
 }
-.pttTalkBtn.pttMic{ background:#FF8A00; box-shadow:0 3px 10px rgba(255,138,0,0.45); }
-.pttTalkBtn.pttPhone{ background:#14B8A6; box-shadow:0 3px 10px rgba(20,184,166,0.45); }
-.pttTalkBtn[data-active]{ background:#FF3B30; animation:pttPulse 1.1s ease-out infinite; }
+/* 參考對講 App:深色圓心 + 發光色環 + 白色圖示(色環用 inset 陰影,不會被圓形容器裁掉) */
+.pttTalkBtn.pttMic{ background:radial-gradient(circle at 50% 40%, #2A3548 0%, #141B27 75%); box-shadow:inset 0 0 0 3px #FF8A00, inset 0 0 12px rgba(255,138,0,0.35); }
+.pttTalkBtn.pttPhone{ background:radial-gradient(circle at 50% 40%, #2A3548 0%, #141B27 75%); box-shadow:inset 0 0 0 3px #14B8A6, inset 0 0 12px rgba(20,184,166,0.35); }
+.pttTalkBtn[data-active]{ background:radial-gradient(circle at 50% 40%, #FF5A4F 0%, #E0231A 80%); box-shadow:inset 0 0 0 3px rgba(255,255,255,0.9); }
+/* 外圈光暈放在圓形容器上:平常是模式顏色,說話中變紅色向外擴散 */
+.pttModeViewport{ box-shadow:0 0 0 1px rgba(255,138,0,0.25), 0 3px 12px rgba(255,138,0,0.45); transition:box-shadow 0.25s; }
+.pttModes[data-mode="1"] .pttModeViewport{ box-shadow:0 0 0 1px rgba(20,184,166,0.25), 0 3px 12px rgba(20,184,166,0.45); }
+.pttModeViewport:has(.pttTalkBtn[data-active]){ animation:pttPulse 1.1s ease-out infinite; }
 @keyframes pttPulse{
-  0%{ box-shadow:0 0 0 0 rgba(255,59,48,0.55); }
-  100%{ box-shadow:0 0 0 12px rgba(255,59,48,0); }
+  0%{ box-shadow:0 0 0 0 rgba(255,59,48,0.6); }
+  100%{ box-shadow:0 0 0 14px rgba(255,59,48,0); }
 }
-.pttRow.pttOff .pttTalkBtn{ opacity:0.45; box-shadow:none; }
+.pttRow.pttOff .pttModeViewport{ box-shadow:none; }
+.pttRow.pttOff .pttTalkBtn{ opacity:0.5; }
 .pttDots{ display:flex; gap:4px; }
 .pttDots span{ width:5px; height:5px; border-radius:50%; background:rgba(60,60,67,0.25); transition:background 0.2s; }
 .pttDots span.on{ background:#3C3C43; }
@@ -184,26 +190,80 @@ html,body{
   align-items:center;
   gap:6px;
   pointer-events:none;
-  background:rgba(255,255,255,0.8);
-  border:0.5px solid #d9d9d9;
-  box-shadow:0 4px 4px rgba(0,0,0,0.25);
-  border-radius:16.5px;
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
+  padding:0;
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-size:13px;
-  font-weight:600;
-  color:#404345;
+  font-weight:700;
+  color:#FFFFFF;
+  text-shadow:0 1px 3px rgba(0,0,0,0.75), 0 0 8px rgba(0,0,0,0.35);
   white-space:nowrap;
   z-index:5;
   transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1), left 0.38s cubic-bezier(0.32,0.72,0,1);
 }
 .appBrand img{
-  width:20px;
-  height:20px;
-  border-radius:5px;
+  width:22px;
+  height:22px;
+  border-radius:6px;
   display:block;
+  box-shadow:0 1px 4px rgba(0,0,0,0.5);
 }
+
+/* ===== 💬 對講聊天(品牌標籤上方,加入對講房後才出現) ===== */
+.pttChat{
+  position:fixed;
+  left:16px;
+  bottom:148px;
+  width:calc(50vw - 40px); /* 右緣停在畫面中線左邊,不擋住正中間的車子 */
+  z-index:6;
+  display:none;
+  flex-direction:column;
+  gap:6px;
+  transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1), left 0.38s cubic-bezier(0.32,0.72,0,1);
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+}
+body.ptt-in-room .pttChat{ display:flex; }
+.pttChatList{
+  max-height:132px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+}
+.pttChatList:empty{ display:none; }
+.pttMsg{ display:flex; align-items:flex-start; gap:5px; }
+.pttMsg .pttAvatar{ width:22px; height:22px; font-size:10px; border-width:1.5px; margin-left:0; }
+.pttMsgBody{ min-width:0; }
+.pttMsgName{ font-size:10px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.8); margin:0 0 1px 2px; }
+.pttMsgText{
+  display:inline-block; max-width:100%;
+  background:rgba(255,255,255,0.92); color:#000;
+  border-radius:12px; padding:5px 9px;
+  font-size:13px; line-height:1.3;
+  word-break:break-word; overflow-wrap:anywhere;
+  box-shadow:0 2px 4px rgba(0,0,0,0.2);
+}
+.pttMsg.mine .pttMsgText{ background:rgba(47,128,255,0.95); color:#fff; }
+.pttChatInputRow{ display:flex; align-items:center; gap:6px; }
+.pttChatInput{
+  flex:1; min-width:0; height:34px; box-sizing:border-box;
+  padding:0 12px; border-radius:17px;
+  border:0.5px solid #d9d9d9; background:rgba(255,255,255,0.92);
+  font-size:14px; color:#000; outline:none;
+  box-shadow:0 2px 6px rgba(0,0,0,0.2);
+  -webkit-user-select:text; user-select:text;
+}
+.pttChatBtn{
+  width:34px; height:34px; flex-shrink:0; border:none; border-radius:50%; padding:0;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  background:radial-gradient(circle at 50% 40%, #2A3548 0%, #141B27 75%);
+  box-shadow:inset 0 0 0 2px #FF8A00, 0 2px 6px rgba(0,0,0,0.3);
+  -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
+  -webkit-user-select:none; user-select:none; touch-action:none;
+}
+.pttChatBtn[data-active]{ background:#FF3B30; box-shadow:inset 0 0 0 2px #fff; }
+.pttChatBtn.send{ background:#2F80FF; box-shadow:0 2px 6px rgba(0,0,0,0.3); }
 
 
 .rect3{
@@ -1205,13 +1265,19 @@ html, body {
     max-height:calc(100% - 16px);
     margin-left:var(--land-safe-l);
   }
+  /* 道路名稱放在右側車子正下方:水平中心 = 右側空間中央(與 getUserCameraPadding 的車子位置一致),
+     垂直在畫面中線下方;_setPanelState 會寫 inline bottom,所以這裡用 !important 蓋掉 */
   .rect4{
-    left:calc(24px + var(--brand-w));
-    transform:none;
-    max-width:calc(var(--land-col-w) - 16px - var(--brand-w));
-    margin-left:var(--land-safe-l);
+    left:calc((16px + var(--land-safe-l) + var(--land-col-w) + 8px + 100vw) / 2);
+    transform:translateX(-50%);
+    top:calc(50% + 40px);
+    bottom:auto !important;
+    max-width:calc(100vw - var(--land-col-w) - 80px);
   }
   .appBrand{ margin-left:var(--land-safe-l); }
+  .pttChat{ width:var(--land-col-w); margin-left:var(--land-safe-l); }
+  /* 橫式高度只有 ~390px:訊息區限高,往上不壓到左上角的速度計(可捲動看舊訊息) */
+  .pttChatList{ max-height:calc(100vh - 350px); }
   .rect6,
   .onlineCapsule{
     margin-left:var(--land-safe-l);
@@ -1510,6 +1576,16 @@ html, body {
 
 <div class="bottomBar">
   <div class="appBrand" id="appBrand"><img src="圖片/智行地圖.png" alt=""><span>智行地圖</span></div>
+</div>
+<!-- 💬 對講聊天:訊息(頭像+名字+文字)在上,輸入框+麥克風在下;沒有文字時按住麥克風說話,有文字時變成送出 -->
+<div class="pttChat" id="pttChat">
+  <div class="pttChatList" id="pttChatList"></div>
+  <div class="pttChatInputRow">
+    <input class="pttChatInput" id="pttChatInput" maxlength="200" placeholder="輸入訊息…" enterkeyhint="send" autocomplete="off">
+    <button type="button" class="pttChatBtn pttTalkBtn" id="pttChatBtn" aria-label="按住說話 / 送出"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21.5"/></svg></button>
+  </div>
+</div>
+<div class="bottomBar">
   <div class="rect4">
     <div class="rect4-inner">
       <div class="label" id="roadLabel">正在定位道路…</div>
@@ -1626,7 +1702,7 @@ html, body {
     </div>
   </div><!-- /rect1 -->
 
-<script src="audio-manager.js?v=ptt2"></script>
+<script src="audio-manager.js?v=chat1"></script>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
@@ -1808,6 +1884,7 @@ if (navigator.geolocation) {
     window._navRouteGeometry = null;
     plannedRouteCoordinates = [];
     updateWalkLink(0, 0, null); // 清掉道路外的虛線
+    window._navTurnView = false; window._navTurnHoldUntil = 0;
     if (destMarker) { destMarker.remove(); destMarker = null; }
     selectedDest = null;
     if (destPanel) destPanel.style.display = 'none';
@@ -2217,12 +2294,14 @@ if (navigator.geolocation) {
       try { localStorage.setItem('ptt_mode', String(m)); } catch (e) {}
       track.style.transition = animated === false ? 'none' : '';
       track.style.transform = 'translateX(' + (-56 * m) + 'px)';
+      modesEl.setAttribute('data-mode', String(m));
       for (var i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i === m);
       render();
     }
 
     function startTalk() { if (!talking) { talking = true; AM.pttStart(); render(); } }
     function stopTalk()  { if (talking)  { talking = false; AM.pttStop();  render(); } }
+    window._pttTalk = function (on) { if (on) startTalk(); else stopTalk(); }; // 給聊天列的麥克風用
 
     function initial(name) { return String(name || '?').trim().charAt(0).toUpperCase() || '?'; }
     function avatarEl(p, onClick) {
@@ -2238,6 +2317,7 @@ if (navigator.geolocation) {
     function render() {
       var inRoom = AM.inRoom();
       row.classList.toggle('pttOff', !inRoom);
+      document.body.classList.toggle('ptt-in-room', inRoom); // 加入對講後才顯示聊天
       if (!inRoom) {
         titleEl.textContent = '啟用麥克風';
         subEl.textContent = '和朋友即時對講';
@@ -2319,6 +2399,55 @@ if (navigator.geolocation) {
     membersEl.addEventListener('click', function (e) { if (e.target === membersEl) enable(); });
 
     setMode(mode, false);
+
+    // ── 💬 聊天 ──
+    var chatList = document.getElementById('pttChatList');
+    var chatInput = document.getElementById('pttChatInput');
+    var chatBtn = document.getElementById('pttChatBtn');
+    var MIC_ICON = chatBtn.innerHTML;
+    var SEND_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M3 20.5 21 12 3 3.5l2.2 7.1L14 12l-8.8 1.4z"/></svg>';
+    function addMsg(p, text, mine) {
+      var row = document.createElement('div');
+      row.className = 'pttMsg' + (mine ? ' mine' : '');
+      row.appendChild(avatarEl(p));
+      var body = document.createElement('div'); body.className = 'pttMsgBody';
+      var nm = document.createElement('div'); nm.className = 'pttMsgName'; nm.textContent = p.name || '';
+      var tx = document.createElement('div'); tx.className = 'pttMsgText'; tx.textContent = text; // textContent:不會被插入 HTML
+      body.appendChild(nm); body.appendChild(tx); row.appendChild(body);
+      chatList.appendChild(row);
+      while (chatList.children.length > 50) chatList.removeChild(chatList.firstChild);
+      chatList.scrollTop = chatList.scrollHeight;
+    }
+    AM.onChat = function (member, text) { addMsg(member, text, false); };
+    function syncChatBtn() {
+      var hasText = !!chatInput.value.trim();
+      chatBtn.classList.toggle('send', hasText);
+      chatBtn.innerHTML = hasText ? SEND_ICON : MIC_ICON;
+      chatBtn.setAttribute('aria-label', hasText ? '送出' : '按住說話');
+    }
+    function sendChat() {
+      var text = chatInput.value.trim().slice(0, 200);
+      if (!text) return;
+      AM.sendChat(text);
+      addMsg(AM.getProfile(), text, true);
+      chatInput.value = '';
+      syncChatBtn();
+    }
+    chatInput.addEventListener('input', syncChatBtn);
+    chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendChat(); } });
+    // 沒打字:按住說話;有打字:點一下送出
+    var chatHold = false;
+    chatBtn.addEventListener('pointerdown', function (e) {
+      if (chatInput.value.trim()) return;
+      e.preventDefault();
+      try { chatBtn.setPointerCapture(e.pointerId); } catch (err) {}
+      chatHold = true; startTalk();
+    });
+    function chatUp() { if (chatHold) { chatHold = false; stopTalk(); } }
+    chatBtn.addEventListener('pointerup', chatUp);
+    chatBtn.addEventListener('pointercancel', chatUp);
+    chatBtn.addEventListener('click', function () { if (chatInput.value.trim()) sendChat(); });
+    chatBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   })();
 
   // ===== 🎙 對講室模態邏輯 =====
@@ -2509,6 +2638,8 @@ if (navigator.geolocation) {
     if (br) {
       br.style.transition = animated ? ('bottom .38s '+ease+',left .38s '+ease) : 'none';
       br.style.bottom = r4Bot+'px'; br.style.left = l+'px';
+      var ch = document.getElementById('pttChat');
+      if (ch) { ch.style.transition = br.style.transition; ch.style.bottom = (r4Bot + 39)+'px'; ch.style.left = l+'px'; }
       // 量一次品牌寬度,讓道路名稱依此讓位(字型載入後寬度才準)
       if (br.offsetWidth) document.documentElement.style.setProperty('--brand-w', br.offsetWidth+'px');
     }
@@ -3179,6 +3310,10 @@ if (navigator.geolocation) {
   // 非同步的路線規劃(含偏航重新規劃)回來時若場次已變,代表使用者已退出/換了導航,結果直接丟棄,
   // 避免「按退出後,晚回來的重新規劃又把導航模式打開」。
   let _navSession = 0;
+  // 🎥 導航鏡頭:平常 3D(zoom 17、傾斜 60°);接近轉彎 150m 內拉遠成平面(zoom 16、傾斜 0°),轉完 4 秒後回 3D
+  const NAV_TURN_VIEW_M = 150;
+  const NAV_TURN_HOLD_MS = 4000;
+  window.NAV_CAM = { normal: { zoom: 17, pitch: 60 }, turn: { zoom: 16, pitch: 0 } };
   // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
   // 回傳陣列由遠到近，最多 3 個值
   function getActiveThresholds(speedKmh) {
@@ -3429,6 +3564,16 @@ if (navigator.geolocation) {
 
     updateRect8Display(meters);
 
+    // ===== 🎥 轉彎鏡頭:接近真正的轉彎 → 拉遠 + 變成平面俯視;過了轉彎幾秒後再回到 3D =====
+    // (rAF 迴圈讀 window._navTurnView / _navTurnHoldUntil 並逐幀平滑改變 zoom / pitch)
+    {
+      const m = step.maneuver || {};
+      const mod = m.modifier || '';
+      const isRealTurn = !['depart', 'arrive', 'continue', 'new name', 'notification'].includes(m.type) &&
+        (mod !== 'straight' && mod !== '' || m.type === 'roundabout' || m.type === 'rotary');
+      window._navTurnView = isRealTurn && meters <= NAV_TURN_VIEW_M;
+    }
+
     // ===== 🚨 偏航偵測 =====
     checkOffRoute(lat, lon);
 
@@ -3443,6 +3588,7 @@ if (navigator.geolocation) {
         const v = buildImmediateNavVoice(step);
         if (v) { speakText(v); navStepVoiceState[currentStepIndex] = 'immediate'; }
       }
+      if (window._navTurnView) window._navTurnHoldUntil = Date.now() + NAV_TURN_HOLD_MS; // 轉完再維持平面幾秒才回 3D
       currentStepIndex++;
       if (window._navStats) window._navStats.turns++;
       if (typeof window.earnCoin === 'function') window.earnCoin(2, '✅ 轉彎完成');
@@ -4611,12 +4757,21 @@ map.on('load', function() {
 
     // 地圖鏡頭跟隨
     if (window._cameraFollow && typeof map !== 'undefined') {
-      map.easeTo({
+      const cam = {
         center: [_dispLng, _dispLat],
         bearing: _dispBearing,
         duration: 0,
         padding: typeof getUserCameraPadding === 'function' ? getUserCameraPadding() : {}
-      });
+      };
+      // 導航中:接近轉彎時平滑拉遠 + 變平面,轉完再平滑回 3D(每幀往目標靠近 4%,約 1.5 秒完成)
+      if (typeof isNavigating !== 'undefined' && isNavigating && window.NAV_CAM) {
+        const turnView = window._navTurnView || Date.now() < (window._navTurnHoldUntil || 0);
+        const goal = turnView ? window.NAV_CAM.turn : window.NAV_CAM.normal;
+        const z = map.getZoom(), p = map.getPitch(), k = 0.04;
+        if (Math.abs(goal.zoom - z) > 0.01) cam.zoom = z + (goal.zoom - z) * k;
+        if (Math.abs(goal.pitch - p) > 0.2) cam.pitch = p + (goal.pitch - p) * k;
+      }
+      map.easeTo(cam);
     }
   }
 
@@ -6759,6 +6914,33 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <!-- jsQR (QR 掃描) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<!-- 螢幕恆亮(開車導航時螢幕不要自動關閉) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nosleep/0.12.0/NoSleep.min.js"></script>
+<script>
+(function () {
+  // 支援的瀏覽器用原生 Wake Lock;舊版 iPhone 由 NoSleep 用無聲循環影片維持亮屏。
+  // 兩者都需要使用者手勢才能啟動,所以在第一次點擊/觸控時開啟;切回 App 時系統會自動釋放,下次點擊再開。
+  var noSleep = (typeof NoSleep !== 'undefined') ? new NoSleep() : null;
+  var nativeLock = null;
+  function keepAwake() {
+    if (document.visibilityState !== 'visible') return;
+    if ('wakeLock' in navigator) {
+      if (nativeLock) return;
+      navigator.wakeLock.request('screen').then(function (l) {
+        nativeLock = l;
+        l.addEventListener('release', function () { nativeLock = null; });
+      }).catch(function () { if (noSleep && !noSleep.isEnabled) noSleep.enable().catch(function () {}); });
+    } else if (noSleep && !noSleep.isEnabled) {
+      noSleep.enable().catch(function () {});
+    }
+  }
+  window._isScreenKeptAwake = function () { return !!nativeLock || !!(noSleep && noSleep.isEnabled); };
+  document.addEventListener('click', keepAwake, true);
+  document.addEventListener('touchend', keepAwake, true);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') keepAwake(); });
+  keepAwake(); // 有些瀏覽器不需手勢就能拿到
+})();
+</script>
 
 <!-- 對講室模態 -->
 <!-- 底部面板貼齊螢幕底部;iPhone 底部 Home 條的安全區由面板自己的 padding 補滿,下面不再露出一截地圖 -->

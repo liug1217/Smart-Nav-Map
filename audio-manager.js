@@ -267,6 +267,11 @@
         };
         self._emitMembers();
       }
+      // 💬 聊天訊息：附上對方目前的名字/頭像交給畫面
+      if (msg.t === 'chat' && typeof msg.text === 'string' && self.onChat) {
+        var m = self._members[peerId] || {};
+        self.onChat({ id: peerId, name: m.name || _codeOf(peerId), avatar: m.avatar || '' }, msg.text.slice(0, 200));
+      }
       // 我是新加入的一方：對方告訴我房裡還有誰，我主動去連那些人
       if (msg.t === 'hi' && initiated && Array.isArray(msg.members)) {
         msg.members.forEach(function (id) {
@@ -301,6 +306,11 @@
   AudioManager.prototype._broadcast = function (msg) {
     var conns = this._peerConns || {};
     Object.keys(conns).forEach(function (id) { try { if (conns[id].open) conns[id].send(msg); } catch (e) {} });
+  };
+
+  // 💬 傳文字訊息給房內所有人
+  AudioManager.prototype.sendChat = function (text) {
+    this._broadcast({ t: 'chat', text: String(text || '').slice(0, 200), ts: Date.now() });
   };
 
   // 目前房內其他成員（有語音或資料連線的人），附上名字/頭像
