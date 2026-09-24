@@ -3750,11 +3750,12 @@ if (navigator.geolocation) {
     document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
   };
 
-  // 長按地圖（右鍵/contextmenu）→ 提示導航選項
+  // 長按地圖（右鍵/contextmenu；手機觸控長按）→ 提示導航選項
   (function() {
     window._ctxPopup = null;
-    map.on('contextmenu', function(e) {
-      var lat = e.lngLat.lat, lon = e.lngLat.lng;
+    // closeOnClick=false:觸控長按放開時手機可能補發一次 click,不能讓它把剛跳出的視窗關掉
+    function showNavHerePopup(lngLat, closeOnClick) {
+      var lat = lngLat.lat, lon = lngLat.lng;
       if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
       // 同時關閉其他所有 popup（全家等）
       document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
@@ -3764,11 +3765,52 @@ if (navigator.geolocation) {
         '<button onclick="window._navigateToCoord(' + lat + ',' + lon + ',\'此處\')" ' +
         'style="background:#0a84ff;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;width:100%">🗺 導航到此處</button>' +
         '</div>';
-      window._ctxPopup = new maplibregl.Popup({ offset:10, closeButton:true })
+      window._ctxPopup = new maplibregl.Popup({ offset:10, closeButton:true, closeOnClick: closeOnClick !== false })
         .setLngLat([lon, lat])
         .setHTML(html)
         .addTo(map);
+      return window._ctxPopup;
+    }
+
+    // 電腦右鍵 / Android 長按(瀏覽器會送 contextmenu)
+    var _lpFiredAt = 0;
+    map.on('contextmenu', function(e) {
+      if (Date.now() - _lpFiredAt < 1000) return; // Android 觸控長按已經顯示過,不要重複開
+      showNavHerePopup(e.lngLat);
     });
+
+    // 手機觸控長按:iPhone Safari 長按不會送 contextmenu,自己用計時器判斷
+    // 單指按住 550ms 且移動不超過 10px 才算;拖曳地圖、雙指縮放都會取消
+    var LONG_PRESS_MS = 550, MOVE_CANCEL_PX = 10;
+    var _lpTimer = null, _lpX = 0, _lpY = 0, _lpPopup = null;
+    function _lpCancel() { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }
+    var canvas = map.getCanvasContainer();
+    canvas.addEventListener('touchstart', function(e) {
+      _lpCancel();
+      if (e.touches.length !== 1) return;
+      _lpX = e.touches[0].clientX; _lpY = e.touches[0].clientY;
+      _lpTimer = setTimeout(function() {
+        _lpTimer = null;
+        var rect = canvas.getBoundingClientRect();
+        _lpFiredAt = Date.now();
+        _lpPopup = showNavHerePopup(map.unproject([_lpX - rect.left, _lpY - rect.top]), false);
+        if (navigator.vibrate) { try { navigator.vibrate(15); } catch(err) {} }
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', function(e) {
+      if (!_lpTimer) return;
+      var t = e.touches[0];
+      if (e.touches.length !== 1 || Math.hypot(t.clientX - _lpX, t.clientY - _lpY) > MOVE_CANCEL_PX) _lpCancel();
+    }, { passive: true });
+    canvas.addEventListener('touchend', function() {
+      _lpCancel();
+      // 放開後稍等一下,之後點地圖其他地方才會關閉視窗(避免放開當下補發的 click 立刻關掉)
+      var p = _lpPopup; _lpPopup = null;
+      if (p) setTimeout(function() {
+        map.once('click', function() { if (window._ctxPopup === p) { p.remove(); window._ctxPopup = null; } });
+      }, 400);
+    }, { passive: true });
+    canvas.addEventListener('touchcancel', _lpCancel, { passive: true });
   })();
 
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
