@@ -6708,8 +6708,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
 <!-- 對講室模態 -->
-<div id="pttRoomModal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,0.72);justify-content:center;align-items:flex-end;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);">
-  <div style="background:#1c1c1e;border-radius:20px 20px 12px 12px;padding:20px 20px 24px;width:min(92vw,400px);color:#fff;font-family:-apple-system,sans-serif;max-height:92vh;overflow-y:auto;">
+<!-- 底部面板貼齊螢幕底部;iPhone 底部 Home 條的安全區由面板自己的 padding 補滿,下面不再露出一截地圖 -->
+<div id="pttRoomModal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,0.72);justify-content:center;align-items:flex-end;">
+  <div style="background:#1c1c1e;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));width:min(100vw,420px);box-sizing:border-box;color:#fff;font-family:-apple-system,sans-serif;max-height:92vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <span style="font-size:17px;font-weight:600;">🎙 對講</span>
       <button id="pttRoomClose" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
@@ -6724,7 +6725,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     <div id="pttPeerList" style="min-height:24px;margin-bottom:12px;font-size:13px;color:#888;text-align:center;">尚未有人連線</div>
     <!-- 輸入代碼加入 -->
     <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <input id="pttJoinInput" placeholder="輸入朋友的 6 碼代碼" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:2px;"flex:1;padding:10px 12px;border-radius:10px;border:1px solid #3a3a3c;background:#2c2c2e;color:#fff;font-size:14px;outline:none;" />
+      <input id="pttJoinInput" placeholder="輸入朋友的 6 碼代碼" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:2px;flex:1;padding:10px 12px;border-radius:10px;border:1px solid #3a3a3c;background:#2c2c2e;color:#fff;font-size:14px;outline:none;" />
       <button id="pttJoinBtn" style="padding:10px 16px;border-radius:10px;background:#007AFF;color:#fff;border:none;font-size:14px;cursor:pointer;font-weight:500;white-space:nowrap;">加入</button>
     </div>
     <!-- 掃描 QR 碼 -->
