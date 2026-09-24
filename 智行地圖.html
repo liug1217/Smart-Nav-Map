@@ -1698,6 +1698,7 @@ if (navigator.geolocation) {
     window.plannedRouteCoordinates = [];
     window._navRouteGeometry = null;
     plannedRouteCoordinates = [];
+    updateWalkLink(0, 0, null); // 清掉道路外的虛線
     if (destMarker) { destMarker.remove(); destMarker = null; }
     selectedDest = null;
     if (destPanel) destPanel.style.display = 'none';
@@ -3302,6 +3303,106 @@ if (navigator.geolocation) {
     return minDist;
   }
 
+  // ===== 🚗 導航車輛吸附路線(消除 GPS 左右飄移造成的車子抖動) =====
+  // GPS 原始位置只拿來判斷實際位置/偏航/速度;導航中車子的「顯示位置」改用投影到路線中心線上的點,
+  // 並以「沿路線的距離(along)」表示,讓 rAF 迴圈沿著路線幾何前進與轉彎,而不是在兩個 GPS 點之間直線插值。
+  const SNAP_ENTER_M = 30;      // GPS 距路線 30 公尺內 → 視為在路上,吸附到路線中心
+  const SNAP_EXIT_M = 45;       // 已吸附時距離超過 45 公尺才解除(遲滯,避免在邊界來回切換)
+  const SNAP_BACK_HOLD_M = 25;  // 沿路線方向往回 25 公尺內的變化視為 GPS 前後飄移,車子不後退
+  const SNAP_STOP_HOLD_M = 8;   // 停車(<0.8 m/s)時沿路線前後 8 公尺內的變化忽略
+  let _routeGeom = null;
+  let _snapState = { snapped: false, idx: 0, along: 0, t: 0 };
+
+  // 把路線座標轉成局部平面公尺座標並算好累積距離;同一份路線只算一次(重新規劃會換新陣列)
+  function getRouteGeom(coords){
+    if (!coords || coords.length < 2) return null;
+    if (_routeGeom && _routeGeom.coords === coords) return _routeGeom;
+    const kx = 111320 * Math.cos(coords[0][1] * Math.PI / 180), ky = 110540;
+    const xy = coords.map(c => [c[0] * kx, c[1] * ky]);
+    const cum = [0];
+    for (let i = 1; i < xy.length; i++) cum.push(cum[i - 1] + Math.hypot(xy[i][0] - xy[i - 1][0], xy[i][1] - xy[i - 1][1]));
+    _routeGeom = { coords, kx, ky, xy, cum, total: cum[cum.length - 1] };
+    _snapState = { snapped: false, idx: 0, along: 0, t: 0 };
+    return _routeGeom;
+  }
+
+  // 找路線上離 (lat, lon) 最近的點;只搜尋 [from, to) 這幾段
+  function projectOnRoute(g, lat, lon, from, to){
+    const px = lon * g.kx, py = lat * g.ky;
+    let best = null;
+    for (let i = Math.max(0, from); i < Math.min(to, g.xy.length - 1); i++) {
+      const a = g.xy[i], b = g.xy[i + 1];
+      const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2)) : 0;
+      const d = Math.hypot(px - (a[0] + t * dx), py - (a[1] + t * dy));
+      if (!best || d < best.dist) best = { idx: i, t, dist: d, along: g.cum[i] + t * Math.sqrt(len2) };
+    }
+    return best;
+  }
+
+  // 路線上「沿線距離 along 公尺」處的座標與行進方向
+  function routePointAt(g, along){
+    along = Math.max(0, Math.min(g.total, along));
+    let lo = 0, hi = g.cum.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (g.cum[mid] <= along) lo = mid; else hi = mid; }
+    const segLen = g.cum[hi] - g.cum[lo];
+    const t = segLen > 0 ? (along - g.cum[lo]) / segLen : 0;
+    const a = g.coords[lo], b = g.coords[hi];
+    const bearing = (Math.atan2((b[0] - a[0]) * g.kx, (b[1] - a[1]) * g.ky) * 180 / Math.PI + 360) % 360;
+    return { lng: a[0] + (b[0] - a[0]) * t, lat: a[1] + (b[1] - a[1]) * t, bearing };
+  }
+  window._routePointAt = routePointAt; // 給 rAF 插值迴圈用
+
+  // GPS 更新時呼叫:回傳吸附結果 { snapped, along, speed, geom, proj },沒有導航路線時回傳 null
+  function snapVehicleToRoute(lat, lon, gpsSpeed, now){
+    if (!isNavigating) return null;
+    const g = getRouteGeom(window.plannedRouteCoordinates);
+    if (!g) return null;
+    const st = _snapState;
+    // 先在上次位置附近往前找(避免路線來回重疊時跳到另一段),找不到合理位置才全線搜尋
+    let proj = st.snapped ? projectOnRoute(g, lat, lon, st.idx - 3, st.idx + 80) : null;
+    if (!proj || proj.dist > SNAP_EXIT_M) proj = projectOnRoute(g, lat, lon, 0, g.xy.length);
+    if (!proj) return null;
+
+    const wasSnapped = st.snapped;
+    const snapped = proj.dist <= (wasSnapped ? SNAP_EXIT_M : SNAP_ENTER_M);
+    if (!snapped) { st.snapped = false; return { snapped: false, geom: g, proj }; }
+
+    let along = proj.along;
+    let speed = gpsSpeed > 0 ? gpsSpeed : 0;
+    if (wasSnapped) {
+      const dAlong = along - st.along;
+      const dt = (now - st.t) / 1000;
+      if (!(gpsSpeed > 0) && dt > 0 && dAlong > 0) speed = dAlong / dt; // 裝置沒回報速度時用沿線位移估算
+      if (dAlong < 0 && dAlong > -SNAP_BACK_HOLD_M) along = st.along;              // 往回的小飄移:不後退
+      if (speed < 0.8 && Math.abs(dAlong) < SNAP_STOP_HOLD_M) { along = st.along; speed = 0; } // 停車:原地不動
+    }
+    st.snapped = true; st.idx = proj.idx; st.along = along; st.t = now;
+    return { snapped: true, along, speed, geom: g, proj };
+  }
+
+  // 道路外(未吸附)時:從實際位置畫一條點狀虛線到導航路線上最近的點
+  function updateWalkLink(lat, lon, snap){
+    let data = { type: 'FeatureCollection', features: [] };
+    if (snap && !snap.snapped && snap.proj) {
+      const p = routePointAt(snap.geom, snap.proj.along);
+      data.features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[lon, lat], [p.lng, p.lat]] } });
+    }
+    try {
+      if (!map.getSource('navWalkLink')) {
+        if (!data.features.length) return; // 還沒建立且不需要顯示,就先不建
+        map.addSource('navWalkLink', { type: 'geojson', data });
+        map.addLayer({
+          id: 'navWalkLink', type: 'line', source: 'navWalkLink',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': '#2F80FF', 'line-width': 4, 'line-dasharray': [0.2, 2] }
+        }, map.getLayer('user-pulse') ? 'user-pulse' : undefined);
+      } else {
+        map.getSource('navWalkLink').setData(data);
+      }
+    } catch(e) { /* 樣式切換中,下次 GPS 更新再畫 */ }
+  }
+
   // 觸發重新規劃路線
   async function triggerReroute(lat, lon) {
     if (isRerouting || !selectedDest) return;
@@ -3863,7 +3964,8 @@ if (navigator.geolocation) {
 
 
   if (navigator.geolocation) {
-    navigator.geolocation.watchPosition((pos) => {
+    // 具名以便測試時用 window._simulateGpsFix({coords:{...}}) 走完全相同的 GPS 更新流程
+    const onGpsPosition = (pos) => {
       const now = Date.now();
       const currentLat = pos.coords.latitude;
       const currentLon = pos.coords.longitude;
@@ -3899,6 +4001,20 @@ if (navigator.geolocation) {
         });
       }
 
+      // 導航中且在路線附近:車子目標改用吸附到路線中心的位置(沿路線距離),不直接用 GPS 原始座標
+      const snap = snapVehicleToRoute(currentLat, currentLon, currentSpeed, now);
+      updateWalkLink(currentLat, currentLon, snap);
+      if (snap && snap.snapped) {
+        const p = routePointAt(snap.geom, snap.along);
+        window._vehicleVelocity = null; // 原始 GPS 速度向量含左右飄移,吸附模式不用
+        window._vehicleTarget = {
+          lng: p.lng,
+          lat: p.lat,
+          bearing: p.bearing,
+          timestamp: now,
+          route: { geom: snap.geom, along: snap.along, speed: snap.speed }
+        };
+      } else
       // 更新車子目標位置（rAF 插值迴圈會平滑插值到此）
       {
         const prevTgt = window._vehicleTarget;
@@ -3949,7 +4065,9 @@ if (navigator.geolocation) {
       // 測速照相語音播報(接近100公尺預告、超速警示、通過播報)
       checkSpeedCameraVoice(currentLat, currentLon, speedKmh);
 
-    }, (err) => {
+    };
+    window._simulateGpsFix = onGpsPosition;
+    navigator.geolocation.watchPosition(onGpsPosition, (err) => {
       console.error('GPS error:', err);
       if (!window.simRunning) {
         if (speedPillNum) speedPillNum.innerText = '--';
@@ -4086,6 +4204,8 @@ map.on('load', function() {
 (function() {
   // 目前插值後的顯示位置
   let _dispLng = null, _dispLat = null, _dispBearing = 0;
+  // 吸附路線模式:目前顯示的沿路線距離,以及從非吸附位置銜接進路線時逐漸歸零的偏移量
+  let _dispAlong = null, _routeGeomRef = null, _joinLng = 0, _joinLat = 0;
 
   function _lerpAngle(a, b, t) {
     // 取最短角差（bearing 繞回處理）
@@ -4103,7 +4223,36 @@ map.on('load', function() {
       _dispLng = tgt.lng;
       _dispLat = tgt.lat;
       _dispBearing = tgt.bearing;
+    } else if (tgt.route && typeof window._routePointAt === 'function') {
+      // 吸附路線模式:插值「沿路線距離」,車子永遠落在路線中心線上,轉彎也跟著路線幾何走
+      const r = tgt.route;
+      let targetAlong = r.along;
+      if (r.speed > 0.5 && tgt.timestamp) { // 兩次 GPS 之間沿路線航位推算(最多 2 秒)
+        const dt = Math.min(now - tgt.timestamp, 2000);
+        if (dt >= 0) targetAlong += r.speed * dt / 1000;
+      }
+      targetAlong = Math.min(targetAlong, r.geom.total);
+      if (_routeGeomRef !== r.geom || _dispAlong === null) {
+        // 剛進入吸附模式/重新規劃換了路線:從目前畫面位置平滑銜接到路線上,不瞬移
+        _routeGeomRef = r.geom;
+        _dispAlong = r.along;
+        const p0 = window._routePointAt(r.geom, _dispAlong);
+        _joinLng = _dispLng - p0.lng;
+        _joinLat = _dispLat - p0.lat;
+      }
+      // 航位推算跑得比下一筆 GPS 前面一點時,車子原地等 GPS 追上,不要沿路線倒退
+      // (真的大幅往回,例如迴轉後重新吸附,才允許後退)
+      if (targetAlong < _dispAlong && _dispAlong - targetAlong < 25) targetAlong = _dispAlong;
+      const alpha = 0.12;
+      _dispAlong += (targetAlong - _dispAlong) * alpha;
+      _joinLng *= (1 - alpha);
+      _joinLat *= (1 - alpha);
+      const p = window._routePointAt(r.geom, _dispAlong);
+      _dispLng = p.lng + _joinLng;
+      _dispLat = p.lat + _joinLat;
+      _dispBearing = _lerpAngle(_dispBearing, p.bearing, alpha);
     } else {
+      _routeGeomRef = null; _dispAlong = null; // 離開吸附模式,回到原本的座標插值
       const alpha = 0.12;
       // 航位推算（dead-reckoning）：根據速度向量持續推算下一個位置，
       // 讓車子在兩次 GPS 更新之間也能持續平滑移動，不會停頓。
