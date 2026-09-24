@@ -170,27 +170,38 @@ html,body{
   font-size:30px; font-weight:700; color:#fff; cursor:pointer;
   border:2px solid rgba(255,255,255,0.15);
 }
-/* rect1 左下角 App 圖示 + 名稱:固定在「退出」下方,
-   收合(83px)時剛好在左下角,展開時位於導航列與電台卡之間,不會互相重疊 */
-.rect1Brand{
-  position:absolute;
-  left:24px;
-  top:60px;
+/* App 圖示 + 名稱:放在卡片外、道路名稱膠囊左邊,貼齊卡片左緣;
+   高度/位置與道路名稱同一列,_setPanelState() 會讓它跟著卡片上下移動 */
+:root{ --brand-w: 100px; } /* 實際寬度載入後由 JS 量好寫入,道路名稱依此讓位 */
+.appBrand{
+  box-sizing:border-box;
+  position:fixed;
+  left:16px;
+  bottom:109px;
+  height:33px;
+  padding:0 11px 0 7px;
   display:flex;
   align-items:center;
-  gap:4px;
+  gap:6px;
   pointer-events:none;
+  background:rgba(255,255,255,0.8);
+  border:0.5px solid #d9d9d9;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  border-radius:16.5px;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:11px;
+  font-size:13px;
   font-weight:600;
-  line-height:14px;
   color:#404345;
   white-space:nowrap;
+  z-index:5;
+  transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1), left 0.38s cubic-bezier(0.32,0.72,0,1);
 }
-.rect1Brand img{
-  width:14px;
-  height:14px;
-  border-radius:3.5px;
+.appBrand img{
+  width:20px;
+  height:20px;
+  border-radius:5px;
   display:block;
 }
 
@@ -225,8 +236,8 @@ html,body{
   bottom:109px;
   transition:bottom 0.38s cubic-bezier(0.32,0.72,0,1);
   width:auto;
-  /* 左右各讓出右側地圖按鈕欄(12px + 59px + 8px),長路名改用省略號,不會鑽到按鈕底下 */
-  max-width:calc(100% - 158px);
+  /* 置中顯示,左右各讓出左邊品牌標籤(16px + 品牌寬 + 8px)與右側按鈕欄,長路名改用省略號 */
+  max-width:calc(100% - 2 * (24px + var(--brand-w)));
   height:33px;
   padding:0 13px;
   background:rgba(255,255,255,0.8);
@@ -1195,11 +1206,12 @@ html, body {
     margin-left:var(--land-safe-l);
   }
   .rect4{
-    left:16px;
+    left:calc(24px + var(--brand-w));
     transform:none;
-    max-width:calc(var(--land-col-w) - 16px);
+    max-width:calc(var(--land-col-w) - 16px - var(--brand-w));
     margin-left:var(--land-safe-l);
   }
+  .appBrand{ margin-left:var(--land-safe-l); }
   .rect6,
   .onlineCapsule{
     margin-left:var(--land-safe-l);
@@ -1497,6 +1509,7 @@ html, body {
 </div>
 
 <div class="bottomBar">
+  <div class="appBrand" id="appBrand"><img src="圖片/智行地圖.png" alt=""><span>智行地圖</span></div>
   <div class="rect4">
     <div class="rect4-inner">
       <div class="label" id="roadLabel">正在定位道路…</div>
@@ -1506,7 +1519,6 @@ html, body {
 </div>
 <div class="rect1" id="rect1">
     <div class="rect3" id="rect3Handle"></div>
-    <div class="rect1Brand"><img src="圖片/智行地圖.png" alt=""><span>智行地圖</span></div>
     <div class="rect1Body">
       <div class="rect1NavRow">
         <button type="button" class="navExitBtn" id="navExitBtn">退出</button>
@@ -2462,6 +2474,12 @@ if (navigator.geolocation) {
     });
   });
 
+  // 品牌標籤實際寬度 → --brand-w,讓道路名稱讓出位置(等圖片/字型載入完再量)
+  window.addEventListener('load', function () {
+    var br = document.getElementById('appBrand');
+    if (br && br.offsetWidth) document.documentElement.style.setProperty('--brand-w', br.offsetWidth + 'px');
+  });
+
   // ===== 面板狀態管理（導航收合/展開）=====
   function _setPanelState(h, animated) {
     var r1 = document.getElementById('rect1');
@@ -2487,6 +2505,13 @@ if (navigator.geolocation) {
     if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
     if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
+    var br = document.getElementById('appBrand');
+    if (br) {
+      br.style.transition = animated ? ('bottom .38s '+ease+',left .38s '+ease) : 'none';
+      br.style.bottom = r4Bot+'px'; br.style.left = l+'px';
+      // 量一次品牌寬度,讓道路名稱依此讓位(字型載入後寬度才準)
+      if (br.offsetWidth) document.documentElement.style.setProperty('--brand-w', br.offsetWidth+'px');
+    }
     if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? 'auto' : 'none'; }
     var pr = document.getElementById('pttRow');
     if (pr) { pr.style.opacity = showRadio ? '1' : '0'; pr.style.pointerEvents = showRadio ? 'auto' : 'none'; }
@@ -4435,8 +4460,10 @@ map.on('load', function() {
       layout: {
         'icon-image': 'car-icon',
         'icon-size': 1,
-        'icon-rotate': 0,
-        'icon-rotation-alignment': 'viewport',
+        // 車頭朝向「地圖上的實際行進方向」:鏡頭跟隨時地圖跟著轉,車子照樣朝上;
+        // 用手轉動地圖時,車子跟著道路一起轉,不會自己原地打轉
+        'icon-rotate': ['get', 'heading'],
+        'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true
