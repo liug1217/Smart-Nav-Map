@@ -46,5 +46,18 @@ window.familyMartData = {
     { type:'Feature', geometry:{ type:'Point', coordinates:[121.53756522515329, 25.008040630678430] }, properties:{ name:'全家便利商店 師美店' } },
     { type:'Feature', geometry:{ type:'Point', coordinates:[121.53745919325958, 25.018063421484280] }, properties:{ name:'全家便利商店 台福店' } },
     { type:'Feature', geometry:{ type:'Point', coordinates:[121.53347158834846, 25.018916328995058] }, properties:{ name:'全家便利商店 台新店' } },
+    // 台中海線(龍井/沙鹿/梧棲)與台中市區
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.54968473594818, 24.213384256491153] }, properties:{ name:'全家便利商店 龍井龍山店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.53034067053542, 24.17836702807132] }, properties:{ name:'全家便利商店 龍井茄投店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.56563338832656, 24.21168745282857] }, properties:{ name:'全家便利商店 沙鹿森美店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.59051102268418, 24.18247194790006] }, properties:{ name:'全家便利商店 龍井新文勝店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.65902241777685, 24.190992867524123] }, properties:{ name:'全家便利商店 台中經貿店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.54183455887879, 24.246163536375647] }, properties:{ name:'全家便利商店 梧棲新文華店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.53140582339601, 24.255082913422736] }, properties:{ name:'全家便利商店 梧棲新中和店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.592423843471, 24.188339397125667] }, properties:{ name:'全家便利商店 龍井藝術店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.58933442531325, 24.180804503533693] }, properties:{ name:'全家便利商店 龍井龍后店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.56593952794408, 24.250116644923597] }, properties:{ name:'全家便利商店 沙鹿鹿寮店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.5370621868169, 24.260995336187932] }, properties:{ name:'全家便利商店 梧棲海王子店' } },
+    { type:'Feature', geometry:{ type:'Point', coordinates:[120.69982431428657, 24.14296610159652] }, properties:{ name:'全家便利商店 台中武聖店' } },
   ]
 };
