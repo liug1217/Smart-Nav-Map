@@ -64,7 +64,7 @@ html,body{
 /* rect1 flex 內部排版 */
 .rect1Body{
   box-sizing:border-box;
-  height:224px;
+  height:232px;
   padding:18px 0 6px;
   display:flex;
   flex-direction:column;
@@ -92,16 +92,19 @@ html,body{
 /* ===== 🎙 對講列(底部卡片:導航資訊與電台之間) ===== */
 .pttRow{
   margin:19px 21px 0;
-  height:56px;
+  height:64px;
   flex-shrink:0;
-  display:flex;
+  display:grid;
+  grid-template-columns:1fr 56px 1fr; /* 左:文字 / 中:麥克風 / 右:頭像 → 麥克風永遠在正中間 */
   align-items:center;
-  gap:12px;
+  column-gap:10px;
   transition:opacity 0.25s ease;
 }
 /* 左右滑動切換模式的圓形按鈕區:一次只露出一顆 */
 .pttModes{
-  width:48px;
+  grid-column:2;
+  grid-row:1;
+  width:56px;
   flex-shrink:0;
   display:flex;
   flex-direction:column;
@@ -112,10 +115,10 @@ html,body{
   user-select:none;
   -webkit-touch-callout:none;
 }
-.pttModeViewport{ width:48px; height:48px; overflow:hidden; border-radius:50%; }
-.pttModeTrack{ display:flex; width:96px; transition:transform 0.25s cubic-bezier(.32,.72,0,1); }
+.pttModeViewport{ width:56px; height:56px; overflow:hidden; border-radius:50%; }
+.pttModeTrack{ display:flex; width:112px; transition:transform 0.25s cubic-bezier(.32,.72,0,1); }
 .pttTalkBtn{
-  width:48px; height:48px; flex-shrink:0;
+  width:56px; height:56px; flex-shrink:0;
   border:none; border-radius:50%; padding:0;
   display:flex; align-items:center; justify-content:center;
   color:#fff; cursor:pointer;
@@ -137,15 +140,16 @@ html,body{
 .pttDots span{ width:5px; height:5px; border-radius:50%; background:rgba(60,60,67,0.25); transition:background 0.2s; }
 .pttDots span.on{ background:#3C3C43; }
 .pttInfo{
-  flex:1; min-width:0;
+  grid-column:1; grid-row:1;
+  min-width:0;
   background:none; border:none; padding:0; text-align:left; cursor:pointer;
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   -webkit-tap-highlight-color:transparent;
 }
 .pttInfoTitle{ font-size:15px; font-weight:600; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pttRow.pttOff .pttInfoTitle{ color:#2F80FF; }
-.pttInfoSub{ font-size:11px; color:#6E6E73; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pttMembers{ display:flex; align-items:center; flex-shrink:0; }
+.pttInfoSub{ font-size:11px; line-height:1.3; color:#6E6E73; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.pttMembers{ grid-column:3; grid-row:1; justify-self:end; display:flex; align-items:center; flex-shrink:0; }
 .pttAvatar{
   width:30px; height:30px; border-radius:50%;
   border:2px solid #fff; margin-left:-8px;
@@ -1517,15 +1521,15 @@ html, body {
         <div class="pttModes" id="pttModes">
           <div class="pttModeViewport">
             <div class="pttModeTrack" id="pttModeTrack">
-              <button type="button" class="pttTalkBtn pttMic" aria-label="按住說話"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21.5"/><line x1="8.5" y1="21.5" x2="15.5" y2="21.5"/></svg></button>
-              <button type="button" class="pttTalkBtn pttPhone" aria-label="點一下開始通話"><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.25 1l-2.22 2.2z"/></svg></button>
+              <button type="button" class="pttTalkBtn pttMic" aria-label="按住說話"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21.5"/><line x1="8.5" y1="21.5" x2="15.5" y2="21.5"/></svg></button>
+              <button type="button" class="pttTalkBtn pttPhone" aria-label="點一下開始通話"><svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.25 1l-2.22 2.2z"/></svg></button>
             </div>
           </div>
           <div class="pttDots"><span class="on"></span><span></span></div>
         </div>
         <button type="button" class="pttInfo" id="pttInfo">
           <div class="pttInfoTitle" id="pttInfoTitle">啟用麥克風</div>
-          <div class="pttInfoSub" id="pttInfoSub">開啟後可以和朋友即時對講</div>
+          <div class="pttInfoSub" id="pttInfoSub">和朋友即時對講</div>
         </button>
         <div class="pttMembers" id="pttMembers"></div>
       </div>
@@ -1780,7 +1784,7 @@ if (navigator.geolocation) {
     Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
     clearSpeedCameraVoiceState();
     document.body.classList.remove('navigating');
-    _setPanelState(224, true);
+    _setPanelState(232, true);
     if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
     if (rect8) rect8.style.display = 'none';
     if (searchBarWrapEl) searchBarWrapEl.style.display = '';
@@ -2200,7 +2204,7 @@ if (navigator.geolocation) {
       mode = m;
       try { localStorage.setItem('ptt_mode', String(m)); } catch (e) {}
       track.style.transition = animated === false ? 'none' : '';
-      track.style.transform = 'translateX(' + (-48 * m) + 'px)';
+      track.style.transform = 'translateX(' + (-56 * m) + 'px)';
       for (var i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i === m);
       render();
     }
@@ -2224,13 +2228,13 @@ if (navigator.geolocation) {
       row.classList.toggle('pttOff', !inRoom);
       if (!inRoom) {
         titleEl.textContent = '啟用麥克風';
-        subEl.textContent = '開啟後可以和朋友即時對講';
+        subEl.textContent = '和朋友即時對講';
       } else if (!members.length) {
         titleEl.textContent = '代碼 ' + AM.getRoomCode();
-        subEl.textContent = '等待朋友加入 · 點這裡邀請或加入';
+        subEl.textContent = '點這裡邀請朋友';
       } else {
         titleEl.textContent = talking ? '說話中…' : (members.length + 1) + ' 人對講中';
-        subEl.textContent = mode === 0 ? '按住左邊按鈕說話 · 左右滑動切換' : (talking ? '再點一下結束通話' : '點一下開始通話 · 左右滑動切換');
+        subEl.textContent = mode === 0 ? '按住麥克風說話' : (talking ? '再點一下結束通話' : '點一下開始通話');
       }
       // 頭像：自己排第一個（點自己可改頭像/名字），再來是其他成員，最多顯示 4 個
       membersEl.innerHTML = '';
@@ -2466,15 +2470,15 @@ if (navigator.geolocation) {
     var rd = document.getElementById('radioCard');
     var isNav = document.body.classList.contains('navigating');
     var l, bot, mcBot, r4Bot, showRadio;
-    var COMPACT = 83, NORMAL = 224; // 224 = 原本 160 + 對講列 64
+    var COMPACT = 83, NORMAL = 232; // 232 = 原本 160 + 對講列 72
     var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
     if (h >= NORMAL) {
-      l = 8; bot = 8; mcBot = 249; r4Bot = 242; showRadio = true;
+      l = 8; bot = 8; mcBot = 257; r4Bot = 250; showRadio = true;
     } else if (h <= COMPACT) {
       l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
     } else {
       var t = (h - COMPACT) / (NORMAL - COMPACT);
-      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 133; r4Bot = 109 + t * 133; showRadio = t > 0.7;
+      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 141; r4Bot = 109 + t * 141; showRadio = t > 0.7;
     }
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
@@ -2495,7 +2499,7 @@ if (navigator.geolocation) {
   const _rect3Handle = document.getElementById('rect3Handle');
   const _voiceDrawer = document.getElementById('voiceDrawer');
   const RECT1_COMPACT = 83;    // 導航收合狀態（無電台卡）
-  const RECT1_COLLAPSED = 224; // 正常展開狀態（有對講列 + 電台卡）
+  const RECT1_COLLAPSED = 232; // 正常展開狀態（有對講列 + 電台卡）
   let _drawerOpen = false;
   let _expandedH = 0;
 
@@ -3424,7 +3428,7 @@ if (navigator.geolocation) {
         _navState = 'completed';
         window._cameraFollow = false;
         document.body.classList.remove('navigating');
-        _setPanelState(224, true);
+        _setPanelState(232, true);
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
