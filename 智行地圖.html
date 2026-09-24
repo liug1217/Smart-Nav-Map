@@ -1685,7 +1685,7 @@ if (navigator.geolocation) {
     currentStepIndex = 0;
     offRouteCount = 0;
     Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
-    resetSpeedCameraVoiceState();
+    clearSpeedCameraVoiceState();
     document.body.classList.remove('navigating');
     _setPanelState(160, true);
     if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
@@ -1931,7 +1931,9 @@ if (navigator.geolocation) {
     return state;
   }
 
-  function resetSpeedCameraVoiceState() {
+  // 注意：不能跟下方 window.resetSpeedCameraVoiceState 同名。這段在頁面最外層，同名函式會被 window 版本蓋掉，
+  // 變成自己呼叫自己（無限遞迴），導致開始導航時丟出例外、跳出「路線規劃失敗」。
+  function clearSpeedCameraVoiceState() {
     speedCameraVoiceState.clear();
   }
 
@@ -3526,7 +3528,7 @@ if (navigator.geolocation) {
       currentStepIndex = 0;
       offRouteCount = 0;
       Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
-      if (!fromPosition) resetSpeedCameraVoiceState();
+      if (!fromPosition) clearSpeedCameraVoiceState();
       isNavigating = true;
       _navState = 'navigating';
       if (!fromPosition) window._navStats = {t0:Date.now(), coins0:+(localStorage.getItem('sn_coins')||0), km0:totalDistance, turns:0, cleanCams:0};
@@ -3744,7 +3746,7 @@ if (navigator.geolocation) {
   };
   // 重置所有測速照相的播報狀態,方便重複測試同一支
   window.resetSpeedCameraVoiceState = function(){
-    resetSpeedCameraVoiceState();
+    clearSpeedCameraVoiceState();
     console.log('已重置所有測速照相播報狀態');
   };
   // 直接測試語音功能本身有沒有作用(不牽涉座標距離判斷)

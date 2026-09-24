@@ -23,7 +23,7 @@ function createHarness(features) {
     console,
   };
   vm.createContext(context);
-  vm.runInContext(`${stateCode}\n${checkCode}\nglobalThis.run = checkSpeedCameraVoice; globalThis.reset = resetSpeedCameraVoiceState;`, context);
+  vm.runInContext(`${stateCode}\n${checkCode}\nglobalThis.run = checkSpeedCameraVoice; globalThis.reset = clearSpeedCameraVoiceState;`, context);
   return { events, run: context.run, reset: context.reset };
 }
 
