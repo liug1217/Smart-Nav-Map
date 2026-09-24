@@ -3714,11 +3714,33 @@ if (navigator.geolocation) {
   }
 
   // 螢幕高度算出來的鏡頭偏移,讓定位點顯示在畫面中下方、Rectangle 4正上方,而不是螢幕正中央
+  // 車子跟著底部卡片兩段(收合 / 展開)一起往上下移動:
+  // 每一幀讀取卡片頂端與道路名稱膠囊「目前實際」的位置,車子永遠停在它們上方固定距離。
+  // 卡片的 CSS 動畫與手指拖曳都是逐幀變化,鏡頭又是每幀跟隨,所以車子會很順地一起移動。
+  const CAR_GAP_ABOVE_PANEL = 98; // 收合時道路名稱頂端距底部 142px + 98 = 240,和原本的位置一樣
   function getUserCameraPadding(){
     const H = window.innerHeight || 800;
-    const OFFSET_FROM_BOTTOM = 240; // rect4頂端距螢幕底部約209px,這裡抓240px留一點間距
-    const T = Math.max(0, H - 2 * OFFSET_FROM_BOTTOM);
-    return { top: T, bottom: 0, left: 0, right: 0 };
+    const W = window.innerWidth || 400;
+    let panelTop = H - 142; // 預設:收合狀態
+    let left = 0;
+    const r1 = document.getElementById('rect1');
+    const r4 = document.querySelector('.rect4');
+    if (r1) {
+      const b1 = r1.getBoundingClientRect();
+      if (b1.right < W * 0.75) {
+        // 手機橫式:卡片在左欄,不擋住中間 → 車子改放在卡片右邊的空間正中央,高度維持原本
+        left = b1.right + 8;
+      } else {
+        panelTop = b1.top;
+        if (r4) panelTop = Math.min(panelTop, r4.getBoundingClientRect().top);
+      }
+    }
+    const offset = left ? H / 2 : (H - panelTop) + CAR_GAP_ABOVE_PANEL; // 車子距離螢幕底部(橫式維持垂直置中)
+    // 車子在畫面上的 y = H - offset;用上/下 padding 把地圖中心移到那裡
+    const y = Math.max(60, H - offset); // 卡片拉很高時,車子最高停在頂端下方 60px
+    return y >= H / 2
+      ? { top: 2 * y - H, bottom: 0, left, right: 0 }
+      : { top: 0, bottom: H - 2 * y, left, right: 0 };
   }
 
   // ===== 🧭 手機羅盤方向偵測,讓地圖跟著手機旋轉(360度)而不是固定北方朝上 =====
