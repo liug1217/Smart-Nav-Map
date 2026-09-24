@@ -64,7 +64,7 @@ html,body{
 /* rect1 flex 內部排版 */
 .rect1Body{
   box-sizing:border-box;
-  height:160px;
+  height:224px;
   padding:18px 0 6px;
   display:flex;
   flex-direction:column;
@@ -85,8 +85,86 @@ html,body{
   justify-content:center;
 }
 #radioCard{
-  margin:19px 21px 0;
+  margin:8px 21px 0;
   flex-shrink:0;
+}
+
+/* ===== 🎙 對講列(底部卡片:導航資訊與電台之間) ===== */
+.pttRow{
+  margin:19px 21px 0;
+  height:56px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  transition:opacity 0.25s ease;
+}
+/* 左右滑動切換模式的圓形按鈕區:一次只露出一顆 */
+.pttModes{
+  width:48px;
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  touch-action:none;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+.pttModeViewport{ width:48px; height:48px; overflow:hidden; border-radius:50%; }
+.pttModeTrack{ display:flex; width:96px; transition:transform 0.25s cubic-bezier(.32,.72,0,1); }
+.pttTalkBtn{
+  width:48px; height:48px; flex-shrink:0;
+  border:none; border-radius:50%; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  -webkit-user-select:none; user-select:none;
+  touch-action:none;
+  transition:background 0.15s, box-shadow 0.2s, opacity 0.2s;
+}
+.pttTalkBtn.pttMic{ background:#FF8A00; box-shadow:0 3px 10px rgba(255,138,0,0.45); }
+.pttTalkBtn.pttPhone{ background:#14B8A6; box-shadow:0 3px 10px rgba(20,184,166,0.45); }
+.pttTalkBtn[data-active]{ background:#FF3B30; animation:pttPulse 1.1s ease-out infinite; }
+@keyframes pttPulse{
+  0%{ box-shadow:0 0 0 0 rgba(255,59,48,0.55); }
+  100%{ box-shadow:0 0 0 12px rgba(255,59,48,0); }
+}
+.pttRow.pttOff .pttTalkBtn{ opacity:0.45; box-shadow:none; }
+.pttDots{ display:flex; gap:4px; }
+.pttDots span{ width:5px; height:5px; border-radius:50%; background:rgba(60,60,67,0.25); transition:background 0.2s; }
+.pttDots span.on{ background:#3C3C43; }
+.pttInfo{
+  flex:1; min-width:0;
+  background:none; border:none; padding:0; text-align:left; cursor:pointer;
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+.pttInfoTitle{ font-size:15px; font-weight:600; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pttRow.pttOff .pttInfoTitle{ color:#2F80FF; }
+.pttInfoSub{ font-size:11px; color:#6E6E73; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pttMembers{ display:flex; align-items:center; flex-shrink:0; }
+.pttAvatar{
+  width:30px; height:30px; border-radius:50%;
+  border:2px solid #fff; margin-left:-8px;
+  background:#8E8E93 center/cover no-repeat;
+  color:#fff; font-size:13px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 1px 3px rgba(0,0,0,0.2);
+  flex-shrink:0;
+}
+.pttAvatar:first-child{ margin-left:0; }
+.pttAvatar.pttMore{ background:#E5E5EA; color:#3C3C43; font-size:11px; }
+
+/* 歡迎/個人資料視窗 */
+.pttProfileAvatar{
+  width:76px; height:76px; border-radius:50%; margin:0 auto 6px;
+  background:#3a3a3c center/cover no-repeat;
+  display:flex; align-items:center; justify-content:center;
+  font-size:30px; font-weight:700; color:#fff; cursor:pointer;
+  border:2px solid rgba(255,255,255,0.15);
 }
 /* rect1 左下角 App 圖示 + 名稱:固定在「退出」下方,
    收合(83px)時剛好在左下角,展開時位於導航列與電台卡之間,不會互相重疊 */
@@ -1390,8 +1468,6 @@ html, body {
 <div class="mapCtrlGroup">
   <!-- 即時路況 -->
   <button class="mapCtrlBtn" id="trafficBtn" title="即時路況" style="font-size:17px;">🚦</button>
-  <!-- 對講 PTT -->
-  <button class="mapCtrlBtn" id="pttBtn" title="對講 (PTT)" style="font-size:18px;">🎙</button>
   <!-- 指南針 -->
   <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
@@ -1435,6 +1511,23 @@ html, body {
           <div class="arrivalText" id="arrivalText">00:00到達</div>
         </div>
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
+      </div>
+      <!-- 🎙 對講列:左右滑動切換「按住說話 / 點一下通話」,右邊是房內成員頭像 -->
+      <div class="pttRow pttOff" id="pttRow">
+        <div class="pttModes" id="pttModes">
+          <div class="pttModeViewport">
+            <div class="pttModeTrack" id="pttModeTrack">
+              <button type="button" class="pttTalkBtn pttMic" aria-label="按住說話"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21.5"/><line x1="8.5" y1="21.5" x2="15.5" y2="21.5"/></svg></button>
+              <button type="button" class="pttTalkBtn pttPhone" aria-label="點一下開始通話"><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.25 1l-2.22 2.2z"/></svg></button>
+            </div>
+          </div>
+          <div class="pttDots"><span class="on"></span><span></span></div>
+        </div>
+        <button type="button" class="pttInfo" id="pttInfo">
+          <div class="pttInfoTitle" id="pttInfoTitle">啟用麥克風</div>
+          <div class="pttInfoSub" id="pttInfoSub">開啟後可以和朋友即時對講</div>
+        </button>
+        <div class="pttMembers" id="pttMembers"></div>
       </div>
       <div class="navInfoCard" id="radioCard">
       <button class="radioStartBtn" id="radioStartBtn">
@@ -1517,7 +1610,7 @@ html, body {
     </div>
   </div><!-- /rect1 -->
 
-<script src="audio-manager.js"></script>
+<script src="audio-manager.js?v=ptt2"></script>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
@@ -1687,7 +1780,7 @@ if (navigator.geolocation) {
     Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
     clearSpeedCameraVoiceState();
     document.body.classList.remove('navigating');
-    _setPanelState(160, true);
+    _setPanelState(224, true);
     if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
     if (rect8) rect8.style.display = 'none';
     if (searchBarWrapEl) searchBarWrapEl.style.display = '';
@@ -2080,51 +2173,136 @@ if (navigator.geolocation) {
     _initVolSlider('amRadioVolSlider', 'amRadioVolLabel', function(){ return AM.vol.radio; }, function(v){ AM.setRadioVol(v); });
   })();
 
-  // ===== 🎙 PTT 對講按鈕 =====
+  // ===== 🎙 對講列（底部卡片）=====
+  // 左右滑動切換兩種模式：
+  //   0 = 對講（麥克風，橘色）：按住說話，放開就關
+  //   1 = 通話（電話，青綠色）：點一下開麥克風，要自己再點一下才關
+  // 還沒啟用麥克風時，點任何地方都是「啟用麥克風」→ 建立房間並顯示代碼
   (function _initPTT() {
-    var btn = document.getElementById('pttBtn');
-    if (!btn) return;
     var AM = window.AudioManager;
-    if (!AM) return;
+    var row = document.getElementById('pttRow');
+    if (!AM || !row) return;
+    var modesEl = document.getElementById('pttModes');
+    var track = document.getElementById('pttModeTrack');
+    var dots = row.querySelectorAll('.pttDots span');
+    var infoBtn = document.getElementById('pttInfo');
+    var titleEl = document.getElementById('pttInfoTitle');
+    var subEl = document.getElementById('pttInfoSub');
+    var membersEl = document.getElementById('pttMembers');
 
-    var _pressTimer = null;
-    var _longPressActive = false;
-    var LONG_PRESS_MS = 500;
+    var mode = 0;
+    try { mode = localStorage.getItem('ptt_mode') === '1' ? 1 : 0; } catch (e) {}
+    var talking = false;      // 目前麥克風是否開著
+    var members = [];
 
-    function onPressStart(e) {
-      e.preventDefault();
-      _longPressActive = false;
-      _pressTimer = setTimeout(function () {
-        _longPressActive = true;
-        AM.pttStart();
-      }, LONG_PRESS_MS);
+    function setMode(m, animated) {
+      if (m !== mode && talking) stopTalk(); // 換模式時先把開著的麥克風關掉
+      mode = m;
+      try { localStorage.setItem('ptt_mode', String(m)); } catch (e) {}
+      track.style.transition = animated === false ? 'none' : '';
+      track.style.transform = 'translateX(' + (-48 * m) + 'px)';
+      for (var i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i === m);
+      render();
     }
 
-    function onPressEnd(e) {
-      e.preventDefault();
-      clearTimeout(_pressTimer);
-      _pressTimer = null;
-      if (_longPressActive) {
-        AM.pttStop();
-        _longPressActive = false;
+    function startTalk() { if (!talking) { talking = true; AM.pttStart(); render(); } }
+    function stopTalk()  { if (talking)  { talking = false; AM.pttStop();  render(); } }
+
+    function initial(name) { return String(name || '?').trim().charAt(0).toUpperCase() || '?'; }
+    function avatarEl(p, onClick) {
+      var d = document.createElement('div');
+      d.className = 'pttAvatar';
+      if (p.avatar) d.style.backgroundImage = 'url("' + p.avatar + '")';
+      else d.textContent = initial(p.name);
+      d.title = p.name || '';
+      if (onClick) { d.style.cursor = 'pointer'; d.addEventListener('click', onClick); }
+      return d;
+    }
+
+    function render() {
+      var inRoom = AM.inRoom();
+      row.classList.toggle('pttOff', !inRoom);
+      if (!inRoom) {
+        titleEl.textContent = '啟用麥克風';
+        subEl.textContent = '開啟後可以和朋友即時對講';
+      } else if (!members.length) {
+        titleEl.textContent = '代碼 ' + AM.getRoomCode();
+        subEl.textContent = '等待朋友加入 · 點這裡邀請或加入';
       } else {
-        // 短按 → 開啟對講室
-        if (typeof window._openPttRoom === 'function') window._openPttRoom();
+        titleEl.textContent = talking ? '說話中…' : (members.length + 1) + ' 人對講中';
+        subEl.textContent = mode === 0 ? '按住左邊按鈕說話 · 左右滑動切換' : (talking ? '再點一下結束通話' : '點一下開始通話 · 左右滑動切換');
+      }
+      // 頭像：自己排第一個（點自己可改頭像/名字），再來是其他成員，最多顯示 4 個
+      membersEl.innerHTML = '';
+      if (inRoom && members.length) {
+        membersEl.appendChild(avatarEl(AM.getProfile(), function () { window._openPttProfile(false); }));
+        members.slice(0, 3).forEach(function (m) { membersEl.appendChild(avatarEl(m)); });
+        if (members.length > 3) {
+          var more = document.createElement('div');
+          more.className = 'pttAvatar pttMore';
+          more.textContent = '+' + (members.length - 3);
+          membersEl.appendChild(more);
+        }
       }
     }
 
-    function onPressCancel(e) {
-      clearTimeout(_pressTimer);
-      _pressTimer = null;
-      if (_longPressActive) { AM.pttStop(); _longPressActive = false; }
+    // 房間成員變動（對講室模態也會用到）
+    window._pttOnMembers = function (list) {
+      members = list || [];
+      render();
+      if (typeof window._pttUpdatePeerList === 'function') window._pttUpdatePeerList(members);
+    };
+
+    function enable() {
+      if (typeof window._openPttRoom === 'function') window._openPttRoom();
     }
 
-    btn.addEventListener('mousedown',  onPressStart);
-    btn.addEventListener('touchstart', onPressStart, { passive: false });
-    btn.addEventListener('mouseup',    onPressEnd);
-    btn.addEventListener('touchend',   onPressEnd);
-    btn.addEventListener('mouseleave', onPressCancel);
-    btn.addEventListener('touchcancel',onPressCancel);
+    // ── 圓形按鈕：按住說話 / 點一下通話 / 左右滑動換模式 ──
+    var downX = 0, downY = 0, swiping = false, pressTimer = null, pointerId = null;
+    var SWIPE_PX = 12, TALK_DELAY_MS = 120; // 按下 120ms 內沒滑動才開始說話，避免滑動時誤開麥克風
+
+    modesEl.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      pointerId = e.pointerId;
+      try { modesEl.setPointerCapture(e.pointerId); } catch (err) {}
+      downX = e.clientX; downY = e.clientY; swiping = false;
+      if (mode === 0 && AM.inRoom()) {
+        pressTimer = setTimeout(function () { pressTimer = null; if (!swiping) startTalk(); }, TALK_DELAY_MS);
+      }
+    });
+    modesEl.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== pointerId || swiping) return;
+      var dx = e.clientX - downX;
+      if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(e.clientY - downY)) {
+        swiping = true;
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        if (mode === 0) stopTalk();
+      }
+    });
+    function onUp(e) {
+      if (e.pointerId !== pointerId) return;
+      pointerId = null;
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      var dx = e.clientX - downX;
+      if (swiping) {
+        if (dx < 0 && mode === 0) setMode(1);
+        else if (dx > 0 && mode === 1) setMode(0);
+        return;
+      }
+      if (e.type === 'pointercancel') { if (mode === 0) stopTalk(); return; }
+      if (!AM.inRoom()) { enable(); return; }
+      if (mode === 0) stopTalk();                 // 按住說話：放開就關
+      else if (talking) stopTalk(); else startTalk(); // 通話：點一下開、再點一下關
+    }
+    modesEl.addEventListener('pointerup', onUp);
+    modesEl.addEventListener('pointercancel', onUp);
+    modesEl.addEventListener('contextmenu', function (e) { e.preventDefault(); }); // 手機長按不要跳選單
+
+    // 點中間文字：沒啟用 → 啟用；已啟用 → 打開對講室（代碼/加入）
+    infoBtn.addEventListener('click', enable);
+    membersEl.addEventListener('click', function (e) { if (e.target === membersEl) enable(); });
+
+    setMode(mode, false);
   })();
 
   // ===== 🎙 對講室模態邏輯 =====
@@ -2144,9 +2322,11 @@ if (navigator.geolocation) {
       if (!peers || peers.length === 0) {
         el.textContent = '尚未有人連線';
       } else {
-        el.textContent = '已連線：' + peers.length + ' 人';
+        el.textContent = '已連線：' + peers.map(function (p) { return p.name; }).join('、');
       }
     }
+    window._pttUpdatePeerList = updatePeerList;
+    function onMembers(list) { if (typeof window._pttOnMembers === 'function') window._pttOnMembers(list); else updatePeerList(list); }
 
     function stopScan() {
       clearInterval(_scanInterval);
@@ -2170,26 +2350,37 @@ if (navigator.geolocation) {
         if (canvas && typeof QRCode !== 'undefined') {
           QRCode.toCanvas(canvas, code, { width: 160, margin: 1 }, function () {});
         }
-      }, updatePeerList);
+        onMembers(AM.getMembers());
+      }, onMembers);
     };
 
+    function closeRoom() { modal.style.display = 'none'; stopScan(); }
+    function join(code) {
+      AM.joinRoom(code, onMembers, function () {
+        closeRoom();
+        window._openPttProfile(true); // 加入成功：跳出歡迎視窗，可設定頭像/名字
+      });
+    }
+
     // 關閉按鈕
-    document.getElementById('pttRoomClose').addEventListener('click', function () {
-      modal.style.display = 'none';
-      stopScan();
-    });
+    document.getElementById('pttRoomClose').addEventListener('click', closeRoom);
 
     // 點擊背景關閉
     modal.addEventListener('click', function (e) {
-      if (e.target === modal) { modal.style.display = 'none'; stopScan(); }
+      if (e.target === modal) closeRoom();
     });
 
     // 加入按鈕
+    var joinInput = document.getElementById('pttJoinInput');
+    joinInput.addEventListener('input', function () {
+      var v = joinInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      if (v !== joinInput.value) joinInput.value = v;
+    });
     document.getElementById('pttJoinBtn').addEventListener('click', function () {
-      var code = (document.getElementById('pttJoinInput').value || '').trim();
+      var code = (joinInput.value || '').trim();
       if (!code) return;
-      AM.joinRoom(code, updatePeerList);
-      document.getElementById('pttJoinInput').value = '';
+      join(code);
+      joinInput.value = '';
     });
 
     // 掃描 QR 碼
@@ -2212,12 +2403,58 @@ if (navigator.geolocation) {
             var result = jsQR(imgData.data, imgData.width, imgData.height);
             if (result && result.data) {
               stopScan();
-              document.getElementById('pttJoinInput').value = result.data;
-              AM.joinRoom(result.data, updatePeerList);
+              join(result.data);
             }
           }, 250);
         })
         .catch(function (err) { alert('無法存取相機：' + err.message); });
+    });
+
+    // ── 歡迎 / 個人資料視窗（頭像 + 名字）──
+    var wModal = document.getElementById('pttWelcome');
+    var wAvatar = document.getElementById('pttProfileAvatar');
+    var wFile = document.getElementById('pttAvatarFile');
+    var wName = document.getElementById('pttNameInput');
+    var pendingAvatar = null;
+    function showAvatar(url, name) {
+      wAvatar.style.backgroundImage = url ? 'url("' + url + '")' : '';
+      wAvatar.textContent = url ? '' : (String(name || '?').trim().charAt(0).toUpperCase() || '?');
+    }
+    window._openPttProfile = function (justJoined) {
+      var p = AM.getProfile();
+      pendingAvatar = null;
+      document.getElementById('pttWelcomeTitle').textContent = justJoined ? '🎉 已加入對講' : '我的頭像與名字';
+      document.getElementById('pttWelcomeText').style.display = justJoined ? '' : 'none';
+      wName.value = p.name;
+      showAvatar(p.avatar, p.name);
+      wModal.style.display = 'flex';
+    };
+    wAvatar.addEventListener('click', function () { wFile.click(); });
+    wName.addEventListener('input', function () { if (!pendingAvatar && !AM.getProfile().avatar) showAvatar('', wName.value); });
+    // 選照片 → 中間裁成正方形、縮成 96×96 JPEG（約數 KB），才方便傳給其他成員
+    wFile.addEventListener('change', function () {
+      var f = wFile.files && wFile.files[0];
+      wFile.value = '';
+      if (!f) return;
+      var url = URL.createObjectURL(f);
+      var img = new Image();
+      img.onload = function () {
+        var S = 96, c = document.createElement('canvas');
+        c.width = c.height = S;
+        var side = Math.min(img.naturalWidth, img.naturalHeight);
+        c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+        pendingAvatar = c.toDataURL('image/jpeg', 0.8);
+        showAvatar(pendingAvatar);
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); alert('無法讀取這張照片'); };
+      img.src = url;
+    });
+    document.getElementById('pttWelcomeOk').addEventListener('click', function () {
+      var upd = { name: (wName.value || '').trim() || AM.getProfile().name };
+      if (pendingAvatar) upd.avatar = pendingAvatar;
+      AM.setProfile(upd);
+      wModal.style.display = 'none';
     });
   });
 
@@ -2229,15 +2466,15 @@ if (navigator.geolocation) {
     var rd = document.getElementById('radioCard');
     var isNav = document.body.classList.contains('navigating');
     var l, bot, mcBot, r4Bot, showRadio;
-    var COMPACT = 83, NORMAL = 160;
+    var COMPACT = 83, NORMAL = 224; // 224 = 原本 160 + 對講列 64
     var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
     if (h >= NORMAL) {
-      l = 8; bot = 8; mcBot = 185; r4Bot = 178; showRadio = true;
+      l = 8; bot = 8; mcBot = 249; r4Bot = 242; showRadio = true;
     } else if (h <= COMPACT) {
       l = 16; bot = 16; mcBot = 116; r4Bot = 109; showRadio = false;
     } else {
       var t = (h - COMPACT) / (NORMAL - COMPACT);
-      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 69; r4Bot = 109 + t * 69; showRadio = t > 0.7;
+      l = 16 - t * 8; bot = 16 - t * 8; mcBot = 116 + t * 133; r4Bot = 109 + t * 133; showRadio = t > 0.7;
     }
     var ease = 'cubic-bezier(.32,.72,0,1)';
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
@@ -2247,6 +2484,8 @@ if (navigator.geolocation) {
     if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
     if (rd) { rd.style.opacity = showRadio ? '1' : '0'; rd.style.pointerEvents = showRadio ? 'auto' : 'none'; }
+    var pr = document.getElementById('pttRow');
+    if (pr) { pr.style.opacity = showRadio ? '1' : '0'; pr.style.pointerEvents = showRadio ? 'auto' : 'none'; }
     var navRow = r1 ? r1.querySelector('.rect1NavRow') : null;
     if (navRow) { navRow.style.transition = trPad; navRow.style.padding = '0 '+(31-l)+'px'; }
   }
@@ -2256,7 +2495,7 @@ if (navigator.geolocation) {
   const _rect3Handle = document.getElementById('rect3Handle');
   const _voiceDrawer = document.getElementById('voiceDrawer');
   const RECT1_COMPACT = 83;    // 導航收合狀態（無電台卡）
-  const RECT1_COLLAPSED = 160; // 正常展開狀態（有電台卡）
+  const RECT1_COLLAPSED = 224; // 正常展開狀態（有對講列 + 電台卡）
   let _drawerOpen = false;
   let _expandedH = 0;
 
@@ -2299,7 +2538,7 @@ if (navigator.geolocation) {
     function _onDragStart(e) {
       _tsY = e.touches[0].clientY;
       _moved = false;
-      _tgtIsBtn = !!e.target.closest('button, input, select, a, label');
+      _tgtIsBtn = !!e.target.closest('button, input, select, a, label, .pttModes, .pttMembers');
       if (_tgtIsBtn) return;
       _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || RECT1_COMPACT);
       if (!_drawerOpen) {
@@ -3185,7 +3424,7 @@ if (navigator.geolocation) {
         _navState = 'completed';
         window._cameraFollow = false;
         document.body.classList.remove('navigating');
-        _setPanelState(160, true);
+        _setPanelState(224, true);
         if (rect8) rect8.style.display = 'none';
         if (speedPillNum) speedPillNum.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
@@ -6464,7 +6703,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <!-- PeerJS WebRTC -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <!-- QRCode.js -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <!-- jsQR (QR 掃描) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
@@ -6472,20 +6711,20 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <div id="pttRoomModal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,0.72);justify-content:center;align-items:flex-end;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);">
   <div style="background:#1c1c1e;border-radius:20px 20px 12px 12px;padding:20px 20px 24px;width:min(92vw,400px);color:#fff;font-family:-apple-system,sans-serif;max-height:92vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <span style="font-size:17px;font-weight:600;">🎙 對講室</span>
+      <span style="font-size:17px;font-weight:600;">🎙 對講</span>
       <button id="pttRoomClose" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
     </div>
     <!-- 我的代碼 + QR -->
     <div style="text-align:center;background:#2c2c2e;border-radius:14px;padding:16px;margin-bottom:12px;">
-      <div style="font-size:11px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">我的代碼</div>
-      <div id="pttMyCode" style="font-size:22px;font-weight:700;letter-spacing:5px;font-family:monospace;color:#fff;word-break:break-all;">初始化中…</div>
+      <div style="font-size:11px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">我的代碼（給朋友輸入或掃描）</div>
+      <div id="pttMyCode" style="font-size:30px;font-weight:700;letter-spacing:8px;font-family:ui-monospace,Menlo,monospace;color:#fff;word-break:break-all;">建立中…</div>
       <canvas id="pttQrCanvas" style="margin-top:12px;border-radius:8px;display:block;margin-left:auto;margin-right:auto;max-width:160px;"></canvas>
     </div>
     <!-- 已連線人數 -->
     <div id="pttPeerList" style="min-height:24px;margin-bottom:12px;font-size:13px;color:#888;text-align:center;">尚未有人連線</div>
     <!-- 輸入代碼加入 -->
     <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <input id="pttJoinInput" placeholder="輸入對方代碼" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid #3a3a3c;background:#2c2c2e;color:#fff;font-size:14px;outline:none;" />
+      <input id="pttJoinInput" placeholder="輸入朋友的 6 碼代碼" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:2px;"flex:1;padding:10px 12px;border-radius:10px;border:1px solid #3a3a3c;background:#2c2c2e;color:#fff;font-size:14px;outline:none;" />
       <button id="pttJoinBtn" style="padding:10px 16px;border-radius:10px;background:#007AFF;color:#fff;border:none;font-size:14px;cursor:pointer;font-weight:500;white-space:nowrap;">加入</button>
     </div>
     <!-- 掃描 QR 碼 -->
@@ -6494,6 +6733,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       <video id="pttScanVideo" style="width:100%;display:block;background:#000;" autoplay muted playsinline></video>
       <div style="position:absolute;bottom:6px;right:0;left:0;text-align:center;font-size:12px;color:#eee;text-shadow:0 1px 3px #000;">對準 QR 碼</div>
     </div>
+  </div>
+</div>
+
+<!-- 🎙 加入對講後的歡迎/個人資料視窗(頭像 + 名字) -->
+<div id="pttWelcome" style="display:none;position:fixed;inset:0;z-index:9991;background:rgba(0,0,0,0.72);justify-content:center;align-items:center;padding:16px;">
+  <div style="background:#1c1c1e;border-radius:20px;padding:22px 20px 20px;width:min(88vw,340px);color:#fff;font-family:-apple-system,sans-serif;text-align:center;">
+    <div id="pttWelcomeTitle" style="font-size:18px;font-weight:700;margin-bottom:6px;">🎉 已加入對講</div>
+    <div id="pttWelcomeText" style="font-size:13px;color:#aaa;line-height:1.5;margin-bottom:16px;">你剛加入這個地圖的對講，可以放上頭像、改個名字，讓大家認得你。</div>
+    <div class="pttProfileAvatar" id="pttProfileAvatar"></div>
+    <div style="font-size:11px;color:#888;margin-bottom:14px;">點頭像換照片</div>
+    <input type="file" id="pttAvatarFile" accept="image/*" style="display:none;">
+    <input id="pttNameInput" maxlength="12" placeholder="你的名字" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:10px;border:1px solid #3a3a3c;background:#2c2c2e;color:#fff;font-size:15px;outline:none;text-align:center;margin-bottom:14px;">
+    <button id="pttWelcomeOk" style="width:100%;padding:12px;border-radius:12px;background:#007AFF;color:#fff;border:none;font-size:16px;font-weight:600;cursor:pointer;">我知道了</button>
   </div>
 </div>
 

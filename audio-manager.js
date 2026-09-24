@@ -33,6 +33,8 @@
     this._peer = null;
     this._roomCode = null;
     this._peerCalls = {};
+    this._peerConns = {};
+    this._members = {};
     this._remoteAudios = {};
     this._micStream = null;
   }
@@ -118,6 +120,42 @@
   };
 
   // ── 對講室 (PeerJS WebRTC) ────────────────────────────────────────────────
+  // 房間代碼：6 碼英文大寫+數字（去掉容易看錯的 O/0/I/1）。PeerJS ID = 前綴 + 代碼，避免和其他網站撞號。
+  // 多人互通：新加入的人先連房主，房主回傳目前成員名單，新成員再自己連其他成員（舊成員只負責接聽，不會重複連線）。
+  // 每條連線同時有「語音 call」與「資料 connection」，資料連線用來交換名字/頭像。
+  var PTT_PREFIX = 'zxmap-ptt-';
+  var PTT_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function _genCode() {
+    var c = '';
+    for (var i = 0; i < 6; i++) c += PTT_CHARS[Math.floor(Math.random() * PTT_CHARS.length)];
+    return c;
+  }
+  function _normCode(code) {
+    var s = String(code || '').trim();
+    if (s.indexOf(PTT_PREFIX) === 0) s = s.slice(PTT_PREFIX.length); // QR 碼或貼上完整 ID 也可以
+    return s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+  function _codeOf(peerId) { return String(peerId || '').replace(PTT_PREFIX, ''); }
+
+  // 自己的名字/頭像（存在 localStorage，頭像是縮小過的 dataURL）
+  AudioManager.prototype.getProfile = function () {
+    var p = null;
+    try { p = JSON.parse(localStorage.getItem('ptt_profile') || 'null'); } catch (e) {}
+    if (!p || !p.name) {
+      p = { name: '駕駛' + Math.floor(100 + Math.random() * 900), avatar: '' };
+      try { localStorage.setItem('ptt_profile', JSON.stringify(p)); } catch (e) {}
+    }
+    return p;
+  };
+  AudioManager.prototype.setProfile = function (p) {
+    var cur = this.getProfile();
+    var next = { name: String(p.name || cur.name).slice(0, 12), avatar: p.avatar != null ? p.avatar : cur.avatar };
+    try { localStorage.setItem('ptt_profile', JSON.stringify(next)); } catch (e) {}
+    this._broadcast({ t: 'profile', p: next });
+    this._emitMembers();
+    return next;
+  };
+
   AudioManager.prototype._getMic = function (cb) {
     if (this._micStream) { cb(null, this._micStream); return; }
     var self = this;
@@ -130,47 +168,67 @@
       .catch(function (err) { cb(err); });
   };
 
+  AudioManager.prototype.inRoom = function () { return !!(this._peer && this._roomCode); };
+  AudioManager.prototype.getRoomCode = function () { return this._roomCode; };
+
+  // onReady(code)：房間建立完成；onPeerChange(members)：成員變動，members = [{ id, code, name, avatar }]
   AudioManager.prototype.initRoom = function (onReady, onPeerChange) {
+    if (onPeerChange) this._onMembers = onPeerChange;
     if (this._peer) {
       if (this._roomCode) {
-        // 連線已完成，直接回傳
         if (onReady) onReady(this._roomCode);
-      } else {
-        // Peer 建立中，等 'open' 觸發後再回傳（避免回傳 null）
-        var _cb = function (id) { if (onReady) onReady(id); };
-        this._peer.once('open', _cb);
+      } else if (onReady) {
+        this._pendingReady = (this._pendingReady || []).concat(onReady);
       }
       return;
     }
     var self = this;
+    this._pendingReady = onReady ? [onReady] : [];
     this._getMic(function (err) {
-      if (err) { alert('無法取得麥克風：' + err.message); return; }
-      if (typeof Peer === 'undefined') { alert('PeerJS 尚未載入，請稍後再試。'); return; }
-      var peer = new Peer({ debug: 0 });
-      self._peer = peer;
-      self._peerCalls = {};
-      self._remoteAudios = {};
-      peer.on('open', function (id) {
-        self._roomCode = id;
-        if (onReady) onReady(id);
-      });
-      peer.on('call', function (call) {
-        call.answer(self._micStream);
-        self._setupCall(call, onPeerChange);
-      });
-      peer.on('error', function (err) {
-        console.warn('[PTT Room] peer error:', err.type, err);
-        // 連線失敗時重置 _peer，讓下次 initRoom 能重新建立
-        if (!self._roomCode) {
-          try { peer.destroy(); } catch (e) {}
-          self._peer = null;
-          alert('對講室連線失敗（' + err.type + '），請稍後再試。');
-        }
-      });
+      if (err) { self._pendingReady = []; alert('無法取得麥克風：' + err.message); return; }
+      if (typeof Peer === 'undefined') { self._pendingReady = []; alert('PeerJS 尚未載入，請稍後再試。'); return; }
+      self._createPeer(0);
     });
   };
 
-  AudioManager.prototype._setupCall = function (call, onPeerChange) {
+  AudioManager.prototype._createPeer = function (attempt) {
+    var self = this;
+    var peer = new Peer(PTT_PREFIX + _genCode(), { debug: 0 });
+    self._peer = peer;
+    peer.on('open', function (id) {
+      self._roomCode = _codeOf(id);
+      var cbs = self._pendingReady || []; self._pendingReady = [];
+      cbs.forEach(function (cb) { cb(self._roomCode); });
+      self._emitMembers();
+    });
+    peer.on('call', function (call) {
+      call.answer(self._micStream);
+      self._setupCall(call);
+    });
+    peer.on('connection', function (conn) { self._setupConn(conn, false); });
+    peer.on('error', function (err) {
+      console.warn('[PTT Room] peer error:', err.type, err);
+      if (err.type === 'unavailable-id' && attempt < 3) { // 代碼剛好被別人用了，換一組
+        try { peer.destroy(); } catch (e) {}
+        self._createPeer(attempt + 1);
+        return;
+      }
+      if (err.type === 'peer-unavailable') {
+        var m = /zxmap-ptt-([A-Z0-9]+)/.exec(err.message || '');
+        if (m) self._dropPeer(PTT_PREFIX + m[1]);
+        alert('找不到代碼' + (m ? ' ' + m[1] + ' ' : '') + '的房間，請確認代碼是否正確。');
+        return;
+      }
+      if (!self._roomCode) {
+        try { peer.destroy(); } catch (e) {}
+        self._peer = null;
+        self._pendingReady = [];
+        alert('對講室連線失敗（' + err.type + '），請稍後再試。');
+      }
+    });
+  };
+
+  AudioManager.prototype._setupCall = function (call) {
     var self = this;
     var peerId = call.peer;
     self._peerCalls[peerId] = call;
@@ -179,58 +237,124 @@
       if (!audio) {
         audio = document.createElement('audio');
         audio.autoplay = true;
+        audio.setAttribute('playsinline', '');
         document.body.appendChild(audio);
         self._remoteAudios[peerId] = audio;
       }
       audio.srcObject = remoteStream;
       audio.play().catch(function () {});
-      if (onPeerChange) onPeerChange(Object.keys(self._peerCalls));
+      self._emitMembers();
     });
-    call.on('close', function () {
-      delete self._peerCalls[peerId];
-      var audio = self._remoteAudios[peerId];
-      if (audio) { audio.srcObject = null; try { document.body.removeChild(audio); } catch (e) {} delete self._remoteAudios[peerId]; }
-      if (onPeerChange) onPeerChange(Object.keys(self._peerCalls));
-    });
+    call.on('close', function () { self._dropPeer(peerId); });
     call.on('error', function (err) { console.warn('[PTT Room] call error:', err); });
   };
 
-  AudioManager.prototype.joinRoom = function (targetId, onPeerChange) {
-    if (!this._peer) { alert('請先開啟對講室'); return; }
+  // 資料連線：交換名字/頭像與成員名單。initiated = 這條連線是不是我主動連的
+  AudioManager.prototype._setupConn = function (conn, initiated) {
+    var self = this;
+    var peerId = conn.peer;
+    self._peerConns[peerId] = conn;
+    conn.on('open', function () {
+      conn.send({ t: 'hi', p: self.getProfile(), members: Object.keys(self._peerConns).filter(function (id) { return id !== peerId; }) });
+      self._emitMembers();
+    });
+    conn.on('data', function (msg) {
+      if (!msg || typeof msg !== 'object') return;
+      if ((msg.t === 'hi' || msg.t === 'profile') && msg.p) {
+        self._members[peerId] = {
+          name: String(msg.p.name || '').slice(0, 12),
+          avatar: typeof msg.p.avatar === 'string' && msg.p.avatar.indexOf('data:image/') === 0 ? msg.p.avatar : ''
+        };
+        self._emitMembers();
+      }
+      // 我是新加入的一方：對方告訴我房裡還有誰，我主動去連那些人
+      if (msg.t === 'hi' && initiated && Array.isArray(msg.members)) {
+        msg.members.forEach(function (id) {
+          if (typeof id === 'string' && id.indexOf(PTT_PREFIX) === 0 && id !== self._peer.id && !self._peerConns[id]) self._connectTo(id);
+        });
+      }
+    });
+    conn.on('close', function () { self._dropPeer(peerId); });
+    conn.on('error', function (err) { console.warn('[PTT Room] data error:', err); });
+  };
+
+  AudioManager.prototype._connectTo = function (peerId) {
+    var call = this._peer.call(peerId, this._micStream);
+    if (call) this._setupCall(call);
+    var conn = this._peer.connect(peerId, { reliable: true });
+    if (conn) this._setupConn(conn, true);
+    return conn;
+  };
+
+  AudioManager.prototype._dropPeer = function (peerId) {
+    if (!this._peerCalls[peerId] && !this._peerConns[peerId] && !this._members[peerId]) return;
+    var call = this._peerCalls[peerId]; delete this._peerCalls[peerId];
+    var conn = this._peerConns[peerId]; delete this._peerConns[peerId];
+    try { if (call) call.close(); } catch (e) {}
+    try { if (conn) conn.close(); } catch (e) {}
+    var audio = this._remoteAudios[peerId];
+    if (audio) { audio.srcObject = null; try { document.body.removeChild(audio); } catch (e) {} delete this._remoteAudios[peerId]; }
+    delete this._members[peerId];
+    this._emitMembers();
+  };
+
+  AudioManager.prototype._broadcast = function (msg) {
+    var conns = this._peerConns || {};
+    Object.keys(conns).forEach(function (id) { try { if (conns[id].open) conns[id].send(msg); } catch (e) {} });
+  };
+
+  // 目前房內其他成員（有語音或資料連線的人），附上名字/頭像
+  AudioManager.prototype.getMembers = function () {
+    var self = this;
+    var ids = {};
+    Object.keys(this._peerCalls).concat(Object.keys(this._peerConns)).forEach(function (id) { ids[id] = 1; });
+    return Object.keys(ids).map(function (id) {
+      var m = self._members[id] || {};
+      return { id: id, code: _codeOf(id), name: m.name || _codeOf(id), avatar: m.avatar || '' };
+    });
+  };
+  AudioManager.prototype._emitMembers = function () {
+    if (this._onMembers) this._onMembers(this.getMembers());
+  };
+
+  // 以對方的 6 碼代碼加入；資料連線打開（真的連上）時呼叫 onJoined()
+  AudioManager.prototype.joinRoom = function (code, onPeerChange, onJoined) {
+    if (onPeerChange) this._onMembers = onPeerChange;
+    if (!this.inRoom()) { alert('請先啟用麥克風'); return; }
     if (!this._micStream) { alert('麥克風尚未準備好'); return; }
-    if (targetId === this._roomCode) { alert('不能加入自己的房間'); return; }
-    if (this._peerCalls[targetId]) return;
-    var call = this._peer.call(targetId, this._micStream);
-    this._setupCall(call, onPeerChange);
+    code = _normCode(code);
+    if (code.length !== 6) { alert('代碼是 6 碼英文或數字'); return; }
+    if (code === this._roomCode) { alert('不能加入自己的房間'); return; }
+    var targetId = PTT_PREFIX + code;
+    if (this._peerConns[targetId]) { if (onJoined) onJoined(); return; }
+    var conn = this._connectTo(targetId);
+    if (conn && onJoined) conn.on('open', onJoined);
   };
 
   AudioManager.prototype.destroyRoom = function () {
     var self = this;
-    Object.keys(this._peerCalls || {}).forEach(function (id) { try { self._peerCalls[id].close(); } catch (e) {} });
-    Object.keys(this._remoteAudios || {}).forEach(function (id) {
-      var a = self._remoteAudios[id];
-      try { a.srcObject = null; document.body.removeChild(a); } catch (e) {}
-    });
+    Object.keys(this._peerCalls).concat(Object.keys(this._peerConns)).forEach(function (id) { self._dropPeer(id); });
     if (this._peer) { try { this._peer.destroy(); } catch (e) {} this._peer = null; }
     if (this._micStream) { this._micStream.getTracks().forEach(function (t) { t.stop(); }); this._micStream = null; }
     this._peerCalls = {};
+    this._peerConns = {};
     this._remoteAudios = {};
+    this._members = {};
     this._roomCode = null;
+    this.state.intercomActive = false;
+    _setPttUI(false);
+    this._emitMembers();
   };
 
   // ── UI helpers ────────────────────────────────────────────────────────────
+  // 麥克風按鈕在底部卡片（.pttTalkBtn），說話中加上 data-active 讓樣式亮起來
   function _setPttUI(active) {
-    var btn = document.getElementById('pttBtn');
-    if (!btn) return;
-    if (active) {
-      btn.style.background = 'rgba(255,59,48,0.9)';
-      btn.title = '對講中 — 放開停止';
-      btn.setAttribute('data-active', '1');
-    } else {
-      btn.style.background = '';
-      btn.title = '對講 (PTT)';
-      btn.removeAttribute('data-active');
+    var btns = document.querySelectorAll('.pttTalkBtn');
+    for (var i = 0; i < btns.length; i++) {
+      if (active) btns[i].setAttribute('data-active', '1');
+      else btns[i].removeAttribute('data-active');
     }
+    document.dispatchEvent(new CustomEvent('ptt-talking', { detail: { active: !!active } }));
   }
 
   // Export singleton
