@@ -4583,21 +4583,76 @@ map.on('load', function() {
       data: { type: 'FeatureCollection', features: [] }
     });
 
-    map.addLayer({
-      id: 'user-pulse',
-      type: 'circle',
-      source: 'user-pos',
-      paint: {
-        'circle-radius': 18,
-        'circle-color': '#1E88E5',
-        'circle-opacity': 0.18,
-        'circle-stroke-color': '#1E88E5',
-        'circle-stroke-width': 1.5,
-        'circle-stroke-opacity': 0.35,
-        'circle-pitch-alignment': 'map',
-        'circle-pitch-scale': 'map'
-      }
-    });
+    // 圓環羅盤：圓圈底色、8 方位文字、指針全部畫進同一張圖，用跟車子一樣的
+    // Symbol Layer + icon-rotation-alignment:'map' 貼在地圖上，GPU 原生旋轉，
+    // 地圖怎麼轉，方位字跟指針就跟著轉到正確的實際方位，不用每幀算座標。
+    (function _buildCompassIcon() {
+      const S = 200, C = S / 2;       // 畫布尺寸@2x=200，畫面上實際約 100px 直徑
+      const CIRCLE_R = 80;            // 圓圈半徑（畫面上 40px）
+      const LABEL_R = CIRCLE_R;       // 方位文字半徑=圓圈半徑，讓文字剛好插在邊線中間，一半在圈內一半在圈外
+
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = S;
+      const g = cv.getContext('2d');
+
+      g.beginPath();
+      g.arc(C, C, CIRCLE_R, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(30,136,229,0.16)';
+      g.fill();
+      g.lineWidth = 3;
+      g.strokeStyle = 'rgba(30,136,229,0.6)';
+      g.stroke();
+
+      // 北方指針：車子貼在圓心，指針畫在圓心會被車子完全擋住，
+      // 所以改成浮在圓環正上方、跟「北」文字保持距離的紅色箭頭，呼應指南針按鈕的紅色北針
+      g.beginPath();
+      g.moveTo(C, C - CIRCLE_R - 28);
+      g.lineTo(C - 9, C - CIRCLE_R - 14);
+      g.lineTo(C + 9, C - CIRCLE_R - 14);
+      g.closePath();
+      g.fillStyle = '#E53935';
+      g.fill();
+
+      const DIRS = [
+        { a: 0,   t: '北',  main: true },
+        { a: 45,  t: '東北', main: false },
+        { a: 90,  t: '東',  main: true },
+        { a: 135, t: '東南', main: false },
+        { a: 180, t: '南',  main: true },
+        { a: 225, t: '西南', main: false },
+        { a: 270, t: '西',  main: true },
+        { a: 315, t: '西北', main: false }
+      ];
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineJoin = 'round';
+      DIRS.forEach(function(d) {
+        const rad = d.a * Math.PI / 180;
+        const x = C + LABEL_R * Math.sin(rad);
+        const y = C - LABEL_R * Math.cos(rad);
+        g.font = (d.main ? 'bold 22px' : 'bold 15px') + ' "Microsoft JhengHei","Noto Sans TC",sans-serif';
+        g.lineWidth = 3;
+        g.strokeStyle = '#fff';
+        g.fillStyle = d.a === 0 ? '#E53935' : '#000';
+        g.strokeText(d.t, x, y);
+        g.fillText(d.t, x, y);
+      });
+
+      map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      map.addLayer({
+        id: 'user-compass',
+        type: 'symbol',
+        source: 'user-pos',
+        layout: {
+          'icon-image': 'compass-icon',
+          'icon-size': 1,
+          'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
+      });
+    })();
 
     map.addLayer({
       id: 'user-car',
@@ -4770,6 +4825,17 @@ map.on('load', function() {
         const z = map.getZoom(), p = map.getPitch(), k = 0.04;
         if (Math.abs(goal.zoom - z) > 0.01) cam.zoom = z + (goal.zoom - z) * k;
         if (Math.abs(goal.pitch - p) > 0.2) cam.pitch = p + (goal.pitch - p) * k;
+      } else if (window._camZoomGoal != null) {
+        // 非導航中的一次性縮放目標(例如按下定位鈕):跟隨鏡頭每幀都會呼叫 easeTo，
+        // 若另外獨立呼叫 easeTo({zoom}) 會在下一幀就被這裡的置中覆蓋掉、放大動畫瞬間卡住，
+        // 所以縮放也要併入這個迴圈本身逐幀趨近目標，才不會跟置中互相打架。
+        const z = map.getZoom(), k = 0.12;
+        if (Math.abs(window._camZoomGoal - z) > 0.05) {
+          cam.zoom = z + (window._camZoomGoal - z) * k;
+        } else {
+          cam.zoom = window._camZoomGoal;
+          window._camZoomGoal = null;
+        }
       }
       map.easeTo(cam);
     }
@@ -5223,9 +5289,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     const locateBtn = document.getElementById('locateBtn');
     if(locateBtn) locateBtn.addEventListener('click', function(){
       if(window.currentLat !== undefined && window.currentLon !== undefined){
-        map.easeTo({ center:[window.currentLon, window.currentLat], zoom:17, duration:600 });
         if(window._setFollowUser) window._setFollowUser(true);
         window._cameraFollow = true;
+        // 縮放目標交給鏡頭跟隨迴圈逐幀趨近，避免跟迴圈本身的置中互相打架而卡住不放大
+        window._camZoomGoal = 17;
       } else {
         navigator.geolocation.getCurrentPosition(function(pos){
           map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:17, duration:600 });
