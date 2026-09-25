@@ -4603,16 +4603,6 @@ map.on('load', function() {
       g.strokeStyle = 'rgba(30,136,229,0.6)';
       g.stroke();
 
-      // 北方指針：車子貼在圓心，指針畫在圓心會被車子完全擋住，
-      // 所以改成浮在圓環正上方、跟「北」文字保持距離的紅色箭頭，呼應指南針按鈕的紅色北針
-      g.beginPath();
-      g.moveTo(C, C - CIRCLE_R - 28);
-      g.lineTo(C - 9, C - CIRCLE_R - 14);
-      g.lineTo(C + 9, C - CIRCLE_R - 14);
-      g.closePath();
-      g.fillStyle = '#E53935';
-      g.fill();
-
       const DIRS = [
         { a: 0,   t: '北',  main: true },
         { a: 45,  t: '東北', main: false },
@@ -4637,6 +4627,15 @@ map.on('load', function() {
         g.strokeText(d.t, x, y);
         g.fillText(d.t, x, y);
       });
+
+      // 北方指針：畫在文字之後，疊到「北」字時箭頭會蓋在文字前面，而不是被文字蓋住
+      g.beginPath();
+      g.moveTo(C, C - CIRCLE_R - 28);
+      g.lineTo(C - 9, C - CIRCLE_R - 14);
+      g.lineTo(C + 9, C - CIRCLE_R - 14);
+      g.closePath();
+      g.fillStyle = '#E53935';
+      g.fill();
 
       map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
       map.addLayer({
