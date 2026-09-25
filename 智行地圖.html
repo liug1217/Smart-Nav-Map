@@ -4625,8 +4625,13 @@ map.on('load', function() {
         g.lineWidth = 3;
         g.strokeStyle = '#fff';
         g.fillStyle = d.a === 0 ? '#E53935' : '#000';
-        g.strokeText(d.t, x, y);
-        g.fillText(d.t, x, y);
+        // 文字順著圓弧、朝圓心外側轉過去，不再是平的，跟商標圓形徽章上的弧形字一樣
+        g.save();
+        g.translate(x, y);
+        g.rotate(rad);
+        g.strokeText(d.t, 0, 0);
+        g.fillText(d.t, 0, 0);
+        g.restore();
       });
 
       // 北方指針：畫在文字之後，疊到「北」字時箭頭會蓋在文字前面，而不是被文字蓋住
