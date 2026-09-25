@@ -4651,8 +4651,11 @@ map.on('load', function() {
         layout: {
           'icon-image': 'compass-icon',
           'icon-size': 1,
+          // rotation-alignment 用 map，方位還是跟著地圖轉到正確方向；
+          // pitch-alignment 改用 viewport，圖示才會像 FamilyMart 圖標那樣永遠面向鏡頭，
+          // 不會因為導航鏡頭傾斜（貼著地圖平面）被透視壓扁
           'icon-rotation-alignment': 'map',
-          'icon-pitch-alignment': 'map',
+          'icon-pitch-alignment': 'viewport',
           'icon-allow-overlap': true,
           'icon-ignore-placement': true
         }
