@@ -4587,7 +4587,8 @@ map.on('load', function() {
     // Symbol Layer + icon-rotation-alignment:'map' 貼在地圖上，GPU 原生旋轉，
     // 地圖怎麼轉，方位字跟指針就跟著轉到正確的實際方位，不用每幀算座標。
     (function _buildCompassIcon() {
-      const S = 200, C = S / 2;       // 畫布尺寸@2x=200，畫面上實際約 100px 直徑
+      // 畫布要留夠邊界給往外凸出的北方箭頭，不然箭頭尖端會被畫布邊緣切掉
+      const S = 240, C = S / 2;       // 畫布尺寸@2x=240，畫面上實際約 120px 直徑
       const CIRCLE_R = 80;            // 圓圈半徑（畫面上 40px）
       const LABEL_R = CIRCLE_R;       // 方位文字半徑=圓圈半徑，讓文字剛好插在邊線中間，一半在圈內一半在圈外
 
