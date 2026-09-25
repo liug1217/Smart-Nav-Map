@@ -3266,6 +3266,9 @@ if (navigator.geolocation) {
       .setLngLat([lon, lat])
       .addTo(map);
 
+    // 鏡頭跟隨還開著的話，下一幀跟隨迴圈會把鏡頭拉回使用者目前位置，
+    // 飛到目的地的動畫等於沒發生；先關掉跟隨，飛過去之後畫面才會停在目的地上
+    if (window._setFollowUser) window._setFollowUser(false);
     map.easeTo({ center: [lon, lat], zoom: 15, duration: 800 });
 
     searchResultsList.style.display = 'none';
@@ -3942,11 +3945,9 @@ if (navigator.geolocation) {
       _smoothedHeading = (_smoothedHeading + _COMPASS_ALPHA * diff + 360) % 360;
     }
     window.compassHeading = _smoothedHeading;
+    // bearing 已經交給 updateUserMarkerHeading() 進到鏡頭跟隨迴圈逐幀平滑處理，
+    // 這裡不再額外呼叫 easeTo，不然兩邊各自的平滑/緩動會互相打架，鏡頭轉動變得頓頓的
     if (typeof window.updateUserMarkerHeading === 'function') window.updateUserMarkerHeading();
-
-    if (followUser && map) {
-      map.easeTo({ bearing: _smoothedHeading, duration: 150, easing: t => t });
-    }
   }
 
   function requestOrientationPermission(){
