@@ -4827,16 +4827,29 @@ map.on('load', function() {
         const z = map.getZoom(), p = map.getPitch(), k = 0.04;
         if (Math.abs(goal.zoom - z) > 0.01) cam.zoom = z + (goal.zoom - z) * k;
         if (Math.abs(goal.pitch - p) > 0.2) cam.pitch = p + (goal.pitch - p) * k;
-      } else if (window._camZoomGoal != null) {
-        // 非導航中的一次性縮放目標(例如按下定位鈕):跟隨鏡頭每幀都會呼叫 easeTo，
-        // 若另外獨立呼叫 easeTo({zoom}) 會在下一幀就被這裡的置中覆蓋掉、放大動畫瞬間卡住，
-        // 所以縮放也要併入這個迴圈本身逐幀趨近目標，才不會跟置中互相打架。
-        const z = map.getZoom(), k = 0.12;
-        if (Math.abs(window._camZoomGoal - z) > 0.05) {
-          cam.zoom = z + (window._camZoomGoal - z) * k;
-        } else {
-          cam.zoom = window._camZoomGoal;
-          window._camZoomGoal = null;
+      } else {
+        // 非導航中的一次性縮放/傾角目標(例如按下定位鈕、指南針按鈕)：跟隨鏡頭每幀都會
+        // 呼叫 easeTo，若另外獨立呼叫 easeTo({zoom}/{pitch}) 會在下一幀就被這裡的置中
+        // 覆蓋掉、動畫瞬間卡住，所以縮放跟傾角都要併入這個迴圈本身逐幀趨近目標，
+        // 才不會跟置中互相打架。
+        const k = 0.12;
+        if (window._camZoomGoal != null) {
+          const z = map.getZoom();
+          if (Math.abs(window._camZoomGoal - z) > 0.05) {
+            cam.zoom = z + (window._camZoomGoal - z) * k;
+          } else {
+            cam.zoom = window._camZoomGoal;
+            window._camZoomGoal = null;
+          }
+        }
+        if (window._camPitchGoal != null) {
+          const p = map.getPitch();
+          if (Math.abs(window._camPitchGoal - p) > 0.2) {
+            cam.pitch = p + (window._camPitchGoal - p) * k;
+          } else {
+            cam.pitch = window._camPitchGoal;
+            window._camPitchGoal = null;
+          }
         }
       }
       map.easeTo(cam);
@@ -5284,7 +5297,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(compassBtn) compassBtn.addEventListener('click', function(){
       if(window._setFollowUser) window._setFollowUser(true);
       window._cameraFollow = true;
-      map.easeTo({ bearing: window.compassHeading || 0, pitch: 60, duration: 400 });
+      // bearing 交給跟隨迴圈本身處理(它每幀都會把 bearing 帶往 compassHeading)；
+      // pitch 是獨立目標，跟定位鈕的縮放一樣要交給迴圈逐幀趨近，不然會被每幀的
+      // easeTo(沒帶 pitch)卡住，按下去傾角幾乎沒有變化
+      window._camPitchGoal = 60;
     });
 
     /* --- 定位 --- */
