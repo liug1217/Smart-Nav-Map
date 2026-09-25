@@ -4583,26 +4583,32 @@ map.on('load', function() {
       data: { type: 'FeatureCollection', features: [] }
     });
 
-    // 圓環羅盤：圓圈底色、8 方位文字、指針全部畫進同一張圖，用跟車子一樣的
-    // Symbol Layer + icon-rotation-alignment:'map' 貼在地圖上，GPU 原生旋轉，
-    // 地圖怎麼轉，方位字跟指針就跟著轉到正確的實際方位，不用每幀算座標。
+    // 圓環羅盤：圓圈底色貼在地圖平面上（跟以前的藍色定位圈一樣，鏡頭傾斜時
+    // 會自然透視成橢圓，當作貼地的定位圈）；8 方位文字跟北方指針畫在另一張
+    // 透明底圖上，永遠面向鏡頭不會被壓扁，兩張圖都用 icon-rotation-alignment:'map'
+    // 保持同步旋轉，地圖怎麼轉，方位字跟指針就跟著轉到正確的實際方位。
     (function _buildCompassIcon() {
       // 畫布要留夠邊界給往外凸出的北方箭頭，不然箭頭尖端會被畫布邊緣切掉
       const S = 240, C = S / 2;       // 畫布尺寸@2x=240，畫面上實際約 120px 直徑
       const CIRCLE_R = 80;            // 圓圈半徑（畫面上 40px）
       const LABEL_R = CIRCLE_R;       // 方位文字半徑=圓圈半徑，讓文字剛好插在邊線中間，一半在圈內一半在圈外
 
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = S;
-      const g = cv.getContext('2d');
+      // 圖 1：圓圈底色，貼地
+      const ringCv = document.createElement('canvas');
+      ringCv.width = ringCv.height = S;
+      const rg = ringCv.getContext('2d');
+      rg.beginPath();
+      rg.arc(C, C, CIRCLE_R, 0, Math.PI * 2);
+      rg.fillStyle = 'rgba(30,136,229,0.16)';
+      rg.fill();
+      rg.lineWidth = 3;
+      rg.strokeStyle = 'rgba(30,136,229,0.6)';
+      rg.stroke();
 
-      g.beginPath();
-      g.arc(C, C, CIRCLE_R, 0, Math.PI * 2);
-      g.fillStyle = 'rgba(30,136,229,0.16)';
-      g.fill();
-      g.lineWidth = 3;
-      g.strokeStyle = 'rgba(30,136,229,0.6)';
-      g.stroke();
+      // 圖 2：方位文字 + 北方指針，永遠面向鏡頭
+      const txtCv = document.createElement('canvas');
+      txtCv.width = txtCv.height = S;
+      const g = txtCv.getContext('2d');
 
       const DIRS = [
         { a: 0,   t: '北',  main: true },
@@ -4643,17 +4649,32 @@ map.on('load', function() {
       g.fillStyle = '#E53935';
       g.fill();
 
-      map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      map.addImage('compass-ring-icon', rg.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      map.addImage('compass-text-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+
       map.addLayer({
-        id: 'user-compass',
+        id: 'user-compass-ring',
         type: 'symbol',
         source: 'user-pos',
         layout: {
-          'icon-image': 'compass-icon',
+          'icon-image': 'compass-ring-icon',
+          'icon-size': 1,
+          'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
+      });
+      map.addLayer({
+        id: 'user-compass-text',
+        type: 'symbol',
+        source: 'user-pos',
+        layout: {
+          'icon-image': 'compass-text-icon',
           'icon-size': 1,
           // rotation-alignment 用 map，方位還是跟著地圖轉到正確方向；
-          // pitch-alignment 改用 viewport，圖示才會像 FamilyMart 圖標那樣永遠面向鏡頭，
-          // 不會因為導航鏡頭傾斜（貼著地圖平面）被透視壓扁
+          // pitch-alignment 用 viewport，文字才會像 FamilyMart 圖標那樣永遠面向鏡頭，
+          // 不會因為導航鏡頭傾斜被透視壓扁看不清楚
           'icon-rotation-alignment': 'map',
           'icon-pitch-alignment': 'viewport',
           'icon-allow-overlap': true,
