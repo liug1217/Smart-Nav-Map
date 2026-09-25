@@ -1902,6 +1902,10 @@ if (navigator.geolocation) {
 
   if(navOverviewBtn){
     navOverviewBtn.addEventListener('click', () => {
+      // 鏡頭跟隨還開著的話，下一幀跟隨迴圈會把鏡頭立刻拉回車子位置，
+      // 底下的 fitBounds/easeTo 等於白做；跟拖曳地圖一樣先關掉跟隨，
+      // 使用者要恢復跟車再按定位鈕
+      if (window._setFollowUser) window._setFollowUser(false);
       // 優先顯示規劃中的真實導航路線,沒有規劃路線時才退回GPS軌跡記錄
       const planned = window.plannedRouteCoordinates;
       if (planned && planned.length >= 2) {
