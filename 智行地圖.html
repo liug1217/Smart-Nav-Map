@@ -584,7 +584,43 @@ body.navigating .onlineCapsule{ top:77px; left:92px; }
   z-index:10;
   pointer-events:none;
   white-space:nowrap;
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
+/* 電量顯示 */
+.battWrap{ display:inline-flex; align-items:center; gap:4px; font-size:13px; }
+.battWrap[hidden]{ display:none; }
+.battIcon{
+  position:relative;
+  width:22px;
+  height:11px;
+  border:1.5px solid #fff;
+  border-radius:3px;
+  padding:1px;
+  box-sizing:border-box;
+}
+.battIcon::after{
+  content:'';
+  position:absolute;
+  right:-4px;
+  top:2px;
+  width:2px;
+  height:4px;
+  background:#fff;
+  border-radius:0 1px 1px 0;
+}
+.battIcon i{
+  display:block;
+  height:100%;
+  width:100%;
+  border-radius:1px;
+  background:#30D158;
+  transition:width .3s, background .3s;
+}
+.battWrap.low .battIcon i{ background:#FF9F0A; }
+.battWrap.crit .battIcon i{ background:#FF3B30; }
+.battWrap.charging #battText::before{ content:'⚡'; }
 
 /* ===== 金幣顯示 ===== */
 .coinDisplay{
@@ -1510,7 +1546,7 @@ html, body {
 </div>
 
 <!-- 時鐘 -->
-<div class="mapClock" id="mapClock">00:00:00</div>
+<div class="mapClock" id="mapClock"><span class="battWrap" id="battWrap" hidden><span class="battIcon" id="battIcon"><i id="battFill"></i></span><span id="battText">--%</span></span><span id="mapClockText">00:00:00</span></div>
 
 <!-- 在線人數膠囊 -->
 <div class="onlineCapsule" id="onlineCapsule">
@@ -5279,7 +5315,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(typeof map === 'undefined'){ setTimeout(init, 100); return; }
 
     /* --- 時鐘 --- */
-    const clockEl = document.getElementById('mapClock');
+    const clockEl = document.getElementById('mapClockText');
     function tick(){
       const now = new Date();
       const h = String(now.getHours()).padStart(2,'0');
@@ -5289,6 +5325,28 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     }
     tick();
     setInterval(tick, 1000);
+
+    /* --- 電量顯示(Battery Status API;iOS Safari 不支援時保持隱藏) --- */
+    if(navigator.getBattery){
+      navigator.getBattery().then(function(b){
+        const wrap = document.getElementById('battWrap');
+        const fill = document.getElementById('battFill');
+        const text = document.getElementById('battText');
+        if(!wrap || !fill || !text) return;
+        function render(){
+          const pct = Math.round(b.level * 100);
+          text.textContent = pct + '%';
+          fill.style.width = pct + '%';
+          wrap.classList.toggle('low', pct <= 20 && pct > 10);
+          wrap.classList.toggle('crit', pct <= 10);
+          wrap.classList.toggle('charging', b.charging);
+          wrap.hidden = false;
+        }
+        render();
+        b.addEventListener('levelchange', render);
+        b.addEventListener('chargingchange', render);
+      }).catch(function(){});
+    }
 
     /* --- 指南針 --- */
     const compassSvg = document.getElementById('compassSvg');
