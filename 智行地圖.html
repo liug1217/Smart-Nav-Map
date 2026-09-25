@@ -2050,8 +2050,6 @@ if (navigator.geolocation) {
     if (typeof window._reloadFamilyMartLayer === 'function') window._reloadFamilyMartLayer();
     if (typeof window._reloadToiletLayer === 'function') window._reloadToiletLayer();
     if (typeof window._reloadPxmartLayer === 'function') window._reloadPxmartLayer();
-    // 導航中重建圖層後，補回 POI 隱藏狀態；延遲讓非同步圖層（全家 loadImage）也有機會先加進來
-    if (isNavigating) setTimeout(() => togglePoiLayers(false), 300);
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -4078,7 +4076,6 @@ if (navigator.geolocation) {
       if (rect8) rect8.style.display = 'flex';
       if (rect6El) rect6El.style.display = 'flex';
       updateRect8Display();
-      togglePoiLayers(false); // 導航時隱藏POI地標
       // 確保車子圖層在導航時保持可見
       try { map.setLayoutProperty('user-car', 'visibility', 'visible'); } catch(e) {}
       try { map.setLayoutProperty('user-pulse', 'visibility', 'visible'); } catch(e) {}
