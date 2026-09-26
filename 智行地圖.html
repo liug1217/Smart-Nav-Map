@@ -369,9 +369,15 @@ body.ptt-in-room .pttChat{ display:flex; }
   min-width:0;
 }
 .rect8Distance{
-  color:#9FB3D1;
-  font-size:12px;
+  color:#FFFFFF;
+  font-size:13px;
+  line-height:1.1;
   margin-bottom:2px;
+}
+.rect8Distance .num{
+  font-size:26px;
+  font-weight:800;
+  margin-right:2px;
 }
 .rect8Instruction{
   color:#FFFFFF;
@@ -3572,10 +3578,10 @@ if (navigator.geolocation) {
         rect8Distance.innerText = '';
       } else if (distanceMeters >= 1000) {
         distText = (distanceMeters / 1000).toFixed(1) + ' 公里後';
-        rect8Distance.innerText = distText;
+        rect8Distance.innerHTML = '<span class="num">' + (distanceMeters / 1000).toFixed(1) + '</span>公里後';
       } else {
         distText = Math.round(distanceMeters) + ' 公尺後';
-        rect8Distance.innerText = distText;
+        rect8Distance.innerHTML = '<span class="num">' + Math.round(distanceMeters) + '</span>公尺後';
       }
     }
     if (typeof applyNavRoadNameIfPlaceholder === 'function') applyNavRoadNameIfPlaceholder();
