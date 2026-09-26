@@ -3965,6 +3965,9 @@ if (navigator.geolocation) {
   // 每一幀讀取卡片頂端與道路名稱膠囊「目前實際」的位置,車子永遠停在它們上方固定距離。
   // 卡片的 CSS 動畫與手指拖曳都是逐幀變化,鏡頭又是每幀跟隨,所以車子會很順地一起移動。
   const CAR_GAP_ABOVE_PANEL = 98; // 收合時道路名稱頂端距底部 142px + 98 = 240,和原本的位置一樣
+  // 車子最多跟著卡片往上抬的距離:道路名稱膠囊從收合(109px)升到電台/麥克風出現(_setPanelState 的
+  // t>0.7)時的高度,= 0.7 × (250-109)
+  const CAR_MAX_LIFT_PX = 0.7 * (250 - 109);
   function getUserCameraPadding(){
     const H = window.innerHeight || 800;
     const W = window.innerWidth || 400;
@@ -3980,6 +3983,9 @@ if (navigator.geolocation) {
       } else {
         panelTop = b1.top;
         if (r4) panelTop = Math.min(panelTop, r4.getBoundingClientRect().top);
+        // 卡片往上拉到播放器跟麥克風顯示出來(拉到約 70%)後，車子就不再往上，
+        // 之後再拉高(展開語音設定)車子維持不動
+        panelTop = Math.max(panelTop, (H - 142) - CAR_MAX_LIFT_PX);
       }
     }
     const offset = left ? H / 2 : (H - panelTop) + CAR_GAP_ABOVE_PANEL; // 車子距離螢幕底部(橫式維持垂直置中)
