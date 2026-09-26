@@ -1864,7 +1864,7 @@ if (navigator.geolocation) {
     try {
       let list = JSON.parse(localStorage.getItem(RECENT_DESTS_KEY) || '[]');
       list = list.filter(d => !(Math.abs(d.lat - dest.lat) < 0.0001 && Math.abs(d.lon - dest.lon) < 0.0001));
-      list.unshift({ lat: dest.lat, lon: dest.lon, name: dest.name, addr: dest.addr });
+      list.unshift({ lat: dest.lat, lon: dest.lon, name: dest.name, addr: dest.addr, logo: dest.logo || '' });
       list = list.slice(0, 6);
       localStorage.setItem(RECENT_DESTS_KEY, JSON.stringify(list));
     } catch(e) {}
@@ -1887,7 +1887,7 @@ if (navigator.geolocation) {
       el.className = 'searchResultItem';
       el.innerHTML = '<div class="name">🕐 ' + (item.name || '未知地點') + '</div><div class="addr">' + (item.addr || '') + '</div>';
       el.addEventListener('click', () => {
-        selectDestination(item.lat, item.lon, item.name, item.addr);
+        selectDestination(item.lat, item.lon, item.name, item.addr, item.logo);
         searchResultsList.style.display = 'none';
         searchInput.value = item.name || '';
       });
@@ -3229,7 +3229,7 @@ if (navigator.geolocation) {
           item,
           '<img src="圖片/fm_app.png" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
           '#5ac8fa',
-          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '全家便利商店'); }
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '全家便利商店', '圖片/fm_app.png'); }
         );
         searchResultsList.appendChild(el);
         _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
@@ -3244,7 +3244,7 @@ if (navigator.geolocation) {
           item,
           '<img src="圖片/pxmart.jpg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
           '#e60012',
-          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '大全聯'); }
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '大全聯', '圖片/pxmart.jpg'); }
         );
         searchResultsList.appendChild(el);
         _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
@@ -3286,18 +3286,26 @@ if (navigator.geolocation) {
     }
   }
 
-  window.selectDestination = function selectDestination(lat, lon, name, addr){
-    selectedDest = { lat, lon, name, addr };
+  // 目的地圖標:一般地點是紅色地標;有品牌 logo 的(全家、全聯)直接用 logo
+  function makeDestMarkerEl(logo){
+    const el = document.createElement('div');
+    if (logo) {
+      el.style.cssText = 'display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));';
+      el.innerHTML = '<div style="width:44px;height:44px;border-radius:50%;background:#fff url(\'' + logo + '\') center/72% no-repeat;border:3px solid #E53935;box-sizing:border-box"></div>' +
+        '<div style="width:0;height:0;margin-top:-2px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #E53935"></div>';
+    } else {
+      el.innerHTML = '<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg" style="display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">' +
+        '<path d="M17 1C8.2 1 1 8 1 16.6 1 28.5 17 43 17 43s16-14.5 16-26.4C33 8 25.800 1 17 1z" fill="#E53935" stroke="#fff" stroke-width="2"/>' +
+        '<circle cx="17" cy="16.500" r="6" fill="#fff"/></svg>';
+    }
+    return el;
+  }
+
+  window.selectDestination = function selectDestination(lat, lon, name, addr, logo){
+    selectedDest = { lat, lon, name, addr, logo: logo || '' };
 
     if (destMarker) destMarker.remove();
-    const el = document.createElement('div');
-    el.style.width = '28px';
-    el.style.height = '28px';
-    el.style.borderRadius = '50% 50% 50% 0';
-    el.style.background = '#2F80FF';
-    el.style.border = '3px solid #FFFFFF';
-    el.style.boxShadow = '0 2px 5px rgba(0,0,0,0.4)';
-    el.style.transform = 'rotate(-45deg)';
+    const el = makeDestMarkerEl(logo);
     destMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
       .setLngLat([lon, lat])
       .addTo(map);
@@ -4234,9 +4242,12 @@ if (navigator.geolocation) {
   }
 
   // 供全家/長按 popup 呼叫：直接以座標為目的地開始導航
-  window._navigateToCoord = function(lat, lon, name) {
+  window._navigateToCoord = function(lat, lon, name, logo) {
     if (destMarker) { destMarker.remove(); destMarker = null; }
-    selectedDest = { lat: lat, lon: lon, name: name || '目的地', addr: '' };
+    selectedDest = { lat: lat, lon: lon, name: name || '目的地', addr: '', logo: logo || '' };
+    destMarker = new maplibregl.Marker({ element: makeDestMarkerEl(logo), anchor: 'bottom' })
+      .setLngLat([lon, lat])
+      .addTo(map);
     planRouteTo(lat, lon);
     // 關閉任何開著的 popup
     document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
@@ -6815,7 +6826,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           '<img src="圖片/fm_app.png" style="width:48px;height:48px;object-fit:contain;display:block;margin:0 auto 6px" onerror="this.style.display=\'none\'">' +
           '<div style="font-size:14px;font-weight:700;color:#00a651;margin-bottom:4px">' + storeName + '</div>' +
           '<div id="' + addrId + '" style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.4">查詢地址中...</div>' +
-          '<button onclick="window._navigateToCoord(' + lat + ',' + lon + ',\'' + safeName + '\')" ' +
+          '<button onclick="window._navigateToCoord(' + lat + ',' + lon + ',\'' + safeName + '\',\'圖片/fm_app.png\')" ' +
           'style="background:#00a651;color:#fff;border:none;border-radius:8px;padding:8px 0;font-size:14px;cursor:pointer;width:100%;font-weight:600">🗺 導航到這裡</button>' +
           '</div>';
         // 關閉所有現有 popup（包含長按的）
@@ -6933,9 +6944,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           var btn = document.getElementById('toiletNavBtn');
           if (btn) btn.addEventListener('click', function(){
             _popup.remove(); _popup = null;
-            if (typeof window.planRouteTo === 'function') {
-              window.planRouteTo(lat, lon, props.name || '公共廁所');
-            }
+            window._navigateToCoord(lat, lon, props.name || '公共廁所');
           });
         }, 0);
       });
@@ -7047,9 +7056,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           var btn = document.getElementById('pxmartNavBtn');
           if (btn) btn.addEventListener('click', function(){
             _popup.remove(); _popup = null;
-            if (typeof window.planRouteTo === 'function') {
-              window.planRouteTo(lat, lon, props.name || '大全聯');
-            }
+            window._navigateToCoord(lat, lon, props.name || '大全聯', '圖片/pxmart.jpg');
           });
         }, 0);
       });
