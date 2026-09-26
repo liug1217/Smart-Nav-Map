@@ -107,6 +107,7 @@ module.exports = async (req, res) => {
     }, { cache: 'public, s-maxage=30, stale-while-revalidate=60' });
   } catch (e) {
     console.error('[cms]', e.message);
-    return err(res, 502, 'UPSTREAM_ERROR', '無法取得國道電子看板資料');
+    const cause = e.cause && (e.cause.code || e.cause.message);
+    return err(res, 502, 'UPSTREAM_ERROR', '無法取得國道電子看板資料(' + e.message + (cause ? ' / ' + cause : '') + ')');
   }
 };
