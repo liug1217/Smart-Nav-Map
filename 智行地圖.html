@@ -4136,9 +4136,9 @@ if (navigator.geolocation) {
       if (!fromPosition) clearSpeedCameraVoiceState();
       isNavigating = true;
       _navState = 'navigating';
-      // 選地點/按全覽/拖曳地圖都會關掉鏡頭跟隨，開始導航一定要重新打開，
-      // 不然車子往前走、視角卻停在原地不動
-      if (!fromPosition && window._setFollowUser) window._setFollowUser(true);
+      // 初始導航:先關掉鏡頭跟隨,讓下面「整條路線鳥瞰」的 fitBounds 能停在畫面上;
+      // 1.8 秒後拉回導航視角時再重新打開跟隨(見下方 setTimeout),
+      // 不然車子往前走、視角會停在原地不動
       if (!fromPosition) window._navStats = {t0:Date.now(), coins0:+(localStorage.getItem('sn_coins')||0), km0:totalDistance, turns:0, cleanCams:0};
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
       if (typeof window._coinFirstNav === 'function') window._coinFirstNav();
@@ -4217,8 +4217,10 @@ if (navigator.geolocation) {
         });
       } else {
         // 初始導航：先看整條路線鳥瞰，1.8秒後拉回正常導航視角
+        if (window._setFollowUser) window._setFollowUser(false);
         setTimeout(() => {
           if (!isNavigating) return;
+          if (window._setFollowUser) window._setFollowUser(true);
           map.easeTo({
             center: [origin.lon, origin.lat],
             zoom: 17,
