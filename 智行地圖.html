@@ -3591,6 +3591,32 @@ if (navigator.geolocation) {
     return (window.__navArt = c.toDataURL());
   }
 
+  // 底部行程資訊(剩餘時間/公里 + 預計到達):起點與每次 GPS 更新都走這一個函式
+  let _navTotals = null; // { dist: 全程公尺, dur: 全程秒 },每次(重新)規劃時更新
+  function renderNavTripInfo(remainMeters, remainSec){
+    const infoEl = document.querySelector('.info');
+    if (infoEl) {
+      const min = Math.round(remainSec / 60);
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      infoEl.innerText = (h > 0 ? h + '小時' : '') + m + '分鐘 ' + (remainMeters / 1000).toFixed(1) + '公里';
+    }
+    const arrivalEl = document.getElementById('arrivalText');
+    if (arrivalEl) {
+      const eta = new Date(Date.now() + remainSec * 1000);
+      arrivalEl.innerText = String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + '到達';
+    }
+  }
+  // 剩餘距離 = 離下一個轉彎點的即時距離(跟上方同一個 meters) + 之後每一段的路線距離;
+  // 剩餘時間依全程時間按剩餘距離比例換算
+  function updateNavTripInfo(metersToNextTurn){
+    if (!_navTotals || !_navTotals.dist) return;
+    let remain = metersToNextTurn;
+    for (let i = currentStepIndex; i < navSteps.length; i++) remain += navSteps[i].distance || 0;
+    remain = Math.max(0, Math.min(remain, _navTotals.dist));
+    renderNavTripInfo(remain, _navTotals.dur * remain / _navTotals.dist);
+  }
+
   // GPS每次更新時呼叫:算出離下一個轉彎點多遠,更新畫面跟語音播報
   function checkTurnByTurn(lat, lon){
     if (!isNavigating || !navSteps.length) return;
@@ -3604,6 +3630,7 @@ if (navigator.geolocation) {
     const isDepart = (step.maneuver.type === 'depart');
 
     updateRect8Display(meters);
+    updateNavTripInfo(meters);
 
     // ===== 🎥 轉彎鏡頭:接近真正的轉彎 → 拉遠 + 變成平面俯視;過了轉彎幾秒後再回到 3D =====
     // (rAF 迴圈讀 window._navTurnView / _navTurnHoldUntil 並逐幀平滑改變 zoom / pitch)
@@ -4068,20 +4095,8 @@ if (navigator.geolocation) {
 
       // 更新底部面板的時間/距離/到達時間顯示
       const durationMin = Math.round(route.duration / 60);
-      const distanceKm = (route.distance / 1000).toFixed(1);
-      const infoEl = document.querySelector('.info');
-      if (infoEl) {
-        const h = Math.floor(durationMin / 60);
-        const m = durationMin % 60;
-        infoEl.innerText = (h > 0 ? h + '小時' : '') + m + '分鐘 ' + distanceKm + '公里';
-      }
-      const arrivalEl = document.getElementById('arrivalText');
-      if (arrivalEl) {
-        const eta = new Date(Date.now() + route.duration * 1000);
-        const hh = String(eta.getHours()).padStart(2, '0');
-        const mm = String(eta.getMinutes()).padStart(2, '0');
-        arrivalEl.innerText = hh + ':' + mm + '到達';
-      }
+      _navTotals = { dist: route.distance, dur: route.duration };
+      renderNavTripInfo(route.distance, route.duration);
 
       // 初始導航才縮放顯示整條路線；重新規劃時保持目前視角，不跳走
       if (!fromPosition) {
