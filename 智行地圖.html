@@ -3621,15 +3621,45 @@ if (navigator.geolocation) {
       arrivalEl.innerText = String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + '到達';
     }
   }
-  // 剩餘距離 = 離下一個轉彎點的即時距離(跟上方同一個 meters) + 之後每一段的路線距離;
+  // 剩餘距離 = 路線全長 - 車子投影在路線上的沿線距離(不依賴 currentStepIndex,轉彎點沒被觸發也不會卡住);
   // 剩餘時間依全程時間按剩餘距離比例換算
-  function updateNavTripInfo(metersToNextTurn){
+  function updateNavTripInfo(metersToNextTurn, pos){
     if (!_navTotals || !_navTotals.dist) return;
-    let remain = metersToNextTurn;
-    for (let i = currentStepIndex; i < navSteps.length; i++) remain += navSteps[i].distance || 0;
+    let remain;
+    if (pos) {
+      remain = (pos.g.total - pos.along) * _navTotals.dist / pos.g.total; // 局部平面長度換算回 OSRM 的全程公尺
+    } else {
+      remain = metersToNextTurn;
+      for (let i = currentStepIndex; i < navSteps.length; i++) remain += navSteps[i].distance || 0;
+    }
     remain = Math.max(0, Math.min(remain, _navTotals.dist));
     renderNavTripInfo(remain, _navTotals.dur * remain / _navTotals.dist);
   }
+
+  // 車子目前在導航路線上的沿線距離;順便算好每個轉彎點的沿線位置(同一份路線只算一次)
+  let _stepAlongCache = null; // { geom, steps, along: [] }
+  function navPositionOnRoute(lat, lon){
+    const g = getRouteGeom(window.plannedRouteCoordinates);
+    if (!g) return null;
+    if (!_stepAlongCache || _stepAlongCache.geom !== g || _stepAlongCache.steps !== navSteps) {
+      // 依序往後找,避免路線來回重疊時轉彎點投影到另一段
+      const along = [];
+      let from = 0;
+      navSteps.forEach(s => {
+        const loc = s.maneuver && s.maneuver.location;
+        const p = loc ? projectOnRoute(g, loc[1], loc[0], from, g.xy.length) : null;
+        along.push(p ? p.along : null);
+        if (p) from = p.idx;
+      });
+      _stepAlongCache = { geom: g, steps: navSteps, along };
+    }
+    const st = _snapState;
+    let proj = st.snapped ? projectOnRoute(g, lat, lon, st.idx - 3, st.idx + 80) : null;
+    if (!proj || proj.dist > SNAP_EXIT_M) proj = projectOnRoute(g, lat, lon, 0, g.xy.length);
+    if (!proj || proj.dist > SNAP_EXIT_M) return null; // 不在路線上(偏航中):交給偏航重新規劃
+    return { g, along: proj.along, stepAlong: _stepAlongCache.along };
+  }
+  const NAV_STEP_PASSED_M = 30; // 沿線已超過轉彎點 30 公尺 → 視為已通過(高速時 GPS 1 秒跳 30 公尺,常常碰不到 15 公尺圈)
 
   // GPS每次更新時呼叫:算出離下一個轉彎點多遠,更新畫面跟語音播報
   function checkTurnByTurn(lat, lon){
@@ -3642,9 +3672,12 @@ if (navigator.geolocation) {
     const loc = step.maneuver.location; // [lon, lat]
     const meters = calculateDistance(lat, lon, loc[1], loc[0]) * 1000;
     const isDepart = (step.maneuver.type === 'depart');
+    const pos = navPositionOnRoute(lat, lon);
+    const stepAlong = pos ? pos.stepAlong[currentStepIndex] : null;
+    const passed = stepAlong != null && pos.along > stepAlong + NAV_STEP_PASSED_M;
 
     updateRect8Display(meters);
-    updateNavTripInfo(meters);
+    updateNavTripInfo(meters, pos);
 
     // ===== 🎥 轉彎鏡頭:接近真正的轉彎 → 拉遠 + 變成平面俯視;過了轉彎幾秒後再回到 3D =====
     // (rAF 迴圈讀 window._navTurnView / _navTurnHoldUntil 並逐幀平滑改變 zoom / pitch)
@@ -3664,9 +3697,9 @@ if (navigator.geolocation) {
     const roadPart = step.name ? ('進入' + step.name) : '';
 
 
-    if (meters <= 15) {
+    if (meters <= 15 || passed) {
       const already = navStepVoiceState[currentStepIndex];
-      if (!isDepart && already !== 'immediate') {
+      if (!isDepart && !passed && already !== 'immediate') { // 已經開過頭就不要再唸「現在轉彎」
         const v = buildImmediateNavVoice(step);
         if (v) { speakText(v); navStepVoiceState[currentStepIndex] = 'immediate'; }
       }
