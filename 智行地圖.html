@@ -5925,7 +5925,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         .setLngLat(coords)
         .setHTML(
           '<div style="font-size:12px;font-weight:700;color:#1A6ADB;margin-bottom:5px">'+label+'</div>'+
-          '<img id="'+uid+'" src="'+baseUrl+sep+'t='+Date.now()+'" style="width:300px;height:200px;object-fit:cover;border-radius:8px;display:block;background:#000">'+
+          '<img id="'+uid+'" src="'+baseUrl+sep+'t='+Date.now()+'" style="width:300px;height:200px;object-fit:cover;display:block;background:#000">'+
           '<div style="color:#888;font-size:11px;margin-top:4px">點擊關閉即停止串流</div>'
         )
         .addTo(m);
@@ -6103,7 +6103,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       '<div style="font-size:13px;margin-bottom:3px">📍 '+loc+'</div>'+
       '<div style="font-size:13px;margin-bottom:3px">規模 <b>'+mag+'</b>'+(dep ? '　深度 '+dep : '')+'</div>'+
       '<div style="font-size:11px;color:#666;margin-bottom:6px">🕐 '+time+'</div>'+
-      (img ? '<img src="'+img+'" style="width:280px;border-radius:6px;display:block;background:#eee" onerror="this.style.display=\'none\'">' : '')+
+      (img ? '<img src="'+img+'" style="width:280px;display:block;background:#eee" onerror="this.style.display=\'none\'">' : '')+
       '<div style="font-size:11px;color:#888;margin-top:6px">'+(eq.ReportContent||'')+'</div>';
     eqPopup=new maplibregl.Popup({maxWidth:'320px',closeButton:true})
       .setLngLat(lngLat).setHTML(html).addTo(window.map);
@@ -7086,7 +7086,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;display:flex;flex-direction:column;gap:8px;';
         container.innerHTML =
           '<div style="display:flex;align-items:center;gap:8px">' +
-            '<img src="圖片/pxmart.jpg" style="width:28px;height:28px;object-fit:contain;border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">' +
+            '<img src="圖片/pxmart.jpg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">' +
             '<span style="font-weight:600;font-size:14px;">' + (props.name || '大全聯') + '</span>' +
           '</div>' +
           '<div class="addr">大全聯量販超市</div>' +
