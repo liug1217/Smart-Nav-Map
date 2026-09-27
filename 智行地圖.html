@@ -3279,7 +3279,7 @@ if (navigator.geolocation) {
       cpcMatches.forEach(function(item) {
         const { el, addrId } = _makeLocalItem(
           item,
-          '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
+          '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff;padding:2px;box-sizing:border-box" onerror="this.style.display=\'none\'">',
           '#134e8b',
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '中油加油站', '圖片/cpc.svg'); }
         );
@@ -7172,7 +7172,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       var W = 60, H = 60;
       var c = document.createElement('canvas');
       c.width = W; c.height = H;
-      c.getContext('2d').drawImage(raw, 0, 0, W, H);
+      var cx = c.getContext('2d');
+      cx.fillStyle = '#fff'; // 中油 logo 是透明底,墊一層白色方形底
+      cx.fillRect(0, 0, W, H);
+      cx.drawImage(raw, 4, 4, W - 8, H - 8);
       var sized = new Image(W, H);
       sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
       sized.src = c.toDataURL('image/png');
@@ -7228,7 +7231,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;display:flex;flex-direction:column;gap:8px;';
         container.innerHTML =
           '<div style="display:flex;align-items:center;gap:8px">' +
-            '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">' +
+            '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff;padding:2px;box-sizing:border-box" onerror="this.style.display=\'none\'">' +
             '<span style="font-weight:600;font-size:14px;">' + (props.name || '中油加油站') + '</span>' +
           '</div>' +
           '<div class="addr">中油加油站</div>' +
