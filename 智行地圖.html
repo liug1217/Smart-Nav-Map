@@ -1573,7 +1573,7 @@ html, body {
 
 <!-- 到達統計卡 -->
 <div class="tripSummaryCard" id="tripSummaryCard">
-  <div class="tripTitle">🏁 抵達目的地！</div>
+  <div class="tripTitle">🏁 到達目的地！</div>
   <div class="tripGrid" id="tripGrid"></div>
   <button class="tripCloseBtn" id="tripCloseBtn">繼續探索 →</button>
 </div>
@@ -3471,8 +3471,8 @@ if (navigator.geolocation) {
     const d = r >= 1000
       ? (r / 1000 % 1 === 0 ? (r / 1000) : (r / 1000).toFixed(1)) + ' 公里'
       : r + ' 公尺';
-    // 還沒到:唸距離;真正抵達時由完成流程播報「您已抵達目的地」
-    if (m.type === 'arrive') return isPrepare ? ('前方' + d + '即將抵達目的地。') : (d + '後抵達目的地。');
+    // 還沒到:唸距離;真正到達時由完成流程播報「您已到達目的地」
+    if (m.type === 'arrive') return isPrepare ? ('前方' + d + '即將到達目的地。') : (d + '後到達目的地。');
     const sn = step.name || null;
     const into = sn ? ('進入' + sn) : '';
     if (m.type === 'roundabout' || m.type === 'rotary') {
@@ -3514,7 +3514,7 @@ if (navigator.geolocation) {
   function buildImmediateNavVoice(step) {
     const m = step.maneuver;
     if (m.type === 'depart') return null;
-    if (m.type === 'arrive') return '您已抵達目的地。';
+    if (m.type === 'arrive') return '您已到達目的地。';
     const sn = step.name || null;
     const into = sn ? ('進入' + sn) : '';
     if (m.type === 'roundabout' || m.type === 'rotary') {
@@ -3734,7 +3734,7 @@ if (navigator.geolocation) {
     if (meters <= 15 || passed) {
       const already = navStepVoiceState[currentStepIndex];
       if (!isDepart && !passed && already !== 'immediate') { // 已經開過頭就不要再唸「現在轉彎」
-        // 抵達由下方完成流程統一播報「您已抵達目的地」,這裡不重複唸
+        // 到達由下方完成流程統一播報「您已到達目的地」,這裡不重複唸
         let v = step.maneuver.type === 'arrive' ? null : buildImmediateNavVoice(step);
         // 下一個轉彎就在 150 公尺內:一起唸出來。不然兩次播報的 8 秒最小間隔會把下一個轉彎整個吃掉
         const next = navSteps[currentStepIndex + 1];
@@ -3753,7 +3753,7 @@ if (navigator.geolocation) {
       if (typeof window.earnCoin === 'function') window.earnCoin(2, '✅ 轉彎完成');
       navStepVoiceState[currentStepIndex] = navStepVoiceState[currentStepIndex] || 'idle';
       if (currentStepIndex >= navSteps.length) {
-        _navSession++; // 抵達後同樣作廢還在路上的重新規劃
+        _navSession++; // 到達後同樣作廢還在路上的重新規劃
         isNavigating = false;
         _navState = 'completed';
         window._cameraFollow = false;
@@ -3764,7 +3764,7 @@ if (navigator.geolocation) {
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
         togglePoiLayers(true);
         if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
-        speakText('您已抵達目的地。');
+        speakText('您已到達目的地。');
         if (typeof window.earnCoin === 'function') window.earnCoin(15, '完成導航');
         (function(){
           const s = window._navStats;
@@ -6629,7 +6629,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // ── 金幣提示系統 ─────────────────────
   const COIN_HINTS = [
     '🧭 開始導航，每個轉彎 +2🪙',
-    '🏁 抵達目的地 +15🪙',
+    '🏁 到達目的地 +15🪙',
     '📷 守法通過測速照相 +5🪙',
     '📹 靠近監視器自動切換 +1🪙',
     '🎯 每天開車2公里完成任務 +10🪙',
@@ -6642,7 +6642,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   let _hintIdx = 0;
 
   // 情境提示：直接用既有 toast
-  window._hintCoinNav   = ()=> showToast('🧭 開始導航！每個轉彎 +2🪙，抵達 +15🪙');
+  window._hintCoinNav   = ()=> showToast('🧭 開始導航！每個轉彎 +2🪙，到達 +15🪙');
   window._hintCoinCam   = ()=> showToast('📷 前方測速照相！守法通過 +5🪙');
   window._hintCoinCctv  = ()=> showToast('📹 監視器 +1🪙（每日最多8次）');
 
