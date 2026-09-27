@@ -2096,6 +2096,7 @@ if (navigator.geolocation) {
     if (typeof window._reloadFamilyMartLayer === 'function') window._reloadFamilyMartLayer();
     if (typeof window._reloadToiletLayer === 'function') window._reloadToiletLayer();
     if (typeof window._reloadPxmartLayer === 'function') window._reloadPxmartLayer();
+    if (typeof window._reloadCpcLayer === 'function') window._reloadCpcLayer();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -3159,6 +3160,19 @@ if (navigator.geolocation) {
     });
   }
 
+  // 搜尋本地中油加油站資料
+  function getCpcMatches(query) {
+    if (!window.cpcData || !window.cpcData.features) return [];
+    const q = query.trim().toLowerCase();
+    const matchAll = q.includes('中油') || q.includes('加油');
+    return window.cpcData.features.filter(function(f) {
+      const n = (f.properties.name || '').toLowerCase();
+      return matchAll || n.includes(q);
+    }).map(function(f) {
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || '中油加油站' };
+    });
+  }
+
   // 搜尋本地公共廁所資料
   function getToiletMatches(query) {
     if (!window.toiletData || !window.toiletData.features) return [];
@@ -3180,16 +3194,17 @@ if (navigator.geolocation) {
     const fmMatches = getFmMatches(query);
     const pxMatches = getPxmartMatches(query);
     const toiMatches = getToiletMatches(query);
+    const cpcMatches = getCpcMatches(query);
 
     try {
       const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=tw&accept-language=zh-TW&q=' + encodeURIComponent(query);
       const res = await fetch(url);
       const list = await res.json();
-      renderSearchResults(list, fmMatches, pxMatches, toiMatches);
+      renderSearchResults(list, fmMatches, pxMatches, toiMatches, cpcMatches);
     } catch (e) {
       console.error('搜尋地點失敗:', e);
-      if (fmMatches.length || pxMatches.length || toiMatches.length) {
-        renderSearchResults([], fmMatches, pxMatches, toiMatches);
+      if (fmMatches.length || pxMatches.length || toiMatches.length || cpcMatches.length) {
+        renderSearchResults([], fmMatches, pxMatches, toiMatches, cpcMatches);
       } else {
         searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋失敗,請檢查網路連線</div>';
       }
@@ -3209,11 +3224,12 @@ if (navigator.geolocation) {
     return { el, addrId };
   }
 
-  function renderSearchResults(list, fmMatches, pxMatches, toiMatches){
+  function renderSearchResults(list, fmMatches, pxMatches, toiMatches, cpcMatches){
     fmMatches  = fmMatches  || [];
     pxMatches  = pxMatches  || [];
     toiMatches = toiMatches || [];
-    const hasLocal = fmMatches.length || pxMatches.length || toiMatches.length;
+    cpcMatches = cpcMatches || [];
+    const hasLocal = fmMatches.length || pxMatches.length || toiMatches.length || cpcMatches.length;
     if ((!list || !list.length) && !hasLocal) {
       searchResultsList.innerHTML = '<div class="searchResultsEmpty">找不到符合的地點</div>';
       return;
@@ -3251,6 +3267,21 @@ if (navigator.geolocation) {
           '<img src="圖片/pxmart.jpg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
           '#e60012',
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '大全聯', '圖片/pxmart.jpg'); }
+        );
+        searchResultsList.appendChild(el);
+        _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
+      });
+    }
+
+    // 中油加油站（中油藍）
+    if (cpcMatches.length) {
+      addLabel('⛽ 中油加油站', '#134e8b');
+      cpcMatches.forEach(function(item) {
+        const { el, addrId } = _makeLocalItem(
+          item,
+          '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
+          '#134e8b',
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '中油加油站', '圖片/cpc.svg'); }
         );
         searchResultsList.appendChild(el);
         _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
@@ -7124,6 +7155,117 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     else { m.once('styledata', function(){ initPxmart(m); }); }
   }
   window._reloadPxmartLayer = tryInit;
+  tryInit();
+})();
+</script>
+<script src="cpc_data.js?v=1"></script>
+<script>
+/* ===== ⛽ 中油加油站圖層 ===== */
+(function(){
+  var ICON_ID = 'cpc-icon';
+  var _popup = null;
+
+  function _addCpcIcon(m) {
+    if (m.hasImage(ICON_ID)) return;
+    var raw = new Image();
+    raw.onload = function() {
+      var W = 60, H = 60;
+      var c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      c.getContext('2d').drawImage(raw, 0, 0, W, H);
+      var sized = new Image(W, H);
+      sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
+      sized.src = c.toDataURL('image/png');
+    };
+    raw.onerror = function() {
+      var c = document.createElement('canvas');
+      c.width = 60; c.height = 60;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#134e8b';
+      ctx.beginPath(); ctx.roundRect(0, 0, 60, 60, 12); ctx.fill();
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('中油', 30, 30);
+      var img = new Image(60, 60);
+      img.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 }); };
+      img.src = c.toDataURL('image/png');
+    };
+    raw.src = '圖片/cpc.svg';
+  }
+
+  function initCpc(m) {
+    if (m.getSource('cpc')) return;
+    var data = window.cpcData;
+    if (!data) return;
+
+    _addCpcIcon(m);
+
+    function _setup() {
+      if (m.getSource('cpc')) return;
+      m.addSource('cpc', { type:'geojson', data:data, cluster:false });
+      m.addLayer({
+        id: 'cpc-points',
+        type: 'symbol',
+        source: 'cpc',
+        layout: {
+          'icon-image': ICON_ID,
+          'icon-size': 1,
+          'icon-allow-overlap': true,
+        }
+      });
+
+      m.on('click', 'cpc-points', function(e) {
+        var props = e.features[0].properties;
+        var coords = e.features[0].geometry.coordinates.slice();
+        var lon = coords[0], lat = coords[1];
+
+        if (_popup) { _popup.remove(); _popup = null; }
+        if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
+        document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
+
+        var container = document.createElement('div');
+        container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;display:flex;flex-direction:column;gap:8px;';
+        container.innerHTML =
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">' +
+            '<span style="font-weight:600;font-size:14px;">' + (props.name || '中油加油站') + '</span>' +
+          '</div>' +
+          '<div class="addr">中油加油站</div>' +
+          '<button id="cpcNavBtn" style="width:100%;padding:7px 0;background:#134e8b;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">🧭 導航前往</button>';
+
+        _popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: '220px' })
+          .setLngLat([lon, lat])
+          .setDOMContent(container)
+          .addTo(m);
+
+        _popup.on('close', function(){ _popup = null; });
+
+        setTimeout(function(){
+          var btn = document.getElementById('cpcNavBtn');
+          if (btn) btn.addEventListener('click', function(){
+            _popup.remove(); _popup = null;
+            window._navigateToCoord(lat, lon, props.name || '中油加油站', '圖片/cpc.svg');
+          });
+        }, 0);
+      });
+
+      m.on('mouseenter', 'cpc-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
+      m.on('mouseleave', 'cpc-points', function(){ m.getCanvas().style.cursor = ''; });
+    }
+
+    if (m.hasImage(ICON_ID)) { _setup(); }
+    else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
+  }
+
+  function tryInit() {
+    var m = window.map;
+    var data = window.cpcData;
+    if (!m || !data) { setTimeout(tryInit, 300); return; }
+    if (m.isStyleLoaded()) { initCpc(m); }
+    else { m.once('styledata', function(){ initCpc(m); }); }
+  }
+  window._reloadCpcLayer = tryInit;
   tryInit();
 })();
 </script>
