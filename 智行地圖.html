@@ -3457,20 +3457,22 @@ if (navigator.geolocation) {
 
   // 把動態門檻取整到導航 App 慣用的整數距離
   function roundToNatural(m) {
-    if (m >= 1000) return Math.round(m / 1000) * 1000; // → 1公里, 2公里…
-    if (m >= 200)  return Math.round(m / 100) * 100; // → 200, 300, 400, 500…
-    return Math.round(m / 50) * 50;                  // → 50, 100
+    if (m >= 1000) return Math.round(m / 500) * 500;  // → 1公里, 1.5公里, 2公里…
+    if (m >= 200)  return Math.round(m / 100) * 100;  // → 200, 300, 400, 500…
+    if (m >= 100)  return Math.round(m / 50) * 50;    // → 100, 150
+    return Math.max(10, Math.round(m / 10) * 10);     // → 10, 20 … 90(路口很近時不要唸成 0 或 100)
   }
 
   // 依門檻與步驟產生符合規格的語音字串
   function buildNavVoice(step, threshold, isPrepare) {
     const m = step.maneuver;
     if (m.type === 'depart') return null;
-    if (m.type === 'arrive') return '您已抵達目的地。';
     const r = roundToNatural(threshold);
     const d = r >= 1000
       ? (r / 1000 % 1 === 0 ? (r / 1000) : (r / 1000).toFixed(1)) + ' 公里'
       : r + ' 公尺';
+    // 還沒到:唸距離;真正抵達時由完成流程播報「您已抵達目的地」
+    if (m.type === 'arrive') return isPrepare ? ('前方' + d + '即將抵達目的地。') : (d + '後抵達目的地。');
     const sn = step.name || null;
     const into = sn ? ('進入' + sn) : '';
     if (m.type === 'roundabout' || m.type === 'rotary') {
@@ -3691,6 +3693,7 @@ if (navigator.geolocation) {
     return { g, along: proj.along, stepAlong: _stepAlongCache.along };
   }
   const NAV_STEP_PASSED_M = 30; // 沿線已超過轉彎點 30 公尺 → 視為已通過(高速時 GPS 1 秒跳 30 公尺,常常碰不到 15 公尺圈)
+  const NAV_CHAIN_TURN_M = 150; // 兩個轉彎相距 150 公尺內 → 第一個轉彎時連同下一個一起播報
 
   // GPS每次更新時呼叫:算出離下一個轉彎點多遠,更新畫面跟語音播報
   function checkTurnByTurn(lat, lon){
@@ -3731,7 +3734,17 @@ if (navigator.geolocation) {
     if (meters <= 15 || passed) {
       const already = navStepVoiceState[currentStepIndex];
       if (!isDepart && !passed && already !== 'immediate') { // 已經開過頭就不要再唸「現在轉彎」
-        const v = buildImmediateNavVoice(step);
+        // 抵達由下方完成流程統一播報「您已抵達目的地」,這裡不重複唸
+        let v = step.maneuver.type === 'arrive' ? null : buildImmediateNavVoice(step);
+        // 下一個轉彎就在 150 公尺內:一起唸出來。不然兩次播報的 8 秒最小間隔會把下一個轉彎整個吃掉
+        const next = navSteps[currentStepIndex + 1];
+        if (v && next && (step.distance || 0) < NAV_CHAIN_TURN_M) {
+          const nv = buildImmediateNavVoice(next);
+          if (nv && next.maneuver.type !== 'arrive') {
+            v = v.replace(/。$/, '') + '，隨後' + nv.replace(/^請/, '');
+            navStepVoiceState[currentStepIndex + 1] = 'w0'; // 已預告過,不再唸「幾公尺後」;到了路口仍會唸「請左轉」
+          }
+        }
         if (v) { speakText(v); navStepVoiceState[currentStepIndex] = 'immediate'; }
       }
       if (window._navTurnView) window._navTurnHoldUntil = Date.now() + NAV_TURN_HOLD_MS; // 轉完再維持平面幾秒才回 3D
@@ -3804,7 +3817,7 @@ if (navigator.geolocation) {
         if (th > nearTh && meters / speedMs < 15) continue;
         navStepVoiceState[currentStepIndex] = 'w' + th;
         const isPrepare = (_i === 0 && active.length > 1);
-        const voiceText = buildNavVoice(step, th, isPrepare);
+        const voiceText = buildNavVoice(step, meters, isPrepare); // 唸實際距離:這段一開始就比門檻近時,門檻值(例如 2 公里)會差很多
         if (voiceText) { speakText(voiceText); _lastNavAnnounceMs = Date.now(); }
         break;
       }
@@ -4240,9 +4253,7 @@ if (navigator.geolocation) {
           // 重新規劃：只播報下一個轉彎指示
           if (firstStepDistanceMeters != null) {
             const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            const initActive = getActiveThresholds(window.currentSpeedKmh || 50);
-            const nearTh = initActive.find(th => th <= initMeters) || initActive[initActive.length - 1];
-            const initVoice = buildNavVoice(firstStep, nearTh);
+            const initVoice = buildNavVoice(firstStep, initMeters);
             if (initVoice) speakText(initVoice);
           }
         } else {
@@ -4258,9 +4269,7 @@ if (navigator.geolocation) {
           const items = ['開始導航', '全程' + distKmInt + '公里', durText, etaText];
           if (firstStepDistanceMeters != null) {
             const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            const initActive2 = getActiveThresholds(window.currentSpeedKmh || 50);
-            const nearTh = initActive2.find(th => th <= initMeters) || initActive2[initActive2.length - 1];
-            const initVoice = buildNavVoice(firstStep, nearTh);
+            const initVoice = buildNavVoice(firstStep, initMeters);
             if (initVoice) items.push(initVoice);
           } else if (firstText) {
             items.push(firstText + firstRoadPart);
