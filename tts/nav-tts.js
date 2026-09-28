@@ -10,12 +10,12 @@
   var scriptSrc = (document.currentScript && document.currentScript.src) || location.href;
   var BASE = new URL('.', scriptSrc).href; // …/tts/
 
-  // Piper 中文語音(phoneme_type = pinyin 的模型)。預設 chaowen：CC0 授權，可商用
+  // Piper 中文語音(phoneme_type = pinyin 的模型)。預設 xiao_ya 女聲(停頓短、較緊湊)
   var PIPER_VOICES = {
-    'zh_CN-chaowen-medium': 'zh/zh_CN/chaowen/medium/', // 男聲，CC0
-    'zh_CN-xiao_ya-medium': 'zh/zh_CN/xiao_ya/medium/'  // 女聲，僅限非商業用途
+    'zh_CN-xiao_ya-medium': 'zh/zh_CN/xiao_ya/medium/', // 女聲，僅限非商業用途
+    'zh_CN-chaowen-medium': 'zh/zh_CN/chaowen/medium/'  // 男聲，CC0 可商用
   };
-  var PIPER_DEFAULT_VOICE = 'zh_CN-chaowen-medium';
+  var PIPER_DEFAULT_VOICE = 'zh_CN-xiao_ya-medium';
   var PIPER_HF_BASE = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/';
   var PIPER_LIBS = {
     ortUrl: 'https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/ort.wasm.min.js',
@@ -77,7 +77,7 @@
       var file = v + '.onnx';
       state = 'loading';
       try {
-        worker = new Worker(BASE + 'piper-worker.js');
+        worker = new Worker(BASE + 'piper-worker.js?v=2');
       } catch (e) { state = 'error'; errorMsg = String(e.message || e); return; }
       worker.onmessage = onMessage;
       worker.onerror = function (e) { fail(e.message || 'worker error'); };
@@ -87,7 +87,7 @@
         configUrls: [BASE + 'piper/' + file + '.json', PIPER_HF_BASE + PIPER_VOICES[v] + file + '.json'],
         cacheName: 'piper-voices-v1',
         ortUrl: PIPER_LIBS.ortUrl, ortWasmBase: PIPER_LIBS.ortWasmBase, pinyinUrl: PIPER_LIBS.pinyinUrl,
-        phonemizerUrl: BASE + 'piper-zh.js?v=1'
+        phonemizerUrl: BASE + 'piper-zh.js?v=2'
       } });
     }
 

@@ -39,3 +39,17 @@ test('phoneme ids: BOS, pad after each tone/punctuation group, EOS', () => {
   const idMap = { '^': [1], '$': [2], '_': [0], t: [9], ong: [38], '1': [64], '。': [69] };
   assert.deepEqual(Z.phonemesToIds(['t', 'ong', '1', '。'], idMap), [1, 9, 38, 64, 0, 69, 0, 2]);
 });
+
+test('tightenSilence trims lead/trail silence and shortens long pauses', () => {
+  const sr = 1000; // 1 樣本 = 1ms，好算
+  const tone = ms => Float32Array.from({ length: ms }, (_, i) => 0.5 * Math.sin(i));
+  const silence = ms => new Float32Array(ms);
+  const cat = (...a) => { const o = new Float32Array(a.reduce((n, x) => n + x.length, 0)); let p = 0; a.forEach(x => { o.set(x, p); p += x.length; }); return o; };
+  const pcm = cat(silence(300), tone(200), silence(500), tone(200), silence(300));
+  const out = Z.tightenSilence(pcm, sr, 180);
+  // 頭 20ms + 聲音 200 + 停頓 180 + 聲音 200 + 尾 80ms
+  assert.equal(out.length, 20 + 200 + 180 + 200 + 80);
+  // 短停頓不動
+  const short = cat(tone(200), silence(100), tone(200));
+  assert.equal(Z.tightenSilence(short, sr, 180).length, 500);
+});

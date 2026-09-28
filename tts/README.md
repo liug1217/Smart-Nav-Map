@@ -11,21 +11,21 @@
 
 - `nav-tts.js`：引擎介面、Piper/系統語音兩個引擎、預先合成快取、播放(共用頁面的 AudioContext 與導航音量)
 - `piper-worker.js`：Web Worker，載入 onnxruntime-web + 模型並合成
-- `piper-zh.js`：中文前處理(繁轉簡 → 數字轉中文 → 拼音 → Piper 音素 id)，對應 Piper 1.4+ 的 `phonemize_chinese.py`
+- `piper-zh.js`：中文前處理(繁轉簡 → 數字轉中文 → 拼音 → Piper 音素 id)，對應 Piper 1.4+ 的 `phonemize_chinese.py`；合成後修剪頭尾靜音、縮短過長停頓
 - `piper/`：(選用)自架模型放這裡
 
 ## 語音模型
 
-預設 **`zh_CN-chaowen-medium`**(男聲，CC0 授權可商用，約 63 MB)。
-不需要手動下載：第一次開網頁時會自動從 Hugging Face 下載並快取。
+預設 **`zh_CN-xiao_ya-medium`**(女聲，約 63 MB)。注意：此模型的訓練資料**僅限非商業用途**。
+不需要手動下載：第一次開網頁時會自動從 Hugging Face 下載並快取(換語音時舊模型會自動從快取刪掉)。
 
 想自架(不依賴 Hugging Face)就把這兩個檔案放進 `tts/piper/`，網頁會優先用這裡的：
 
-- https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium.onnx
-- https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium.onnx.json
+- https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/xiao_ya/medium/zh_CN-xiao_ya-medium.onnx
+- https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/xiao_ya/medium/zh_CN-xiao_ya-medium.onnx.json
 
-另一個可用的是 `zh_CN-xiao_ya-medium`(女聲，**僅限非商業用途**)，在主控台執行
-`localStorage.setItem('navPiperVoice','zh_CN-xiao_ya-medium')` 後重新整理即可切換。
+若要商用，可改用 `zh_CN-chaowen-medium`(男聲，CC0)：在主控台執行
+`localStorage.setItem('navPiperVoice','zh_CN-chaowen-medium')` 後重新整理即可切換。
 只支援 `phoneme_type = pinyin` 的模型；`zh_CN-huayan-*`(espeak 音素、授權不明)不支援。
 
 ## 速度

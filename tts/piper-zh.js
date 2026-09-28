@@ -129,7 +129,46 @@
     return ids.concat(idMap['$']);
   }
 
+  // Piper 輸出的頭尾各有 0.2~0.4 秒靜音、逗號停頓可達 0.5 秒，連著念(例如「900公尺」+「您已超速」)會覺得一直在停。
+  // 以 10ms 為單位找出有聲音的範圍：頭留 20ms、尾留 80ms(讓尾音自然收掉)，中間超過 maxPauseMs 的停頓縮短成 maxPauseMs。
+  function tightenSilence(pcm, sampleRate, maxPauseMs) {
+    var win = Math.max(1, Math.round(sampleRate * 0.01));
+    var frames = Math.floor(pcm.length / win);
+    if (frames < 3) return pcm;
+    var rms = new Float32Array(frames), peak = 0;
+    for (var f = 0; f < frames; f++) {
+      var s = 0;
+      for (var i = f * win; i < (f + 1) * win; i++) s += pcm[i] * pcm[i];
+      rms[f] = Math.sqrt(s / win);
+      if (rms[f] > peak) peak = rms[f];
+    }
+    var th = Math.max(0.006, peak * 0.03);
+    var first = 0, last = frames - 1;
+    while (first < frames && rms[first] < th) first++;
+    while (last > first && rms[last] < th) last--;
+    if (first >= frames) return pcm; // 整段都是靜音就不動
+    var start = Math.max(0, first - 2) * win;
+    var end = Math.min(pcm.length, (last + 1 + 8) * win);
+    var keepHalf = Math.max(1, Math.round((maxPauseMs || 180) / 20)); // 長停頓頭尾各留一半
+    var chunks = [], segStart = start, f2 = first;
+    while (f2 <= last) {
+      if (rms[f2] >= th) { f2++; continue; }
+      var runStart = f2;
+      while (f2 <= last && rms[f2] < th) f2++;
+      if (f2 - runStart > keepHalf * 2) {
+        chunks.push([segStart, (runStart + keepHalf) * win]);
+        segStart = (f2 - keepHalf) * win;
+      }
+    }
+    chunks.push([segStart, end]);
+    var len = chunks.reduce(function (n, c) { return n + (c[1] - c[0]); }, 0);
+    var out = new Float32Array(len), off = 0;
+    chunks.forEach(function (c) { out.set(pcm.subarray(c[0], c[1]), off); off += c[1] - c[0]; });
+    return out;
+  }
+
   var api = {
+    tightenSilence: tightenSilence,
     toSimplified: toSimplified,
     intToChinese: intToChinese,
     numbersToChinese: numbersToChinese,

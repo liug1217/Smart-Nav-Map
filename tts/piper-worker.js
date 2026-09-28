@@ -63,13 +63,25 @@ async function init(config) {
   var cfgBuf = await fetchCached(config.configUrls, config.cacheName);
   modelConfig = JSON.parse(new TextDecoder().decode(cfgBuf));
   if (modelConfig.phoneme_type !== 'pinyin') {
-    throw new Error('目前只支援 phoneme_type = pinyin 的中文 Piper 模型(例如 zh_CN-chaowen-medium)');
+    throw new Error('目前只支援 phoneme_type = pinyin 的中文 Piper 模型(例如 zh_CN-xiao_ya-medium)');
   }
   var modelBuf = await fetchCached(config.modelUrls, config.cacheName, function (loaded, total) {
     postMessage({ type: 'progress', loaded: loaded, total: total });
   });
   session = await ort.InferenceSession.create(modelBuf, { executionProviders: ['wasm'] });
   ready = true;
+  removeOtherVoices(config);
+}
+
+// 換過語音時，把舊語音的模型(每個約 63 MB)從快取刪掉
+async function removeOtherVoices(config) {
+  try {
+    var cache = await caches.open(config.cacheName);
+    var keep = config.modelUrls.concat(config.configUrls);
+    (await cache.keys()).forEach(function (req) {
+      if (/\.onnx(\.json)?$/.test(req.url) && keep.indexOf(req.url) < 0) cache.delete(req);
+    });
+  } catch (e) { /* 不支援 Cache Storage */ }
 }
 
 async function synthSentence(phonemes, lengthScale) {
@@ -86,16 +98,17 @@ async function synthSentence(phonemes, lengthScale) {
   };
   if ((modelConfig.num_speakers || 1) > 1) feeds.sid = new ort.Tensor('int64', BigInt64Array.from([0n]), [1]);
   var out = await session.run(feeds);
-  return out.output.data;
+  return PiperZh.tightenSilence(out.output.data, modelConfig.audio.sample_rate, 180); // 去掉頭尾靜音、縮短過長停頓
 }
 
 async function synth(text, rate) {
   var sentences = PiperZh.phonemize(text, pinyinPro.pinyin);
   if (!sentences.length) return new Float32Array(0);
   var baseScale = (modelConfig.inference && modelConfig.inference.length_scale) || 1;
-  var lengthScale = baseScale / Math.max(0.5, Math.min(2, rate || 1)); // 語速設定 0.95× → 念慢一點
+  // 語速滑桿預設 0.95×(原本是替系統語音調的)，對 Piper 視為正常語速；往右調更快、往左調更慢
+  var lengthScale = baseScale * 0.95 / Math.max(0.5, Math.min(2, rate || 1));
   var sr = modelConfig.audio.sample_rate;
-  var gap = Math.round(sr * 0.2); // 句與句之間停 0.2 秒
+  var gap = Math.round(sr * 0.15); // 句與句之間停 0.15 秒
   var parts = [];
   for (var i = 0; i < sentences.length; i++) {
     if (i > 0) parts.push(new Float32Array(gap));
