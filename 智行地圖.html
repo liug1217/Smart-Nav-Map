@@ -1751,6 +1751,7 @@ html, body {
 
 <script>
 function updateUserLocation(position) {
+  if (window._kbDriving) return; // 試開模式中不讓真實 GPS 把車子拉回去
   window.currentLat = position.coords.latitude;
   window.currentLon = position.coords.longitude;
 }
@@ -4680,6 +4681,7 @@ if (navigator.geolocation) {
   if (navigator.geolocation) {
     // 具名以便測試時用 window._simulateGpsFix({coords:{...}}) 走完全相同的 GPS 更新流程
     const onGpsPosition = (pos) => {
+      if (window._kbDriving) return; // 試開模式(鍵盤 WASD / 手機觸控)中暫停真實 GPS，避免兩邊搶位置
       const now = Date.now();
       const currentLat = pos.coords.latitude;
       const currentLon = pos.coords.longitude;
@@ -6845,6 +6847,30 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   border:0.5px solid rgba(255,255,255,0.2);
 ">⌨️ W油門 S煞車 A左 D右 &nbsp;|&nbsp; <span id="kbSpeedDisplay">0</span> km/h</div>
 
+<!-- ===== 手機觸控試開(網址加 ?drive=1 開啟)：左邊方向、右邊油門/煞車，功能等同鍵盤 WASD ===== -->
+<style>
+.tdPad{display:none;position:fixed;top:42%;z-index:9999;flex-direction:column;gap:10px;touch-action:none;user-select:none;-webkit-user-select:none;}
+.tdPad.show{display:flex;}
+.tdPad.left{left:12px;flex-direction:row;}
+.tdPad.right{right:12px;}
+.tdBtn{width:64px;height:64px;border-radius:50%;border:0.5px solid rgba(255,255,255,0.25);
+  background:rgba(0,0,0,0.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;
+  touch-action:none;-webkit-tap-highlight-color:transparent;cursor:pointer;}
+.tdBtn[data-on]{background:rgba(47,128,255,0.85);}
+.tdBtn.small{width:64px;height:36px;border-radius:18px;font-size:12px;}
+</style>
+<div class="tdPad left" id="tdPadLeft">
+  <div class="tdBtn" data-key="a">◀</div>
+  <div class="tdBtn" data-key="d">▶</div>
+</div>
+<div class="tdPad right" id="tdPadRight">
+  <div class="tdBtn" data-key="w">▲</div>
+  <div class="tdBtn" data-key="s">▼</div>
+  <div class="tdBtn small" id="tdCamSim">📷 測速</div>
+  <div class="tdBtn small" id="tdClose">✕ 結束</div>
+</div>
+
 <script>
 (function(){
   var active = {};
@@ -6865,8 +6891,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function init(){
     var t = window._vehicleTarget;
-    if(t){ lng=t.lng; lat=t.lat; bearing=t.bearing||0; return; }
-    if(window.currentLon!=null){ lng=window.currentLon; lat=window.currentLat; bearing=0; }
+    if(t){ lng=t.lng; lat=t.lat; bearing=t.bearing||0; }
+    else if(window.currentLon!=null){ lng=window.currentLon; lat=window.currentLat; bearing=0; }
+    else if(window.map){ var c=window.map.getCenter(); lng=c.lng; lat=c.lat; bearing=0; } // 沒有 GPS(例如區網 http 測試)就從地圖中心出發
+    if(lng!==null) window._kbDriving = true; // 開始試開後暫停真實 GPS
   }
 
   function tick(now){
@@ -6927,6 +6955,36 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   document.addEventListener('keyup', function(e){
     active[e.key.toLowerCase()]=false;
   });
+
+  // ── 手機觸控試開：按住按鈕 = 按住鍵盤 WASD(可多指同時按：油門 + 轉彎) ──
+  var padL = document.getElementById('tdPadLeft'), padR = document.getElementById('tdPadRight');
+  function showTouchDrive(on){
+    [padL, padR].forEach(function(p){ if(p) p.classList.toggle('show', on); });
+    if(hud) hud.firstChild.nodeValue = on ? '🕹️ 觸控試開 | ' : '⌨️ W油門 S煞車 A左 D右  |  ';
+  }
+  document.querySelectorAll('.tdBtn[data-key]').forEach(function(btn){
+    var k = btn.getAttribute('data-key');
+    function down(e){ e.preventDefault(); if(lng===null) init(); active[k]=true; btn.setAttribute('data-on',''); try{ btn.setPointerCapture(e.pointerId); }catch(_){} }
+    function up(){ active[k]=false; btn.removeAttribute('data-on'); }
+    btn.addEventListener('pointerdown', down);
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', up);
+    btn.addEventListener('lostpointercapture', up);
+    btn.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  });
+  var camSim = document.getElementById('tdCamSim');
+  if(camSim) camSim.addEventListener('click', function(){
+    // 用目前試開車速(沒在開就用 72)模擬開向限速 60 的測速照相，聽完整的測速播報
+    if(typeof window.simulateSpeedCameraApproach === 'function') window.simulateSpeedCameraApproach(60, Math.round(speed*3.6) || 72);
+  });
+  var closeBtn = document.getElementById('tdClose');
+  if(closeBtn) closeBtn.addEventListener('click', function(){
+    active = {}; speed = 0; lng = lat = null;
+    window._kbDriving = false; // 恢復真實 GPS
+    showTouchDrive(false);
+  });
+  if(/[?&#]drive(=1)?(&|$)/.test(location.search + location.hash)) showTouchDrive(true);
+  window.showTouchDrive = showTouchDrive;
 
   requestAnimationFrame(tick);
 })();
