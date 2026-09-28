@@ -3294,7 +3294,7 @@ if (navigator.geolocation) {
       toiMatches.forEach(function(item) {
         const { el, addrId } = _makeLocalItem(
           item,
-          '<img src="圖片/toilet.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
+          '<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚾</span>',
           '#1a4fa0',
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '公共廁所', '圖片/toilet.svg'); }
         );
@@ -6980,35 +6980,21 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var ICON_ID = 'toilet-icon';
   var _popup = null;
 
-  // 用 WC 圖檔而不是 🚾 表情符號:表情符號在 iPhone / Android 長得不一樣;圖檔載入失敗才退回表情符號
   function _addToiletIcon(m) {
     if (m.hasImage(ICON_ID)) return;
     var sz = 60;
-    function _add(c) {
-      var img = new Image(sz, sz);
-      img.onload = function() {
-        if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 });
-      };
-      img.src = c.toDataURL('image/png');
-    }
-    var raw = new Image();
-    raw.onload = function() {
-      var c = document.createElement('canvas');
-      c.width = sz; c.height = sz;
-      c.getContext('2d').drawImage(raw, 0, 0, sz, sz);
-      _add(c);
+    var c = document.createElement('canvas');
+    c.width = sz; c.height = sz;
+    var ctx = c.getContext('2d');
+    ctx.font = '44px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚾', sz / 2, sz / 2);
+    var img = new Image(sz, sz);
+    img.onload = function() {
+      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 });
     };
-    raw.onerror = function() {
-      var c = document.createElement('canvas');
-      c.width = sz; c.height = sz;
-      var ctx = c.getContext('2d');
-      ctx.font = '44px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🚾', sz / 2, sz / 2);
-      _add(c);
-    };
-    raw.src = '圖片/toilet.svg';
+    img.src = c.toDataURL('image/png');
   }
 
   function initToilets(m) {
@@ -7044,10 +7030,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         var container = document.createElement('div');
         container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;';
         container.innerHTML =
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-            '<img src="圖片/toilet.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">' +
-            '<span style="font-weight:600;font-size:14px;">' + (props.name || '公共廁所') + '</span>' +
-          '</div>' +
+          '<div style="font-weight:600;font-size:14px;margin-bottom:8px;">🚾 ' + (props.name || '公共廁所') + '</div>' +
           '<button id="toiletNavBtn" style="width:100%;padding:7px 0;background:#007aff;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">🧭 導航前往</button>';
 
         _popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: '220px' })
