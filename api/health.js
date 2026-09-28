@@ -9,7 +9,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return methodNotAllowed(res);
 
   const redis = await redisPing();
-  const configured = !!process.env.UPSTASH_REDIS_REST_URL;
+  const configured = !!(process.env.SNM_DATA_DIR || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
   const ok = redis === 'ok' || (!configured && redis === 'error');
 
   res.status(ok ? 200 : 503).json({

@@ -7384,12 +7384,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 (function () {
   'use strict';
 
+  // ── 後端伺服器網址 ───────────────────────────────────────────────────────
+  // 網頁放在 GitHub Pages(本身不能跑後端)，後端跑在自己的電腦(server/server.js)，
+  // 透過 Tailscale Funnel 的 HTTPS 網址連過去。填入例如 'https://my-pc.tail1234.ts.net'
+  // 留空 = 用同網域的 /api(部署在 Vercel 或本機測試時)
+  var SNM_SERVER_URL = '';
+
   // ── 設定集中管理 ─────────────────────────────────────────────────────────
   var TCFG = {
-    // API 基礎 URL：部署在 Vercel 時用相對路徑即可；
-    // 如果前端在 GitHub Pages、API 在 Vercel，需設定：
-    //   window.SNM_API_BASE = 'https://your-project.vercel.app/api'
-    API_BASE:                  window.SNM_API_BASE || '/api',
+    API_BASE: window.SNM_API_BASE ||
+              (SNM_SERVER_URL ? SNM_SERVER_URL.replace(/\/+$/, '') + '/api' : '/api'),
     HEARTBEAT_INTERVAL_MS:     15000,  // 15 秒 heartbeat
     ONLINE_COUNT_INTERVAL_MS:  30000,  // 30 秒更新在線人數
     GPS_POLL_INTERVAL_MS:      3000,   // 每 3 秒輪詢一次（內部有自己的節流）
