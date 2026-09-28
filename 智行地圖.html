@@ -2097,6 +2097,7 @@ if (navigator.geolocation) {
     if (typeof window._reloadToiletLayer === 'function') window._reloadToiletLayer();
     if (typeof window._reloadPxmartLayer === 'function') window._reloadPxmartLayer();
     if (typeof window._reloadCpcLayer === 'function') window._reloadCpcLayer();
+    if (typeof window._reloadTrafficLayer === 'function') window._reloadTrafficLayer();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -7542,7 +7543,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       latitude:        lat,
       longitude:       lng,
       speed:           speedKmh / 3.6,            // 轉回 m/s
-      heading:         window.compassHeading,      // 或 null
+      // 車子實際的行進方向(GPS / 導航路線)，不是手機羅盤：手機架歪時羅盤方向跟車頭不同，路況會記到錯的方向
+      heading:         (window._vehicleTarget && typeof window._vehicleTarget.bearing === 'number')
+                         ? window._vehicleTarget.bearing : null,
       accuracy:        null,                       // 目前 window 沒有 accuracy
       navigationActive: document.body.classList.contains('navigating'),
     }).catch(function () {});
@@ -7551,67 +7554,105 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   setInterval(tryUploadGps, TCFG.GPS_POLL_INTERVAL_MS);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TRAFFIC MAP LAYER（MapLibre 路況圓點）
+  // TRAFFIC MAP LAYER（路況：依塞車程度把道路上色）
+  // 順暢＝導航路線的淺藍色；車多黃、緩慢橘、壅塞紅、嚴重壅塞深紅。
+  // 沒在導航時也顯示(預設開啟，🚦 可以關掉並記住)；畫在導航路線上方，路線上塞車的那段會變色
   // ═══════════════════════════════════════════════════════════════════════════
   var TRAFFIC_SOURCE = 'snm-traffic-src';
-  var TRAFFIC_LAYER  = 'snm-traffic-circles';
-  var _trafficOn     = false;
+  var TRAFFIC_LAYER  = 'snm-traffic-lines';   // 道路線段
+  var TRAFFIC_POINTS = 'snm-traffic-points';  // 方向不明、只能畫成點的少數路段
+  var _trafficOn     = true;
+  try { if (localStorage.getItem('snm_traffic_off') === '1') _trafficOn = false; } catch (e) {}
   var _trafficData   = null;
+  var _trafficHandlersBound = false;
+
+  // 放在導航路線之上、車子之下
+  function trafficBeforeId() {
+    var m = window.map;
+    return m.getLayer('user-pulse') ? 'user-pulse' : (m.getLayer('user-car') ? 'user-car' : undefined);
+  }
+  function keepTrafficOnTop() {
+    var m = window.map, before = trafficBeforeId();
+    try {
+      if (m.getLayer(TRAFFIC_LAYER))  m.moveLayer(TRAFFIC_LAYER, before);
+      if (m.getLayer(TRAFFIC_POINTS)) m.moveLayer(TRAFFIC_POINTS, before);
+    } catch (e) {}
+  }
+
+  function showTrafficPopup(e) {
+    if (!e.features || !e.features[0]) return;
+    var p = e.features[0].properties;
+    var base = (p.baselineSpeed == null || p.baselineSpeed === 'null')
+      ? '學習中（資料累積後自動判斷）' : p.baselineSpeed + ' km/h';
+    new maplibregl.Popup({ offset: 12, closeButton: true })
+      .setLngLat(e.lngLat)
+      .setHTML(
+        '<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
+        '<strong style="color:' + p.color + '">' + (p.label || '路況') + '</strong><br>' +
+        '目前車速：' + p.averageSpeed + ' km/h<br>' +
+        '這段路順暢時：' + base + '<br>' +
+        '樣本數：' + p.sampleCount + '（' + p.uniqueContributors + ' 人）' +
+        '</div>'
+      )
+      .addTo(window.map);
+  }
 
   function initTrafficLayer() {
     if (!window.map) { setTimeout(initTrafficLayer, 600); return; }
-    if (!window.map.isStyleLoaded()) {
-      window.map.once('styledata', initTrafficLayer); return;
+    // 用輪詢等地圖載入完成：styledata 事件可能在還沒載完時就觸發過了，之後不會再來，會永遠等不到
+    if (!window.map.isStyleLoaded()) { setTimeout(initTrafficLayer, 500); return; }
+    var m = window.map;
+    if (!m.getSource(TRAFFIC_SOURCE)) {
+      m.addSource(TRAFFIC_SOURCE, {
+        type: 'geojson',
+        data: _trafficData || { type: 'FeatureCollection', features: [] },
+      });
     }
-    if (window.map.getSource(TRAFFIC_SOURCE)) return;
+    var vis = _trafficOn ? 'visible' : 'none';
+    if (!m.getLayer(TRAFFIC_LAYER)) {
+      m.addLayer({
+        id:     TRAFFIC_LAYER,
+        type:   'line',
+        source: TRAFFIC_SOURCE,
+        filter: ['==', ['geometry-type'], 'LineString'],
+        layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color':   ['get', 'color'],
+          'line-width':   ['interpolate', ['linear'], ['zoom'], 11, 3, 14, 6, 17, 10],
+          'line-opacity': 0.9,
+        },
+      }, trafficBeforeId());
+    }
+    if (!m.getLayer(TRAFFIC_POINTS)) {
+      m.addLayer({
+        id:     TRAFFIC_POINTS,
+        type:   'circle',
+        source: TRAFFIC_SOURCE,
+        filter: ['==', ['geometry-type'], 'Point'],
+        layout: { visibility: vis },
+        paint: {
+          'circle-radius':       ['interpolate', ['linear'], ['zoom'], 11, 3, 14, 5, 17, 8],
+          'circle-color':        ['get', 'color'],
+          'circle-opacity':      0.9,
+          'circle-stroke-color': 'rgba(255,255,255,0.7)',
+          'circle-stroke-width': 1,
+        },
+      }, trafficBeforeId());
+    }
 
-    window.map.addSource(TRAFFIC_SOURCE, {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] },
-    });
-
-    window.map.addLayer({
-      id:     TRAFFIC_LAYER,
-      type:   'circle',
-      source: TRAFFIC_SOURCE,
-      layout: { visibility: 'none' },
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'],
-          11, 5, 14, 10, 17, 18
-        ],
-        'circle-color':        ['get', 'color'],
-        'circle-opacity':      0.72,
-        'circle-stroke-color': 'rgba(255,255,255,0.6)',
-        'circle-stroke-width': 1.2,
-      },
-    });
-
-    // 點擊路況圓點顯示資訊
-    window.map.on('click', TRAFFIC_LAYER, function (e) {
-      if (!e.features || !e.features[0]) return;
-      var p = e.features[0].properties;
-      new maplibregl.Popup({ offset: 12, closeButton: true })
-        .setLngLat(e.lngLat)
-        .setHTML(
-          '<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
-          '<strong>' + (p.label || '路況') + '</strong><br>' +
-          '平均速度：' + p.averageSpeed + ' km/h<br>' +
-          '基準速度：' + p.baselineSpeed + ' km/h<br>' +
-          '速度比：' + Math.round(p.speedRatio * 100) + '%<br>' +
-          '樣本數：' + p.sampleCount + '（' + p.uniqueContributors + ' 人）<br>' +
-          '可信度：' + (p.confidence === 'high' ? '高' : p.confidence === 'medium' ? '中' : '低') +
-          '</div>'
-        )
-        .addTo(window.map);
-    });
-
-    window.map.on('mouseenter', TRAFFIC_LAYER, function () {
-      window.map.getCanvas().style.cursor = 'pointer';
-    });
-    window.map.on('mouseleave', TRAFFIC_LAYER, function () {
-      window.map.getCanvas().style.cursor = '';
-    });
+    // 點路況線段顯示資訊(事件綁在 map 上，換地圖樣式後不會失效，只綁一次)
+    if (!_trafficHandlersBound) {
+      _trafficHandlersBound = true;
+      [TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) {
+        m.on('click', id, showTrafficPopup);
+        m.on('mouseenter', id, function () { m.getCanvas().style.cursor = 'pointer'; });
+        m.on('mouseleave', id, function () { m.getCanvas().style.cursor = ''; });
+      });
+    }
+    fetchTrafficSegments();
   }
+  // 換地圖樣式後重建(由 reloadMapLayers 呼叫)
+  window._reloadTrafficLayer = initTrafficLayer;
 
   // 等待 map 初始化
   if (window.map) { initTrafficLayer(); }
@@ -7629,9 +7670,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     apiGet('/traffic/segments' + q)
       .then(function (r) { return (r && r.data) ? r.data : r; })
       .then(function (geojson) {
+        if (!geojson || geojson.type !== 'FeatureCollection') return;
         _trafficData = geojson;
         var src = window.map && window.map.getSource(TRAFFIC_SOURCE);
-        if (src && geojson && geojson.type === 'FeatureCollection') src.setData(geojson);
+        if (src) src.setData(geojson);
+        keepTrafficOnTop(); // 導航路線可能在路況之後才建立，每次更新都確保路況在路線上面
         checkRouteTrafficAlert();
       })
       .catch(function () {}); // API 不可用時不影響導航
@@ -7641,23 +7684,23 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   // ── 路況切換按鈕 ─────────────────────────────────────────────────────────
   var _trafficBtn = document.getElementById('trafficBtn');
+  function paintTrafficBtn() {
+    if (!_trafficBtn) return;
+    _trafficBtn.style.background = _trafficOn ? 'rgba(0,122,255,0.15)' : '';
+    _trafficBtn.style.boxShadow  = _trafficOn ? 'inset 0 0 0 2px rgba(0,122,255,0.4)' : '';
+  }
   function toggleTraffic() {
     _trafficOn = !_trafficOn;
-    if (!window.map || !window.map.getLayer(TRAFFIC_LAYER)) {
-      initTrafficLayer();
-      return;
-    }
-    window.map.setLayoutProperty(
-      TRAFFIC_LAYER, 'visibility', _trafficOn ? 'visible' : 'none'
-    );
-    if (_trafficBtn) {
-      _trafficBtn.style.background = _trafficOn
-        ? 'rgba(0,122,255,0.15)' : '';
-      _trafficBtn.style.boxShadow  = _trafficOn
-        ? 'inset 0 0 0 2px rgba(0,122,255,0.4)' : '';
-    }
+    try { localStorage.setItem('snm_traffic_off', _trafficOn ? '0' : '1'); } catch (e) {}
+    paintTrafficBtn();
+    var m = window.map;
+    if (!m || !m.getLayer(TRAFFIC_LAYER)) { initTrafficLayer(); return; }
+    [TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) {
+      if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', _trafficOn ? 'visible' : 'none');
+    });
     if (_trafficOn) fetchTrafficSegments();
   }
+  paintTrafficBtn();
   if (_trafficBtn) _trafficBtn.addEventListener('click', toggleTraffic);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -7684,8 +7727,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
     for (var i = 0; i < congested.length; i++) {
       var f    = congested[i];
-      var sLng = f.geometry.coordinates[0];
-      var sLat = f.geometry.coordinates[1];
+      // 路段可能是線(取中點)或點
+      var gc   = f.geometry.coordinates;
+      var mid  = f.geometry.type === 'LineString' ? gc[Math.floor(gc.length / 2)] : gc;
+      var sLng = mid[0];
+      var sLat = mid[1];
       var distM = haversineM(myLat, myLng, sLat, sLng);
       var distKm = distM / 1000;
 

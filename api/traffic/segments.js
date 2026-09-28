@@ -8,8 +8,31 @@ const { parseBbox } = require('../../lib/validation');
 const { redisCmd, redisPipeline } = require('../../lib/redis');
 const { ghDecode } = require('../../lib/traffic/geohash');
 const { computeState } = require('../../lib/traffic/aggregator');
-const { ROLLING_WINDOW_MS, BASELINE_KMH } = require('../../lib/traffic/config');
+const { ROLLING_WINDOW_MS } = require('../../lib/traffic/config');
+const { ffKey, freeFlowSpeed } = require('../../lib/traffic/baseline');
 const SEG_ACTIVE_WINDOW_MS  = 30 * 60 * 1000;
+
+// 路況要畫成道路線段：優先用使用者實際開過的軌跡；沒有軌跡時，
+// 依行進方向在格子中心畫一小段(方向不明就只能畫成點)
+const FALLBACK_HALF_M = 50;
+function segmentGeometry(seg, geoJson) {
+  if (geoJson) {
+    try {
+      const line = JSON.parse(geoJson);
+      if (Array.isArray(line) && line.length >= 2) return { type: 'LineString', coordinates: line };
+    } catch (_) {}
+  }
+  const dLat = FALLBACK_HALF_M / 110540;
+  const dLng = FALLBACK_HALF_M / (111320 * Math.cos(seg.lat * Math.PI / 180));
+  const c = [seg.lng, seg.lat];
+  switch (seg.dir) {
+    case 'N': return { type: 'LineString', coordinates: [[c[0], c[1] - dLat], [c[0], c[1] + dLat]] };
+    case 'S': return { type: 'LineString', coordinates: [[c[0], c[1] + dLat], [c[0], c[1] - dLat]] };
+    case 'E': return { type: 'LineString', coordinates: [[c[0] - dLng, c[1]], [c[0] + dLng, c[1]]] };
+    case 'W': return { type: 'LineString', coordinates: [[c[0] + dLng, c[1]], [c[0] - dLng, c[1]]] };
+    default:  return { type: 'Point', coordinates: c };
+  }
+}
 
 module.exports = async (req, res) => {
   corsHeaders(res);
@@ -48,20 +71,26 @@ module.exports = async (req, res) => {
       return ok(res, { type: 'FeatureCollection', features: [], updatedAt: now }, { cache: 'public, max-age=15' });
     }
 
-    // Batch-fetch samples via pipeline
-    const cmds    = inBbox.map(seg => ['ZRANGEBYSCORE', seg.segKey, String(windowStart), '+inf']);
+    // 一次批次取回：每段的近期車速樣本、學到的順暢車速、實際開過的道路軌跡
+    const cmds = inBbox.flatMap(seg => [
+      ['ZRANGEBYSCORE', seg.segKey, String(windowStart), '+inf'],
+      ['GET', ffKey(seg.gh, seg.dir)],
+      ['GET', `geo:${seg.gh}:${seg.dir}`],
+    ]);
     const results = await redisPipeline(cmds);
+    const at = i => results[i] && results[i].result;
 
     const features = [];
     for (let i = 0; i < inBbox.length; i++) {
-      const seg     = inBbox[i];
-      const samples = results[i] && results[i].result;
-      const state   = computeState(samples);
+      const seg      = inBbox[i];
+      const samples  = at(i * 3);
+      const freeFlow = freeFlowSpeed(at(i * 3 + 1));
+      const state    = computeState(samples, freeFlow);
       if (!state) continue;
 
       features.push({
         type: 'Feature',
-        geometry:   { type: 'Point', coordinates: [seg.lng, seg.lat] },
+        geometry:   segmentGeometry(seg, at(i * 3 + 2)),
         properties: {
           segmentId:          `${seg.gh}:${seg.dir}`,
           direction:          seg.dir,
@@ -69,7 +98,8 @@ module.exports = async (req, res) => {
           speedRatio:         state.speedRatio,
           sampleCount:        state.totalSamples,
           uniqueContributors: state.uniqueContributors,
-          baselineSpeed:      BASELINE_KMH,
+          baselineSpeed:      state.baseline,          // null = 這段路還在學習順暢車速
+          baselineSource:     state.baselineSource,
           trafficLevel:       state.level.level,
           color:              state.level.color,
           label:              state.level.label,

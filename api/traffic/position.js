@@ -9,7 +9,10 @@ const { validateSessionId, validateCoords, validateTimestamp } = require('../../
 const { checkRateLimit } = require('../../lib/rate-limit');
 const { redisCmd } = require('../../lib/redis');
 const { normalizeGps } = require('../../lib/traffic/normalize');
-const { ROLLING_WINDOW_MS, SAMPLE_TTL_S, CONTRIB_TTL_MS, RATE_LIMIT_MS } = require('../../lib/traffic/config');
+const { haversineKm } = require('../../lib/traffic/geohash');
+const { ffKey, addSpeed, LEARN_TTL_S } = require('../../lib/traffic/baseline');
+const { ROLLING_WINDOW_MS, SAMPLE_TTL_S, CONTRIB_TTL_MS, RATE_LIMIT_MS,
+        GEO_MIN_M, GEO_MAX_M, GEO_MAX_GAP_MS, GEO_TTL_S, GEO_MAX_POINTS } = require('../../lib/traffic/config');
 
 module.exports = async (req, res) => {
   corsHeaders(res);
@@ -72,6 +75,29 @@ module.exports = async (req, res) => {
       // update moving status
       redisCmd('ZADD', 'hb:moving', String(contribExpiry), sessionId),
     ]);
+
+    // ── 學習這段路的順暢車速(長期車速分布) ──────────────────────────────
+    const fk = ffKey(sample.gh, sample.dir);
+    const hist = await redisCmd('GET', fk);
+    await redisCmd('SETEX', fk, String(LEARN_TTL_S), addSpeed(hist, sample.speedKmh));
+
+    // ── 記下剛開過的這一小段軌跡，前端用它把路況畫成道路線段 ──────────────
+    if (lastPos && ts - lastPos.ts > 0 && ts - lastPos.ts <= GEO_MAX_GAP_MS) {
+      const dM = haversineKm(lastPos.lat, lastPos.lng, latitude, longitude) * 1000;
+      if (dM >= GEO_MIN_M && dM <= GEO_MAX_M) {
+        const gk   = `geo:${sample.gh}:${sample.dir}`;
+        const from = [+lastPos.lng.toFixed(6), +lastPos.lat.toFixed(6)];
+        const to   = [+longitude.toFixed(6), +latitude.toFixed(6)];
+        let line = [from, to];
+        // 同一台車在這一格裡接著開：把新的一小段接在原本線段後面，塞車時(每次只前進幾十公尺)才不會變成一截一截的虛線
+        try {
+          const prev = JSON.parse(await redisCmd('GET', gk) || 'null');
+          const end  = Array.isArray(prev) && prev[prev.length - 1];
+          if (end && haversineKm(end[1], end[0], from[1], from[0]) * 1000 < 5 && prev.length < GEO_MAX_POINTS) line = [...prev, to];
+        } catch (_) {}
+        await redisCmd('SETEX', gk, String(GEO_TTL_S), JSON.stringify(line));
+      }
+    }
 
     return ok(res, { segment: `${sample.gh}:${sample.dir}` });
   } catch (e) {
