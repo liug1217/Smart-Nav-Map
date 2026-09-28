@@ -4,8 +4,10 @@
 
 | 引擎 | 說明 |
 |---|---|
-| `piper`(預設) | 開源 Piper TTS，在手機/電腦**本機**用 WASM 合成(`piper-worker.js`，背景執行緒)，不需要 API Key、不按次計費。模型下載一次後存在瀏覽器 Cache Storage，之後離線可用 |
-| `system` | 瀏覽器內建語音(原本的做法)。Piper 還在下載、載入失敗，或某句來不及合成時自動改用它 |
+| `piper`(選用) | 開源 Piper TTS，在手機/電腦**本機**用 WASM 合成(`piper-worker.js`，背景執行緒)，不需要 API Key、不按次計費。模型下載一次後存在瀏覽器 Cache Storage，之後離線可用 |
+| `system`(**預設**) | 瀏覽器內建語音(台灣口音、不用下載、即時播報)。用 Piper 時，Piper 還在下載、載入失敗，或某句來不及合成也會改用它 |
+
+目前預設用 `system`；想試 Piper 在主控台執行 `NavTTS.setEngine('piper')`，改回來用 `NavTTS.setEngine('system')`(會順便刪掉手機快取裡的 Piper 模型)。
 
 ## 檔案
 

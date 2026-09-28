@@ -1,5 +1,6 @@
 // NavTTS — 導航語音引擎(可替換)
 // 導航播報只呼叫 NavTTS.speak(text)，實際用哪個引擎念由這裡決定：
+// 目前預設用 system(台灣口音、不用下載、播報即時)；Piper 保留為選用：NavTTS.setEngine('piper')
 //   piper  : 開源 Piper TTS，在手機/電腦本機用 WASM 合成(Web Worker)，不需要 API Key、不按次計費，模型下載一次後離線可用
 //   system : 瀏覽器內建 speechSynthesis(原本的做法)，Piper 還在下載/載入失敗時自動改用它，確保不會沒聲音
 // 要換成別的引擎：NavTTS.registerEngine('名稱', { isReady, speak, stop, init?, preload? }) 再 NavTTS.setEngine('名稱')
@@ -224,7 +225,7 @@
   var gen = 0; // stop() 時 +1，讓還在合成中的語句不要再播出來
 
   function preferred() {
-    var name = lsGet('navTtsEngine', 'piper');
+    var name = lsGet('navTtsEngine', 'system');
     return engines[name] ? name : 'system';
   }
 
@@ -234,11 +235,16 @@
     setEngine: function (name) {
       if (!engines[name]) return false;
       lsSet('navTtsEngine', name);
-      if (engines[name].init) engines[name].init();
+      NavTTS.init();
       return true;
     },
     getEngine: preferred,
-    init: function () { var e = engines[preferred()]; if (e.init) e.init(); },
+    init: function () {
+      var e = engines[preferred()];
+      if (e.init) e.init();
+      // 沒用 Piper 時，把之前下載過的 Piper 模型(約 63 MB)從手機快取刪掉
+      if (preferred() !== 'piper' && window.caches) caches.delete('piper-voices-v1').catch(function () {});
+    },
     // 常用語句先在背景合成，真正播報時直接播(系統語音引擎不需要)
     preload: function (texts, opts) { var e = engines[preferred()]; if (e.preload) e.preload(texts, opts); },
     // 念完才 resolve；偏好的引擎還沒好或失敗時，改用系統語音
