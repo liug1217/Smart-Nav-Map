@@ -3296,7 +3296,7 @@ if (navigator.geolocation) {
           item,
           '<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚾</span>',
           '#1a4fa0',
-          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '公共廁所', '圖片/toilet.svg'); }
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '公共廁所', '🚾'); }
         );
         searchResultsList.appendChild(el);
         _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
@@ -3327,8 +3327,13 @@ if (navigator.geolocation) {
   function makeDestMarkerEl(logo){
     const el = document.createElement('div');
     if (logo) {
+      // logo 可以是圖檔路徑,或直接是表情符號(例如廁所 🚾,之後有正式圖檔再換)
+      if (logo === '圖片/toilet.svg') logo = '🚾'; // 最近目的地裡可能存著已移除的暫用 WC 圖
+      const isImg = /[\/.]/.test(logo);
       el.style.cssText = 'display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));';
-      el.innerHTML = '<div style="width:44px;height:44px;border-radius:50%;background:#fff url(\'' + logo + '\') center/72% no-repeat;border:3px solid #E53935;box-sizing:border-box"></div>' +
+      el.innerHTML = (isImg
+          ? '<div style="width:44px;height:44px;border-radius:50%;background:#fff url(\'' + logo + '\') center/72% no-repeat;border:3px solid #E53935;box-sizing:border-box"></div>'
+          : '<div style="width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #E53935;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1">' + logo + '</div>') +
         '<div style="width:0;height:0;margin-top:-2px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #E53935"></div>';
     } else {
       el.innerHTML = '<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg" style="display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">' +
@@ -7044,7 +7049,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           var btn = document.getElementById('toiletNavBtn');
           if (btn) btn.addEventListener('click', function(){
             _popup.remove(); _popup = null;
-            window._navigateToCoord(lat, lon, props.name || '公共廁所', '圖片/toilet.svg');
+            window._navigateToCoord(lat, lon, props.name || '公共廁所', '🚾');
           });
         }, 0);
       });
