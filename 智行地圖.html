@@ -4089,11 +4089,17 @@ if (navigator.geolocation) {
     return d > 180 ? d - 360 : d;
   }
 
+  let _hasAbsoluteOrientation = false;
   function handleDeviceOrientation(event){
     let heading = null;
     if (typeof event.webkitCompassHeading === 'number') {
-      heading = event.webkitCompassHeading;
+      heading = event.webkitCompassHeading; // iOS:真正的指北方向
     } else if (typeof event.alpha === 'number') {
+      // Android 同時會送兩種事件:deviceorientationabsolute(以正北為 0°)跟 deviceorientation(大多是
+      // 相對角度,0° 是開啟時手機剛好朝的方向)。兩種混進同一個平滑器,方向會在兩個基準間來回跳 → 方向錯 + 畫面晃。
+      // 只用以正北為基準的那一種
+      if (event.type === 'deviceorientationabsolute') _hasAbsoluteOrientation = true;
+      else if (_hasAbsoluteOrientation || event.absolute !== true) return;
       heading = 360 - event.alpha;
     }
     if (heading == null || isNaN(heading)) return;
@@ -4730,7 +4736,8 @@ map.on('load', function() {
   };
   function _addCarLayers(_img) {
     if (map.getSource('user-pos')) return;
-    map.addImage('car-icon', _img, { pixelRatio: 2 });
+    // 切換地圖風格後舊圖可能還在,重複 addImage 會丟錯中斷,車子就整個不見
+    if (!map.hasImage('car-icon')) map.addImage('car-icon', _img, { pixelRatio: 2 });
 
     map.addSource('user-pos', {
       type: 'geojson',
@@ -4797,7 +4804,7 @@ map.on('load', function() {
       g.fillStyle = '#E53935';
       g.fill();
 
-      map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      if (!map.hasImage('compass-icon')) map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
       map.addLayer({
         id: 'user-compass',
         type: 'symbol',
@@ -4849,6 +4856,10 @@ map.on('load', function() {
 
     window.updateUserMarkerHeading = function() {
       if (window.currentLon != null && window.currentLat != null) {
+        // 車子在移動或已吸附在導航路線上時,方向以路線/GPS 行進方向為準。羅盤每秒觸發幾十次,
+        // 若在這裡覆寫,會跟每秒一次的 GPS 方向來回搶 → 畫面晃;手機架歪時方向也會錯。只有停著時才用羅盤
+        const t = window._vehicleTarget;
+        if (t && (t.route || (window.currentSpeedKmh || 0) > 5)) return;
         if (window._vehicleTarget) {
           window._vehicleTarget.bearing = window.compassHeading != null ? window.compassHeading : 0;
         } else {
@@ -5519,11 +5530,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     function applyStyle(idx){
       const s = STYLES[idx];
       if(styleBtn) styleBtn.textContent = s.icon;
-      map.once('styledata', function(){
+      // 等新風格「完全載入」(style.load)才重建圖層。原本用 styledata 可能在舊圖層還沒清掉時就觸發,
+      // 重建時看到車子來源還在就跳過,接著切換把它清掉 → 切幾次後車子不見;diff:false 讓每次都完整替換
+      map.once('style.load', function(){
         /* 重新載入 route/navRoute layers 避免樣式切換後消失 */
         if(typeof window.reloadMapLayers === 'function') window.reloadMapLayers();
       });
-      map.setStyle(s.style);
+      map.setStyle(s.style, { diff: false });
     }
 
     if(styleBtn) styleBtn.addEventListener('click', function(){
