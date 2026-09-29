@@ -7687,8 +7687,18 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 沒在導航時也顯示(預設開啟，🚦 可以關掉並記住)；畫在導航路線上方，路線上塞車的那段會變色
   // ═══════════════════════════════════════════════════════════════════════════
   var TRAFFIC_SOURCE = 'snm-traffic-src';
+  var TRAFFIC_CASING = 'snm-traffic-casing';  // 路況線段的深色外框(跟導航路線一樣有外框)
   var TRAFFIC_LAYER  = 'snm-traffic-lines';   // 道路線段
   var TRAFFIC_POINTS = 'snm-traffic-points';  // 方向不明、只能畫成點的少數路段
+  // 沒人開過(沒有車速資料)的道路也要顯示成「順暢」的藍色：道路形狀取自 OpenFreeMap 的向量道路資料，
+  // 任何地圖樣式(衛星/街道/夜間)都疊得上去；畫在導航路線底下，塞車路段畫在最上面
+  var ROADS_SOURCE   = 'snm-roads';
+  var ROADS_OUTLINE  = 'snm-roads-outline';
+  var ROADS_LINE     = 'snm-roads-line';
+  var ROAD_CLASSES   = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'];
+  // 跟導航路線完全一樣的粗細與顏色(navRoute-outline / navRoute-line)
+  var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#325cb3', NAV_LINE_C = '#4783fe';
+  var TRAFFIC_LAYERS = [ROADS_OUTLINE, ROADS_LINE, TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS];
   var _trafficOn     = true;
   try { if (localStorage.getItem('snm_traffic_off') === '1') _trafficOn = false; } catch (e) {}
   var _trafficData   = null;
@@ -7699,11 +7709,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     return m.getLayer('user-pulse') ? 'user-pulse' : (m.getLayer('user-car') ? 'user-car' : undefined);
   }
+  // 藍色道路底圖放在導航路線底下(路線本身才看得清楚)
+  function roadsBeforeId() {
+    var m = window.map;
+    return m.getLayer('navRoute-outline') ? 'navRoute-outline' : trafficBeforeId();
+  }
   function keepTrafficOnTop() {
-    var m = window.map, before = trafficBeforeId();
+    var m = window.map, before = trafficBeforeId(), roadsBefore = roadsBeforeId();
     try {
-      if (m.getLayer(TRAFFIC_LAYER))  m.moveLayer(TRAFFIC_LAYER, before);
-      if (m.getLayer(TRAFFIC_POINTS)) m.moveLayer(TRAFFIC_POINTS, before);
+      [ROADS_OUTLINE, ROADS_LINE].forEach(function (id) { if (m.getLayer(id)) m.moveLayer(id, roadsBefore); });
+      [TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) { if (m.getLayer(id)) m.moveLayer(id, before); });
     } catch (e) {}
   }
 
@@ -7737,6 +7752,46 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       });
     }
     var vis = _trafficOn ? 'visible' : 'none';
+
+    // ── 藍色道路底圖(沒有車速資料 = 視為順暢) ──
+    if (!m.getSource(ROADS_SOURCE)) {
+      m.addSource(ROADS_SOURCE, { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
+    }
+    var roadFilter = ['match', ['get', 'class'], ROAD_CLASSES, true, false];
+    if (!m.getLayer(ROADS_OUTLINE)) {
+      m.addLayer({
+        id: ROADS_OUTLINE, type: 'line', source: ROADS_SOURCE, 'source-layer': 'transportation',
+        minzoom: 8, filter: roadFilter,
+        layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': NAV_OUTLINE_C, 'line-width': NAV_OUTLINE_W, 'line-opacity': 0.9 },
+      }, roadsBeforeId());
+    }
+    if (!m.getLayer(ROADS_LINE)) {
+      m.addLayer({
+        id: ROADS_LINE, type: 'line', source: ROADS_SOURCE, 'source-layer': 'transportation',
+        minzoom: 8, filter: roadFilter,
+        layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': NAV_LINE_C, 'line-width': NAV_LINE_W, 'line-opacity': 0.95 },
+      }, roadsBeforeId());
+    }
+
+    // ── 有車速資料的路段：依塞車程度上色，粗細跟導航路線一樣，外框用同色系的深色 ──
+    if (!m.getLayer(TRAFFIC_CASING)) {
+      m.addLayer({
+        id:     TRAFFIC_CASING,
+        type:   'line',
+        source: TRAFFIC_SOURCE,
+        filter: ['==', ['geometry-type'], 'LineString'],
+        layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['match', ['get', 'trafficLevel'],
+            'moderate', '#B07C00', 'slow', '#B34C00', 'congested', '#A32020', 'severe', '#4F0000',
+            NAV_OUTLINE_C],
+          'line-width':   NAV_OUTLINE_W,
+          'line-opacity': 0.9,
+        },
+      }, trafficBeforeId());
+    }
     if (!m.getLayer(TRAFFIC_LAYER)) {
       m.addLayer({
         id:     TRAFFIC_LAYER,
@@ -7746,8 +7801,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color':   ['get', 'color'],
-          'line-width':   ['interpolate', ['linear'], ['zoom'], 11, 3, 14, 6, 17, 10],
-          'line-opacity': 0.9,
+          'line-width':   NAV_LINE_W,
+          'line-opacity': 0.95,
         },
       }, trafficBeforeId());
     }
@@ -7823,7 +7878,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     paintTrafficBtn();
     var m = window.map;
     if (!m || !m.getLayer(TRAFFIC_LAYER)) { initTrafficLayer(); return; }
-    [TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) {
+    TRAFFIC_LAYERS.forEach(function (id) {
       if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', _trafficOn ? 'visible' : 'none');
     });
     if (_trafficOn) fetchTrafficSegments();
