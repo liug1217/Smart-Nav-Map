@@ -1592,6 +1592,8 @@ html, body {
 <div class="mapCtrlGroup">
   <!-- 即時路況 -->
   <button class="mapCtrlBtn" id="trafficBtn" title="即時路況" style="font-size:17px;">🚦</button>
+  <!-- 分享我的車給其他車友看(要本人同意) -->
+  <button class="mapCtrlBtn" id="shareCarBtn" title="分享我的車給車友" style="font-size:17px;">🚗</button>
   <!-- 指南針 -->
   <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
@@ -2100,6 +2102,7 @@ if (navigator.geolocation) {
     if (typeof window._reloadPxmartLayer === 'function') window._reloadPxmartLayer();
     if (typeof window._reloadCpcLayer === 'function') window._reloadCpcLayer();
     if (typeof window._reloadTrafficLayer === 'function') window._reloadTrafficLayer();
+    if (typeof window._reloadCarsLayer === 'function') window._reloadCarsLayer();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -8036,6 +8039,145 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   paintTrafficBtn();
   if (_trafficBtn) _trafficBtn.addEventListener('click', toggleTraffic);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 車友：地圖上顯示其他使用者的車。只有本人按 🚗 並同意後才會分享自己的位置；
+  // 同意後照實際位置顯示(停車時也會)，隨時可以關，關掉立刻從別人的地圖上消失。
+  // 伺服器只留最近 30 秒的位置；編號每次開 App 隨機產生，不是使用者身分
+  // ═══════════════════════════════════════════════════════════════════════════
+  var CARS_SOURCE = 'snm-cars-src', CARS_LAYER = 'snm-cars', CAR_ICON = 'snm-other-car';
+  var CAR_SHARE_MS = 5000, CAR_FETCH_MS = 5000;
+  var _carPubId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID() : 'car_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  var _shareOn = false;
+  try { _shareOn = localStorage.getItem('snm_share_car') === '1'; } catch (e) {}
+  var _shareBtn = document.getElementById('shareCarBtn');
+  var _carsClickBound = false;
+
+  function paintShareBtn() {
+    if (!_shareBtn) return;
+    _shareBtn.style.background = _shareOn ? 'rgba(52,199,89,0.18)' : '';
+    _shareBtn.style.boxShadow  = _shareOn ? 'inset 0 0 0 2px rgba(52,199,89,0.55)' : '';
+    _shareBtn.title = _shareOn ? '正在分享我的車(點一下關閉)' : '分享我的車給車友';
+  }
+  function stopSharingOnServer(useBeacon) {
+    var body = JSON.stringify({ pubId: _carPubId });
+    if (useBeacon && navigator.sendBeacon) {
+      // 關 App 時用 beacon 才送得出去；跨網域只能用 text/plain，伺服器會自己解析
+      navigator.sendBeacon(TCFG.API_BASE + '/cars/stop', new Blob([body], { type: 'text/plain;charset=UTF-8' }));
+    } else {
+      apiPost('/cars/stop', { pubId: _carPubId }).catch(function () {});
+    }
+  }
+  function toggleShareCar() {
+    if (!_shareOn) {
+      var agree = window.confirm(
+        '分享我的車給其他車友看？\n\n' +
+        '開啟後，其他使用智行地圖的人會在地圖上看到你的車子「即時位置」，停車時也看得到。\n' +
+        '不會顯示你的名字，伺服器不保存你的行車紀錄。\n\n' +
+        '隨時可以再按 🚗 關閉，關閉後立刻從別人的地圖上消失。'
+      );
+      if (!agree) return;
+      _shareOn = true;
+      shareMyCar();
+    } else {
+      _shareOn = false;
+      stopSharingOnServer(false);
+    }
+    try { localStorage.setItem('snm_share_car', _shareOn ? '1' : '0'); } catch (e) {}
+    paintShareBtn();
+  }
+  paintShareBtn();
+  if (_shareBtn) _shareBtn.addEventListener('click', toggleShareCar);
+
+  function shareMyCar() {
+    if (!_shareOn) return;
+    var lat = window.currentLat, lng = window.currentLon;
+    if (lat == null || lng == null) return;
+    apiPost('/cars/position', {
+      pubId:     _carPubId,
+      timestamp: Date.now(),
+      latitude:  lat,
+      longitude: lng,
+      heading:   (window._vehicleTarget && typeof window._vehicleTarget.bearing === 'number') ? window._vehicleTarget.bearing : null,
+      speed:     Number(window.currentSpeedKmh) || 0,
+    }).catch(function () {});
+  }
+  setInterval(shareMyCar, CAR_SHARE_MS);
+  window.addEventListener('pagehide', function () { if (_shareOn) stopSharingOnServer(true); });
+
+  // 其他車友的車：綠色圓底白箭頭，箭頭朝行進方向
+  function addCarIcon(m) {
+    if (m.hasImage(CAR_ICON)) return;
+    var S = 64, c = document.createElement('canvas');
+    c.width = c.height = S;
+    var g = c.getContext('2d');
+    g.beginPath(); g.arc(S / 2, S / 2, 26, 0, Math.PI * 2);
+    g.fillStyle = '#34C759'; g.fill();
+    g.lineWidth = 5; g.strokeStyle = '#fff'; g.stroke();
+    g.beginPath(); g.moveTo(S / 2, 13); g.lineTo(S / 2 + 12, 44); g.lineTo(S / 2, 37); g.lineTo(S / 2 - 12, 44); g.closePath();
+    g.fillStyle = '#fff'; g.fill();
+    m.addImage(CAR_ICON, g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+  }
+  function initCarsLayer() {
+    var m = window.map;
+    if (!m) { setTimeout(initCarsLayer, 600); return; }
+    var st = m.style;
+    if (!st || !st._loaded) { setTimeout(initCarsLayer, 500); return; }
+    try {
+      addCarIcon(m);
+      if (!m.getSource(CARS_SOURCE)) m.addSource(CARS_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      if (!m.getLayer(CARS_LAYER)) {
+        m.addLayer({
+          id: CARS_LAYER, type: 'symbol', source: CARS_SOURCE,
+          layout: {
+            'icon-image': CAR_ICON, 'icon-size': 1,
+            'icon-rotate': ['coalesce', ['get', 'heading'], 0],
+            'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
+            'icon-allow-overlap': true, 'icon-ignore-placement': true,
+          },
+        }, m.getLayer('user-pulse') ? 'user-pulse' : (m.getLayer('user-car') ? 'user-car' : undefined));
+      }
+      if (!_carsClickBound) {
+        _carsClickBound = true; // 事件綁在 map 上，換地圖樣式後仍有效，只綁一次
+        m.on('click', CARS_LAYER, function (e) {
+          var p = e.features[0].properties;
+          new maplibregl.Popup({ offset: 12, closeButton: true })
+            .setLngLat(e.lngLat)
+            .setHTML('<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
+              '<strong style="color:#34C759">智行地圖車友</strong><br>' +
+              (p.speed != null && p.speed !== 'null' ? '時速約 ' + p.speed + ' km/h<br>' : '') +
+              p.ageS + ' 秒前更新</div>')
+            .addTo(m);
+        });
+      }
+      fetchNearbyCars();
+    } catch (e) { setTimeout(initCarsLayer, 500); }
+  }
+  window._reloadCarsLayer = initCarsLayer;
+  initCarsLayer();
+
+  function fetchNearbyCars() {
+    var m = window.map;
+    if (!m || !m.getSource(CARS_SOURCE)) return;
+    var b = m.getBounds();
+    apiGet('/cars/nearby?n=' + b.getNorth().toFixed(5) + '&s=' + b.getSouth().toFixed(5) +
+           '&e=' + b.getEast().toFixed(5) + '&w=' + b.getWest().toFixed(5) + '&self=' + encodeURIComponent(_carPubId))
+      .then(function (r) { return (r && r.data) ? r.data : r; })
+      .then(function (d) {
+        var src = window.map && window.map.getSource(CARS_SOURCE);
+        if (!src || !d || !d.cars) return;
+        src.setData({
+          type: 'FeatureCollection',
+          features: d.cars.map(function (c) {
+            return { type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+                     properties: { heading: c.heading, speed: c.speed, ageS: c.ageS } };
+          }),
+        });
+      })
+      .catch(function () {});
+  }
+  setInterval(fetchNearbyCars, CAR_FETCH_MS);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 導航路況播報（前方壅塞提示）
