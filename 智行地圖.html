@@ -7633,6 +7633,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
 
   function fetchOnlineCount() {
+    if (document.hidden) return; // 螢幕關著或切到別的 App：只是「看」的資料先不抓，省電省流量
     apiGet('/presence/count')
       .then(function (r) { return (r && r.data) ? r.data : r; })
       .then(updateOnlineUI)
@@ -8002,6 +8003,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function fetchTrafficSegments() {
     if (!_trafficOn) return;
     if (!window.map) return;
+    if (document.hidden) return; // 畫面看不到時不抓(回到畫面會立刻補抓一次)
     var b = window.map.getBounds();
     var q = '?n=' + b.getNorth().toFixed(5) +
             '&s=' + b.getSouth().toFixed(5) +
@@ -8157,16 +8159,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   window._reloadCarsLayer = initCarsLayer;
   initCarsLayer();
 
+  // 附近有車友時每 5 秒更新；沒有時放慢到 15 秒；畫面看不到時不抓
+  var CAR_IDLE_MS = 15000, _carsTimer = null;
+  function scheduleCars(ms) { clearTimeout(_carsTimer); _carsTimer = setTimeout(fetchNearbyCars, ms); }
   function fetchNearbyCars() {
     var m = window.map;
-    if (!m || !m.getSource(CARS_SOURCE)) return;
+    if (document.hidden || !m || !m.getSource(CARS_SOURCE)) { scheduleCars(CAR_IDLE_MS); return; }
     var b = m.getBounds();
     apiGet('/cars/nearby?n=' + b.getNorth().toFixed(5) + '&s=' + b.getSouth().toFixed(5) +
            '&e=' + b.getEast().toFixed(5) + '&w=' + b.getWest().toFixed(5) + '&self=' + encodeURIComponent(_carPubId))
       .then(function (r) { return (r && r.data) ? r.data : r; })
       .then(function (d) {
         var src = window.map && window.map.getSource(CARS_SOURCE);
-        if (!src || !d || !d.cars) return;
+        if (!src || !d || !d.cars) { scheduleCars(CAR_IDLE_MS); return; }
         src.setData({
           type: 'FeatureCollection',
           features: d.cars.map(function (c) {
@@ -8174,10 +8179,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
                      properties: { heading: c.heading, speed: c.speed, ageS: c.ageS } };
           }),
         });
+        scheduleCars(d.cars.length ? CAR_FETCH_MS : CAR_IDLE_MS);
       })
-      .catch(function () {});
+      .catch(function () { scheduleCars(CAR_IDLE_MS); });
   }
-  setInterval(fetchNearbyCars, CAR_FETCH_MS);
+  scheduleCars(CAR_FETCH_MS);
+
+  // 回到畫面(開螢幕、切回 App)時立刻更新一次，不用等下一輪
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    fetchOnlineCount();
+    fetchTrafficSegments();
+    fetchNearbyCars();
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 導航路況播報（前方壅塞提示）

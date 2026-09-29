@@ -11,6 +11,7 @@
 const http = require('http');
 const fs   = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const ROOT    = path.resolve(__dirname, '..');
 const API_DIR = path.join(ROOT, 'api');
@@ -31,6 +32,33 @@ const PORT = Number(process.env.PORT) || 8787;
 if (!process.env.SNM_DATA_DIR) process.env.SNM_DATA_DIR = 'C:\\SmartNavData';
 
 const MAX_BODY = 100 * 1024;
+const GZIP_MIN_BYTES = 1024;
+
+// ── 視窗紀錄：不再每個請求印一行(車友功能每 5 秒就有一次，會把視窗刷滿)；
+//    只印錯誤與慢的請求，每 10 分鐘印一次摘要。SNM_LOG=all 可恢復逐筆紀錄 ──
+const LOG_ALL     = process.env.SNM_LOG === 'all';
+const LOG_OFF     = process.env.SNM_LOG === '0';
+const SLOW_MS     = 500;
+const SUMMARY_MS  = 10 * 60 * 1000;
+const stats = { n: 0, errors: 0, slow: 0, byPath: {} };
+function logRequest(method, pathname, status, ms) {
+  stats.n++;
+  stats.byPath[pathname] = (stats.byPath[pathname] || 0) + 1;
+  if (status >= 500) stats.errors++;
+  if (ms > SLOW_MS) stats.slow++;
+  if (LOG_OFF) return;
+  if (LOG_ALL || status >= 400 || ms > SLOW_MS) {
+    console.log(new Date().toLocaleTimeString('zh-TW', { hour12: false }), method, pathname, status, ms + 'ms' + (ms > SLOW_MS ? ' (慢)' : ''));
+  }
+}
+setInterval(() => {
+  if (!stats.n || LOG_OFF) return;
+  const top = Object.entries(stats.byPath).sort((a, b) => b[1] - a[1]).slice(0, 4)
+    .map(([p, n]) => p.replace('/api/', '') + ' ' + n).join('、');
+  console.log(new Date().toLocaleTimeString('zh-TW', { hour12: false }) +
+    ` 過去 10 分鐘：${stats.n} 次請求，錯誤 ${stats.errors}，慢 ${stats.slow}（${top}）`);
+  stats.n = stats.errors = stats.slow = 0; stats.byPath = {};
+}, SUMMARY_MS).unref();
 
 // /api/traffic/position → api/traffic/position.js；只允許 api 資料夾裡真的存在的檔案
 const handlers = new Map();
@@ -52,7 +80,15 @@ function adapt(req, res, url, body) {
   res.status = code => { res.statusCode = code; return res; };
   res.json = obj => {
     if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify(obj));
+    const body = JSON.stringify(obj);
+    // 較大的回應(例如很多路段的路況)壓縮後再送，手機少下載很多；很小的就不壓，省 CPU
+    if (body.length >= GZIP_MIN_BYTES && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.end(zlib.gzipSync(body));
+    } else {
+      res.end(body);
+    }
     return res;
   };
   res.send = data => { res.end(typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); return res; };
@@ -111,9 +147,7 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) { cors(res); res.statusCode = 500; res.setHeader('Content-Type', 'application/json'); }
     if (!res.writableEnded) res.end('{"ok":false,"error":{"code":"server_error"}}');
   } finally {
-    if (process.env.SNM_LOG !== '0') {
-      console.log(new Date().toISOString().slice(11, 19), req.method, url.pathname, res.statusCode, (Date.now() - t0) + 'ms');
-    }
+    logRequest(req.method, url.pathname, res.statusCode, Date.now() - t0);
   }
 });
 
