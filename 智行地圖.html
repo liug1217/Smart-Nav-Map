@@ -7695,7 +7695,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var ROADS_SOURCE   = 'snm-roads';
   var ROADS_OUTLINE  = 'snm-roads-outline';
   var ROADS_LINE     = 'snm-roads-line';
-  var ROAD_CLASSES   = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'];
+  // 包含巷弄小路(minor = 一般小路、service = 巷弄/服務道路)；不含步道、鐵路、渡輪
+  var ROAD_CLASSES   = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
   // 跟導航路線完全一樣的粗細與顏色(navRoute-outline / navRoute-line)
   var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#325cb3', NAV_LINE_C = '#4783fe';
   var TRAFFIC_LAYERS = [ROADS_OUTLINE, ROADS_LINE, TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS];
@@ -7742,9 +7743,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function initTrafficLayer() {
     if (!window.map) { setTimeout(initTrafficLayer, 600); return; }
-    // 用輪詢等地圖載入完成：styledata 事件可能在還沒載完時就觸發過了，之後不會再來，會永遠等不到
-    if (!window.map.isStyleLoaded()) { setTimeout(initTrafficLayer, 500); return; }
-    var m = window.map;
+    // 只等「地圖樣式本身讀進來」就好，不能用 isStyleLoaded()：它要等所有圖磚都下載完，
+    // 開車時鏡頭一直跟著移動、衛星圖磚一直在下載，會一直是 false → 路況永遠建不起來(要切一次地圖樣式才出現)
+    var st = window.map.style;
+    if (!st || !st._loaded) { setTimeout(initTrafficLayer, 500); return; }
+    try { buildTrafficLayers(window.map); }
+    catch (e) { setTimeout(initTrafficLayer, 500); } // 萬一樣式還沒準備好，稍後再試
+  }
+
+  function buildTrafficLayers(m) {
     if (!m.getSource(TRAFFIC_SOURCE)) {
       m.addSource(TRAFFIC_SOURCE, {
         type: 'geojson',
