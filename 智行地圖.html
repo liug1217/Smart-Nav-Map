@@ -7644,6 +7644,61 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // ═══════════════════════════════════════════════════════════════════════════
   var _lastUpLat = null, _lastUpLng = null, _lastUpTime = 0;
 
+  // 車子目前在哪一種道路上(OpenStreetMap 分類：國道/快速道路/主要道路…/巷弄)。
+  // 找 25 公尺內最近、而且方向跟車頭大致相同的道路(交流道、高架橋上下重疊時才不會認錯)
+  var ROAD_MATCH_M = 25, ROAD_MISALIGN_PENALTY_M = 20;
+  function roadAtPosition(lng, lat, bearing) {
+    var m = window.map;
+    if (!m || !m.getSource || !m.getSource(ROADS_SOURCE)) return null;
+    var feats;
+    try {
+      feats = m.querySourceFeatures(ROADS_SOURCE, {
+        sourceLayer: 'transportation',
+        filter: ['match', ['get', 'class'], PROBE_CLASSES, true, false],
+      });
+    } catch (e) { return null; }
+    var kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;
+    var px = lng * kx, py = lat * ky, best = null;
+    var near = 0.0005; // 約 50 公尺，先粗篩
+    for (var i = 0; i < feats.length; i++) {
+      var g = feats[i].geometry;
+      var lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+      for (var li = 0; li < lines.length; li++) {
+        var c = lines[li];
+        for (var j = 1; j < c.length; j++) {
+          var a = c[j - 1], b = c[j];
+          if (Math.min(a[0], b[0]) > lng + near || Math.max(a[0], b[0]) < lng - near ||
+              Math.min(a[1], b[1]) > lat + near || Math.max(a[1], b[1]) < lat - near) continue;
+          var ax = a[0] * kx, ay = a[1] * ky, dx = b[0] * kx - ax, dy = b[1] * ky - ay, l = dx * dx + dy * dy;
+          var t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
+          var d = Math.hypot(px - ax - t * dx, py - ay - t * dy);
+          if (d > ROAD_MATCH_M) continue;
+          var score = d;
+          if (typeof bearing === 'number' && l > 0) {
+            var segB = Math.atan2(dx, dy) * 180 / Math.PI;
+            var diff = Math.abs(((segB - bearing) % 180 + 270) % 180 - 90); // 0~90，道路是雙向的所以看 180 度
+            if (diff > 35) score += ROAD_MISALIGN_PENALTY_M;
+          }
+          if (!best || score < best.score) best = { score: score, cls: feats[i].properties['class'], ramp: feats[i].properties.ramp == 1 };
+        }
+      }
+    }
+    return best;
+  }
+  // 150 公尺內最近的測速照相速限(太遠的可能是隔壁另一條路的)
+  function speedLimitNear(lng, lat) {
+    var data = window.speedCameraData;
+    if (!data || !data.features) return null;
+    var best = null, bestD = 150;
+    for (var i = 0; i < data.features.length; i++) {
+      var f = data.features[i], c = f.geometry.coordinates;
+      if (Math.abs(c[1] - lat) > 0.002 || Math.abs(c[0] - lng) > 0.002) continue;
+      var d = haversineM(lat, lng, c[1], c[0]);
+      if (d < bestD && f.properties && f.properties.limit) { bestD = d; best = Number(f.properties.limit); }
+    }
+    return best;
+  }
+
   function tryUploadGps() {
     var lat = window.currentLat, lng = window.currentLon;
     if (lat == null || lng == null) return;
@@ -7667,6 +7722,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     _lastUpLng  = lng;
     _lastUpTime = now;
 
+    var bearing = (window._vehicleTarget && typeof window._vehicleTarget.bearing === 'number')
+      ? window._vehicleTarget.bearing : null;
+    var road = roadAtPosition(lng, lat, bearing);
+
     apiPost('/traffic/position', {
       sessionId:       _sid,
       timestamp:       now,
@@ -7674,10 +7733,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       longitude:       lng,
       speed:           speedKmh / 3.6,            // 轉回 m/s
       // 車子實際的行進方向(GPS / 導航路線)，不是手機羅盤：手機架歪時羅盤方向跟車頭不同，路況會記到錯的方向
-      heading:         (window._vehicleTarget && typeof window._vehicleTarget.bearing === 'number')
-                         ? window._vehicleTarget.bearing : null,
+      heading:         bearing,
       accuracy:        null,                       // 目前 window 沒有 accuracy
       navigationActive: document.body.classList.contains('navigating'),
+      // 道路等級與速限：這段路還沒累積到實際車速前，伺服器用它推估「順暢時該開多快」
+      roadClass:       road ? road.cls : null,
+      ramp:            road ? road.ramp : false,
+      speedLimit:      speedLimitNear(lng, lat),
     }).catch(function () {});
   }
 
@@ -7705,6 +7767,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 外框全部在內線底下，路口交會處才不會被外框切斷
   var ROAD_LAYERS = ROAD_GROUPS.map(function (g) { return 'snm-roads-outline-' + g.key; })
     .concat(ROAD_GROUPS.map(function (g) { return 'snm-roads-line-' + g.key; }));
+  var ROAD_PROBE    = 'snm-roads-probe';
+  var PROBE_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
   // 跟導航路線完全一樣的粗細與顏色(navRoute-outline / navRoute-line)
   var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#325cb3', NAV_LINE_C = '#4783fe';
   var TRAFFIC_LAYERS = ROAD_LAYERS.concat([TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS]);
@@ -7796,8 +7860,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function showTrafficPopup(e) {
     if (!e.features || !e.features[0]) return;
     var p = e.features[0].properties;
+    var srcTxt = { learned: '實際車速學到的', limit: '依速限', 'class': '依道路等級推估' }[p.baselineSource] || '';
     var base = (p.baselineSpeed == null || p.baselineSpeed === 'null')
-      ? '學習中（資料累積後自動判斷）' : p.baselineSpeed + ' km/h';
+      ? '學習中（資料累積後自動判斷）'
+      : p.baselineSpeed + ' km/h' + (srcTxt ? '（' + srcTxt + '）' : '');
     new maplibregl.Popup({ offset: 12, closeButton: true })
       .setLngLat(e.lngLat)
       .setHTML(
@@ -7850,6 +7916,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }, roadsBeforeId());
       });
     });
+
+    // ── 完全透明的探測圖層：導航時藍色道路被藏起來，道路資料就不會下載；
+    //    靠這層讓道路資料一直在，才能判斷車子目前在哪一種道路上(上傳路況時用) ──
+    if (!m.getLayer(ROAD_PROBE)) {
+      m.addLayer({
+        id: ROAD_PROBE, type: 'line', source: ROADS_SOURCE, 'source-layer': 'transportation',
+        minzoom: 12, filter: ['match', ['get', 'class'], PROBE_CLASSES, true, false],
+        paint: { 'line-opacity': 0, 'line-width': 1 },
+      }, roadsBeforeId());
+    }
 
     // ── 有車速資料的路段：依塞車程度上色，粗細跟導航路線一樣，外框用同色系的深色 ──
     if (!m.getLayer(TRAFFIC_CASING)) {
@@ -8059,6 +8135,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     fetchTraffic:  fetchTrafficSegments,
     getOnlineData: function () { return _lastOnlineData; },
     getTrafficData: function () { return _trafficData; },
+    roadAt:         roadAtPosition,   // 測試用：某個位置在哪一種道路上
   };
 
 })();

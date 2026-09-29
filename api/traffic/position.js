@@ -10,7 +10,7 @@ const { checkRateLimit } = require('../../lib/rate-limit');
 const { redisCmd } = require('../../lib/redis');
 const { normalizeGps } = require('../../lib/traffic/normalize');
 const { haversineKm } = require('../../lib/traffic/geohash');
-const { ffKey, addSpeed, LEARN_TTL_S } = require('../../lib/traffic/baseline');
+const { ffKey, addSpeed, LEARN_TTL_S, rcKey, ROAD_INFO_TTL_S, encodeRoadInfo } = require('../../lib/traffic/baseline');
 const { ROLLING_WINDOW_MS, SAMPLE_TTL_S, CONTRIB_TTL_MS, RATE_LIMIT_MS,
         GEO_MIN_M, GEO_MAX_M, GEO_MAX_GAP_MS, GEO_TTL_S, GEO_MAX_POINTS } = require('../../lib/traffic/config');
 
@@ -19,7 +19,8 @@ module.exports = async (req, res) => {
   if (handlePreflight(req, res)) return;
   if (req.method !== 'POST') return methodNotAllowed(res);
 
-  const { sessionId, timestamp, latitude, longitude, speed, heading, accuracy, navigationActive } = req.body || {};
+  const { sessionId, timestamp, latitude, longitude, speed, heading, accuracy, navigationActive,
+          roadClass, ramp, speedLimit } = req.body || {};
 
   // ── Validate ──────────────────────────────────────────────────────────────
   const e1 = validateSessionId(sessionId);
@@ -80,6 +81,10 @@ module.exports = async (req, res) => {
     const fk = ffKey(sample.gh, sample.dir);
     const hist = await redisCmd('GET', fk);
     await redisCmd('SETEX', fk, String(LEARN_TTL_S), addSpeed(hist, sample.speedKmh));
+
+    // ── 這段路的道路等級(OpenStreetMap 分類)與速限：還沒學到實際車速前，用它推估順暢車速 ──
+    const roadInfo = encodeRoadInfo(roadClass, ramp, speedLimit);
+    if (roadInfo) await redisCmd('SETEX', rcKey(sample.gh, sample.dir), String(ROAD_INFO_TTL_S), roadInfo);
 
     // ── 記下剛開過的這一小段軌跡，前端用它把路況畫成道路線段 ──────────────
     if (lastPos && ts - lastPos.ts > 0 && ts - lastPos.ts <= GEO_MAX_GAP_MS) {

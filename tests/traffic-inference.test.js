@@ -50,3 +50,40 @@ test('a single driver with many samples cannot outweigh others (median of per-dr
   ];
   assert.equal(computeState(s, 100).level.level, 'free');
 });
+
+// ── 還沒學到實際車速時：速限 > 道路等級推估 ──────────────────────────────────
+const { encodeRoadInfo, resolveBaseline } = require('../lib/traffic/baseline');
+
+test('first time a freeway is driven: 40 km/h already counts as congestion (class baseline 100)', () => {
+  const base = resolveBaseline(null, encodeRoadInfo('motorway', false, null));
+  assert.deepEqual(base, { kmh: 100, source: 'class' });
+  const st = computeState(samples([40, 42, 38]), base.kmh, base.source);
+  assert.equal(st.level.level, 'slow');
+  assert.equal(st.baselineSource, 'class');
+});
+
+test('first time an alley is driven: 25 km/h is free flow (class baseline 30)', () => {
+  const base = resolveBaseline(null, encodeRoadInfo('service', false, null));
+  assert.equal(computeState(samples([25, 24, 26]), base.kmh, base.source).level.level, 'free');
+});
+
+test('speed limit beats the class guess, but only when it is plausible for that road type', () => {
+  assert.deepEqual(resolveBaseline(null, encodeRoadInfo('trunk', false, 90)), { kmh: 90, source: 'limit' });
+  // 巷弄拿到 100 的速限(多半是旁邊國道的測速照相)→ 不採用，改用等級推估
+  assert.deepEqual(resolveBaseline(null, encodeRoadInfo('service', false, 100)), { kmh: 30, source: 'class' });
+});
+
+test('ramps use a lower baseline than the freeway itself', () => {
+  assert.deepEqual(resolveBaseline(null, encodeRoadInfo('motorway', true, null)), { kmh: 50, source: 'class' });
+});
+
+test('learned real speed always wins over limit and class', () => {
+  const learned = learn(Array.from({ length: 200 }, (_, i) => 60 + (i % 10)));
+  assert.equal(resolveBaseline(learned, encodeRoadInfo('motorway', false, 100)).source, 'learned');
+});
+
+test('unknown / bogus road class is not stored and falls back to absolute thresholds', () => {
+  assert.equal(encodeRoadInfo('path', false, 30), null);
+  assert.equal(encodeRoadInfo(undefined, false, null), null);
+  assert.deepEqual(resolveBaseline(null, null), { kmh: null, source: 'none' });
+});

@@ -9,7 +9,7 @@ const { redisCmd, redisPipeline } = require('../../lib/redis');
 const { ghDecode } = require('../../lib/traffic/geohash');
 const { computeState } = require('../../lib/traffic/aggregator');
 const { ROLLING_WINDOW_MS } = require('../../lib/traffic/config');
-const { ffKey, freeFlowSpeed } = require('../../lib/traffic/baseline');
+const { ffKey, rcKey, resolveBaseline } = require('../../lib/traffic/baseline');
 const SEG_ACTIVE_WINDOW_MS  = 30 * 60 * 1000;
 
 // 路況要畫成道路線段：優先用使用者實際開過的軌跡；沒有軌跡時，
@@ -72,10 +72,12 @@ module.exports = async (req, res) => {
     }
 
     // 一次批次取回：每段的近期車速樣本、學到的順暢車速、實際開過的道路軌跡
+    const N = 4; // 每段取 4 筆：車速樣本、學到的順暢車速、軌跡、道路等級/速限
     const cmds = inBbox.flatMap(seg => [
       ['ZRANGEBYSCORE', seg.segKey, String(windowStart), '+inf'],
       ['GET', ffKey(seg.gh, seg.dir)],
       ['GET', `geo:${seg.gh}:${seg.dir}`],
+      ['GET', rcKey(seg.gh, seg.dir)],
     ]);
     const results = await redisPipeline(cmds);
     const at = i => results[i] && results[i].result;
@@ -83,14 +85,14 @@ module.exports = async (req, res) => {
     const features = [];
     for (let i = 0; i < inBbox.length; i++) {
       const seg      = inBbox[i];
-      const samples  = at(i * 3);
-      const freeFlow = freeFlowSpeed(at(i * 3 + 1));
-      const state    = computeState(samples, freeFlow);
+      const samples  = at(i * N);
+      const base     = resolveBaseline(at(i * N + 1), at(i * N + 3));
+      const state    = computeState(samples, base.kmh, base.source);
       if (!state) continue;
 
       features.push({
         type: 'Feature',
-        geometry:   segmentGeometry(seg, at(i * 3 + 2)),
+        geometry:   segmentGeometry(seg, at(i * N + 2)),
         properties: {
           segmentId:          `${seg.gh}:${seg.dir}`,
           direction:          seg.dir,
