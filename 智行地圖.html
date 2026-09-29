@@ -7747,6 +7747,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
     var src = m.getSource(TRAFFIC_SOURCE);
     if (src) src.setData(trafficDataForDisplay());
+    keepTrafficOnTop();
   }
   // 開始/結束導航時(body 的 navigating class 改變)馬上切換
   new MutationObserver(function () { applyTrafficDisplay(); })
@@ -7766,12 +7767,28 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     return m.getLayer('navRoute-outline') ? 'navRoute-outline' : trafficBeforeId();
   }
+  // 圖層順序(由下到上)：底圖 → 藍色道路 → 導航路線 → 塞車線 → 路線箭頭 → 加油站/測速照相等圖示 → 車子。
+  // 線都要在圖示底下，不然會把加油站、測速照相蓋住
+  var LINE_STACK_TAIL = ['navRoute-outline', 'navRoute-line', TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS, 'navRoute-arrows'];
+  var NON_ICON_LAYERS = ['route', 'route-outline', 'navWalkLink'];
+  // 最下面的一個 App 圖示圖層(GeoJSON 來源的 symbol / circle)；線全部插在它下面
+  function lowestIconLayer(m, moving) {
+    var layers = m.getStyle().layers;
+    for (var i = 0; i < layers.length; i++) {
+      var l = layers[i];
+      if (moving.indexOf(l.id) >= 0 || NON_ICON_LAYERS.indexOf(l.id) >= 0 || !l.source) continue;
+      if (l.type !== 'symbol' && l.type !== 'circle') continue;
+      var s = m.getSource(l.source);
+      if (s && s.type === 'geojson') return l.id;
+    }
+    return undefined;
+  }
   function keepTrafficOnTop() {
-    var m = window.map, before = trafficBeforeId(), roadsBefore = roadsBeforeId();
-    try {
-      ROAD_LAYERS.forEach(function (id) { if (m.getLayer(id)) m.moveLayer(id, roadsBefore); });
-      [TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) { if (m.getLayer(id)) m.moveLayer(id, before); });
-    } catch (e) {}
+    var m = window.map;
+    if (!m || !m.getStyle()) return;
+    var moving = ROAD_LAYERS.concat(LINE_STACK_TAIL).filter(function (id) { return m.getLayer(id); });
+    var anchor = lowestIconLayer(m, moving);
+    try { moving.forEach(function (id) { m.moveLayer(id, anchor); }); } catch (e) {}
   }
 
   function showTrafficPopup(e) {
@@ -7824,7 +7841,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           id: id, type: 'line', source: ROADS_SOURCE, 'source-layer': 'transportation',
           minzoom: g.minzoom,
           filter: ['match', ['get', 'class'], g.classes, true, false],
-          layout: { visibility: roadsVis, 'line-cap': 'round', 'line-join': 'round' },
+          layout: { visibility: roadsVis, 'line-cap': 'square', 'line-join': 'round' },
           paint: part === 'outline'
             ? { 'line-color': NAV_OUTLINE_C, 'line-width': NAV_OUTLINE_W, 'line-opacity': 0.9 }
             : { 'line-color': NAV_LINE_C,    'line-width': NAV_LINE_W,    'line-opacity': 0.95 },
@@ -7839,7 +7856,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         type:   'line',
         source: TRAFFIC_SOURCE,
         filter: ['==', ['geometry-type'], 'LineString'],
-        layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+        layout: { visibility: vis, 'line-cap': 'square', 'line-join': 'round' },
         paint: {
           'line-color': ['match', ['get', 'trafficLevel'],
             'moderate', '#B07C00', 'slow', '#B34C00', 'congested', '#A32020', 'severe', '#4F0000',
@@ -7855,7 +7872,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         type:   'line',
         source: TRAFFIC_SOURCE,
         filter: ['==', ['geometry-type'], 'LineString'],
-        layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+        layout: { visibility: vis, 'line-cap': 'square', 'line-join': 'round' },
         paint: {
           'line-color':   ['get', 'color'],
           'line-width':   NAV_LINE_W,
@@ -7889,6 +7906,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         m.on('mouseleave', id, function () { m.getCanvas().style.cursor = ''; });
       });
     }
+    keepTrafficOnTop();
+    setTimeout(keepTrafficOnTop, 3000); // 加油站、測速照相等圖示是陸續載入的，晚一點再排一次
     fetchTrafficSegments();
   }
   // 換地圖樣式後重建(由 reloadMapLayers 呼叫)
