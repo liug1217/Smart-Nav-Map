@@ -7946,41 +7946,65 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var _lastAnnounceSegId = null;
   var _lastAnnounceTime  = 0;
 
+  // 沿導航路線的位置(公尺)：投影到路線上最近的點，回傳從起點算起的沿線距離
+  var _routeCum = null, _routeCumFor = null;
+  function alongRoute(route, coord) {
+    if (_routeCumFor !== route) {
+      _routeCum = [0];
+      for (var i = 1; i < route.length; i++) {
+        _routeCum.push(_routeCum[i - 1] + haversineM(route[i - 1][1], route[i - 1][0], route[i][1], route[i][0]));
+      }
+      _routeCumFor = route;
+    }
+    var kx = 111320 * Math.cos(coord[1] * Math.PI / 180), ky = 110540;
+    var px = coord[0] * kx, py = coord[1] * ky, best = Infinity, along = 0;
+    for (var j = 1; j < route.length; j++) {
+      var ax = route[j - 1][0] * kx, ay = route[j - 1][1] * ky, bx = route[j][0] * kx, by = route[j][1] * ky;
+      var dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
+      var t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
+      var d = Math.hypot(px - ax - t * dx, py - ay - t * dy);
+      if (d < best) { best = d; along = _routeCum[j - 1] + t * (_routeCum[j] - _routeCum[j - 1]); }
+    }
+    return along;
+  }
+
+  // 導航中：只播報「導航路線上、在車子前方」100m~3km 內的壅塞，距離照沿路線計算、最近的先播。
+  // 不再要求 3 人以上回報：地圖上已經畫成紅色的，語音就要講，兩邊才一致
   function checkRouteTrafficAlert() {
     if (!_trafficData || !_trafficData.features) return;
     if (!window.currentLat || !window.currentLon) return;
-    if (!document.body.classList.contains('navigating')) return;
+    if (!isNavigating()) return;
+    var route = window.plannedRouteCoordinates;
+    if (!route || route.length < 2) return;
 
     var now = Date.now();
     if (now - _lastAnnounceTime < TCFG.ANNOUNCE_COOLDOWN_MS) return;
 
-    var myLat = window.currentLat, myLng = window.currentLon;
+    var carAlong = alongRoute(route, [window.currentLon, window.currentLat]);
 
-    var congested = _trafficData.features.filter(function (f) {
-      return f.properties.confidence !== 'low' &&
-        (f.properties.trafficLevel === 'congested' ||
-         f.properties.trafficLevel === 'severe');
-    });
+    var ahead = trafficDataForDisplay().features   // 已經只剩路線 40m 內的路段
+      .filter(function (f) {
+        return f.properties.trafficLevel === 'congested' || f.properties.trafficLevel === 'severe';
+      })
+      .map(function (f) {
+        // 路段可能是線(取起點，才是車子先碰到的地方)或點
+        var gc = f.geometry.coordinates;
+        var c  = f.geometry.type === 'LineString' ? gc[0] : gc;
+        return { f: f, dist: alongRoute(route, c) - carAlong };
+      })
+      .filter(function (x) { return x.dist >= 100 && x.dist <= 3000; })
+      .sort(function (a, b) { return a.dist - b.dist; });
 
-    for (var i = 0; i < congested.length; i++) {
-      var f    = congested[i];
-      // 路段可能是線(取中點)或點
-      var gc   = f.geometry.coordinates;
-      var mid  = f.geometry.type === 'LineString' ? gc[Math.floor(gc.length / 2)] : gc;
-      var sLng = mid[0];
-      var sLat = mid[1];
-      var distM = haversineM(myLat, myLng, sLat, sLng);
-      var distKm = distM / 1000;
-
-      if (distKm < 0.1 || distKm > 3.0) continue; // 只播報 100m~3km 前方
+    for (var i = 0; i < ahead.length; i++) {
+      var f = ahead[i].f, distM = ahead[i].dist;
       if (f.properties.segmentId === _lastAnnounceSegId) continue;
 
       _lastAnnounceSegId = f.properties.segmentId;
       _lastAnnounceTime  = now;
 
-      var distTxt = distKm < 1
-        ? Math.round(distM) + '公尺'
-        : distKm.toFixed(1) + '公里';
+      var distTxt = distM < 1000
+        ? Math.round(distM / 50) * 50 + '公尺'
+        : (distM / 1000).toFixed(1) + '公里';
       var msg = '前方約' + distTxt + '路況' + (f.properties.label || '壅塞') + '。';
 
       if (typeof window.speakQueue === 'function') {
