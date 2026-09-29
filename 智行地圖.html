@@ -7693,13 +7693,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 沒人開過(沒有車速資料)的道路也要顯示成「順暢」的藍色：道路形狀取自 OpenFreeMap 的向量道路資料，
   // 任何地圖樣式(衛星/街道/夜間)都疊得上去；畫在導航路線底下，塞車路段畫在最上面
   var ROADS_SOURCE   = 'snm-roads';
-  // 依縮放程度逐層出現，不然全部道路一起畫會很亂：縮小只看國道 → 放大加快速道路 → 一般道路 → 巷弄小路。
+  // 依縮放程度逐層出現，不然全部道路一起畫會很亂：縮小看國道＋快速道路(同時出現) → 放大加一般道路 → 巷弄小路。
   // 由小路排到大路，大路畫在上面；不含步道、鐵路、渡輪
   var ROAD_GROUPS = [
     { key: 'minor',   classes: ['minor', 'service'],                 minzoom: 15.5 }, // 巷弄小路
     { key: 'main',    classes: ['primary', 'secondary', 'tertiary'], minzoom: 13   }, // 一般道路
-    { key: 'expw',    classes: ['trunk'],                            minzoom: 11   }, // 快速道路
-    { key: 'freeway', classes: ['motorway'],                         minzoom: 7    }, // 國道
+    { key: 'freeway', classes: ['motorway', 'trunk'],                minzoom: 7    }, // 國道＋快速道路
   ];
   // 外框全部在內線底下，路口交會處才不會被外框切斷
   var ROAD_LAYERS = ROAD_GROUPS.map(function (g) { return 'snm-roads-outline-' + g.key; })
