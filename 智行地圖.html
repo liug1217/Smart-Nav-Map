@@ -5598,8 +5598,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       { icon:'🌙', label:'夜間', style:{
         version:8,
         glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-        sources:{ 'carto-dark':{ type:'raster', tiles:['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png','https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'], tileSize:256, attribution:'© CARTO', maxzoom:19 }},
-        layers:[{ id:'bg', type:'background', paint:{'background-color':'#111'}},{ id:'tiles', type:'raster', source:'carto-dark'}]
+        // CARTO 深色底圖現在要付費金鑰(沒金鑰滿是「API KEY REQUIRED」浮水印)，改用免金鑰的 Esri 深灰底圖；
+        // 圖磚只到 zoom 16，再放大就拉伸原圖，不會變空白
+        sources:{ 'esri-dark':{ type:'raster', tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'], tileSize:256, attribution:'© Esri', maxzoom:16 }},
+        layers:[{ id:'bg', type:'background', paint:{'background-color':'#111'}},{ id:'tiles', type:'raster', source:'esri-dark', paint:{ 'raster-brightness-max':0.8 }}]
       }}
     ];
     let styleIdx = 0;
