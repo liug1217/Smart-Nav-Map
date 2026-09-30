@@ -4738,30 +4738,43 @@ if (navigator.geolocation) {
       {
         const prevTgt = window._vehicleTarget;
         let gpsBearing = window.compassHeading != null ? window.compassHeading : 0;
+        let moveBearing = null; // 由移動算出的行進方向(停著時沒有)
         if (prevTgt) {
           const dist = calculateDistance(prevTgt.lat, prevTgt.lng, currentLat, currentLon);
-          if (dist > 0.003) { // > 3 公尺才計算方位角
+          if (dist > 0.003 && currentSpeed >= 1) { // > 3 公尺、而且真的在動才計算方位角(停車時 GPS 飄移不算)
             const dLng = (currentLon - prevTgt.lng) * Math.PI / 180;
             const lat1R = prevTgt.lat * Math.PI / 180;
             const lat2R = currentLat * Math.PI / 180;
             const y = Math.sin(dLng) * Math.cos(lat2R);
             const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
-            gpsBearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+            gpsBearing = moveBearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
           }
+        }
+        // 沒導航時也吸附到道路中線(跟導航時一樣)：找 20 公尺內方向相符的道路；
+        // 停著時沿用上一次的車頭方向，避免 GPS 飄移讓車子原地轉向
+        const road = (typeof window._snapToRoad === 'function')
+          ? window._snapToRoad(currentLon, currentLat, moveBearing != null ? moveBearing : (prevTgt ? prevTgt.bearing : null))
+          : null;
+        const tgtLng = road ? road.lng : currentLon;
+        const tgtLat = road ? road.lat : currentLat;
+        const tgtBearing = road ? road.bearing : gpsBearing;
+        if (prevTgt) {
           const dt = now - prevTgt.timestamp;
           if (dt > 0 && dt < 5000) {
+            // 用吸附後的位置算速度向量，兩次 GPS 之間的平滑移動也會沿著道路
             window._vehicleVelocity = {
-              dlng: (currentLon - prevTgt.lng) / dt,
-              dlat: (currentLat - prevTgt.lat) / dt,
+              dlng: (tgtLng - prevTgt.lng) / dt,
+              dlat: (tgtLat - prevTgt.lat) / dt,
               speed: currentSpeed
             };
           }
         }
         window._vehicleTarget = {
-          lng: currentLon,
-          lat: currentLat,
-          bearing: gpsBearing,
-          timestamp: now
+          lng: tgtLng,
+          lat: tgtLat,
+          bearing: tgtBearing,
+          timestamp: now,
+          roadSnapped: !!road
         };
       }
 
@@ -4940,7 +4953,7 @@ map.on('load', function() {
         // 車子在移動或已吸附在導航路線上時,方向以路線/GPS 行進方向為準。羅盤每秒觸發幾十次,
         // 若在這裡覆寫,會跟每秒一次的 GPS 方向來回搶 → 畫面晃;手機架歪時方向也會錯。只有停著時才用羅盤
         const t = window._vehicleTarget;
-        if (t && (t.route || (window.currentSpeedKmh || 0) > 5)) return;
+        if (t && (t.route || t.roadSnapped || (window.currentSpeedKmh || 0) > 5)) return; // 吸附在道路上時車頭照道路方向
         if (window._vehicleTarget) {
           window._vehicleTarget.bearing = window.compassHeading != null ? window.compassHeading : 0;
         } else {
@@ -7651,7 +7664,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 車子目前在哪一種道路上(OpenStreetMap 分類：國道/快速道路/主要道路…/巷弄)。
   // 找 25 公尺內最近、而且方向跟車頭大致相同的道路(交流道、高架橋上下重疊時才不會認錯)
   var ROAD_MATCH_M = 25, ROAD_MISALIGN_PENALTY_M = 20;
-  function roadAtPosition(lng, lat, bearing) {
+  // 回傳最近的道路：等級(cls)、是否匝道(ramp)、吸附點(lng/lat，道路中線上最近的點)、道路方向(segBearing)、距離(d)
+  function roadAtPosition(lng, lat, bearing, maxM) {
+    maxM = maxM || ROAD_MATCH_M;
     var m = window.map;
     if (!m || !m.getSource || !m.getSource(ROADS_SOURCE)) return null;
     var feats;
@@ -7676,19 +7691,38 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           var ax = a[0] * kx, ay = a[1] * ky, dx = b[0] * kx - ax, dy = b[1] * ky - ay, l = dx * dx + dy * dy;
           var t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
           var d = Math.hypot(px - ax - t * dx, py - ay - t * dy);
-          if (d > ROAD_MATCH_M) continue;
+          if (d > maxM) continue;
           var score = d;
+          var segB = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
           if (typeof bearing === 'number' && l > 0) {
-            var segB = Math.atan2(dx, dy) * 180 / Math.PI;
             var diff = Math.abs(((segB - bearing) % 180 + 270) % 180 - 90); // 0~90，道路是雙向的所以看 180 度
             if (diff > 35) score += ROAD_MISALIGN_PENALTY_M;
           }
-          if (!best || score < best.score) best = { score: score, cls: feats[i].properties['class'], ramp: feats[i].properties.ramp == 1 };
+          if (!best || score < best.score) best = {
+            score: score, d: d, cls: feats[i].properties['class'], ramp: feats[i].properties.ramp == 1,
+            lng: a[0] + t * (b[0] - a[0]), lat: a[1] + t * (b[1] - a[1]), segBearing: segB,
+          };
         }
       }
     }
     return best;
   }
+  // 沒導航時也把車子吸附到道路中線(跟導航時一樣)：主程式每次 GPS 更新時呼叫。
+  // 20 公尺內才吸附；已經吸附時放寬到 30 公尺才放開(遲滯，避免在邊界來回跳)，例如開進停車場就放開
+  var FREE_SNAP_ENTER_M = 20, FREE_SNAP_EXIT_M = 30, _freeSnapped = false;
+  window._snapToRoad = function (lng, lat, moveBearing) {
+    var r = roadAtPosition(lng, lat, moveBearing, _freeSnapped ? FREE_SNAP_EXIT_M : FREE_SNAP_ENTER_M);
+    _freeSnapped = !!r;
+    if (!r) return null;
+    // 道路是雙向的：車頭取跟行進方向比較接近的那一邊
+    var b = r.segBearing;
+    if (typeof moveBearing === 'number') {
+      var diff = Math.abs(((b - moveBearing) % 360 + 540) % 360 - 180);
+      if (diff > 90) b = (b + 180) % 360;
+    }
+    return { lng: r.lng, lat: r.lat, bearing: b, cls: r.cls, d: r.d };
+  };
+
   // 150 公尺內最近的測速照相速限(太遠的可能是隔壁另一條路的)
   function speedLimitNear(lng, lat) {
     var data = window.speedCameraData;
@@ -7793,17 +7827,122 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     }
     return false;
   }
+  // ── 塞車直接讓「道路本身」變色：不另外沿 GPS 軌跡畫一條線(會跟道路對不齊)，
+  //    而是找出這一格(約 150m)裡、方向相符的那條道路，用道路本身的形狀、同樣的粗細上色。
+  //    順暢的路段本來就是藍色，不用再畫；導航時改切導航路線上的那一段 ──
+  var GH32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+  function ghBounds(gh) {
+    var lat = [-90, 90], lng = [-180, 180], even = true;
+    for (var i = 0; i < gh.length; i++) {
+      var cd = GH32.indexOf(gh[i]);
+      for (var b = 4; b >= 0; b--) {
+        var bit = (cd >> b) & 1, r = even ? lng : lat, mid = (r[0] + r[1]) / 2;
+        if (bit) r[0] = mid; else r[1] = mid;
+        even = !even;
+      }
+    }
+    return { w: lng[0], e: lng[1], s: lat[0], n: lat[1] };
+  }
+  // 折線裁切到矩形內(每段用 Liang–Barsky)，回傳落在框內的連續片段
+  function clipLine(coords, r) {
+    var pieces = [], cur = null;
+    for (var i = 1; i < coords.length; i++) {
+      var x0 = coords[i - 1][0], y0 = coords[i - 1][1], x1 = coords[i][0], y1 = coords[i][1];
+      var t0 = 0, t1 = 1, dx = x1 - x0, dy = y1 - y0, ok = true;
+      [[-dx, x0 - r.w], [dx, r.e - x0], [-dy, y0 - r.s], [dy, r.n - y0]].forEach(function (pq) {
+        if (!ok) return;
+        var p = pq[0], q = pq[1];
+        if (p === 0) { if (q < 0) ok = false; return; }
+        var t = q / p;
+        if (p < 0) { if (t > t1) ok = false; else if (t > t0) t0 = t; }
+        else { if (t < t0) ok = false; else if (t < t1) t1 = t; }
+      });
+      if (!ok) { cur = null; continue; }
+      var a = [x0 + t0 * dx, y0 + t0 * dy], b = [x0 + t1 * dx, y0 + t1 * dy];
+      if (cur && t0 === 0) cur.push(b); else { cur = [a, b]; pieces.push(cur); }
+      if (t1 < 1) cur = null;
+    }
+    return pieces;
+  }
+  function distToLineM(p, line) {
+    var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 110540, best = Infinity;
+    for (var i = 1; i < line.length; i++) {
+      var ax = line[i - 1][0] * kx, ay = line[i - 1][1] * ky, dx = line[i][0] * kx - ax, dy = line[i][1] * ky - ay;
+      var l = dx * dx + dy * dy, px = p[0] * kx, py = p[1] * ky;
+      var t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
+      best = Math.min(best, Math.hypot(px - ax - t * dx, py - ay - t * dy));
+    }
+    return best;
+  }
+  function lineBearing(a, b) {
+    return (Math.atan2((b[0] - a[0]) * Math.cos(a[1] * Math.PI / 180), b[1] - a[1]) * 180 / Math.PI + 360) % 360;
+  }
+  var DIR_BEARING = { N: 0, E: 90, S: 180, W: 270 };
+  var MATCH_MAX_M = 30;
+  // 候選道路：沒導航時用地圖的道路資料；導航時只用導航路線(方向就是行進方向)
+  function roadCandidates() {
+    var route = window.plannedRouteCoordinates;
+    if (isNavigating() && route && route.length > 1) return [{ coords: route, oneway: true }];
+    var m = window.map, out = [];
+    if (!m || !m.getSource(ROADS_SOURCE)) return out;
+    try {
+      m.querySourceFeatures(ROADS_SOURCE, { sourceLayer: 'transportation', filter: ['match', ['get', 'class'], PROBE_CLASSES, true, false] })
+        .forEach(function (f) {
+          var g = f.geometry, lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+          var ow = Number(f.properties.oneway) || 0;
+          lines.forEach(function (c) {
+            if (c.length < 2) return;
+            if (ow === -1) c = c.slice().reverse();     // 單行道反向畫的，轉成行進方向
+            var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+            c.forEach(function (p) { if (p[0] < w) w = p[0]; if (p[0] > e) e = p[0]; if (p[1] < s) s = p[1]; if (p[1] > n) n = p[1]; });
+            out.push({ coords: c, oneway: ow !== 0, bbox: { w: w, e: e, s: s, n: n } });
+          });
+        });
+    } catch (e) {}
+    return out;
+  }
+  function matchRoadPiece(f, cands) {
+    var id = f.properties && f.properties.segmentId;
+    if (!id) return null;
+    var gh = id.split(':')[0], dir = id.split(':')[1];
+    var bb = ghBounds(gh), padLat = 12 / 110540, padLng = 12 / (111320 * Math.cos(bb.s * Math.PI / 180));
+    var rect = { w: bb.w - padLng, e: bb.e + padLng, s: bb.s - padLat, n: bb.n + padLat };
+    var g = f.geometry, trace = g.type === 'LineString' ? g.coordinates : [g.coordinates];
+    var want = DIR_BEARING[dir], best = null;
+    cands.forEach(function (c) {
+      var b = c.bbox;
+      if (b && (b.w > rect.e || b.e < rect.w || b.s > rect.n || b.n < rect.s)) return;
+      clipLine(c.coords, rect).forEach(function (piece) {
+        if (piece.length < 2) return;
+        var sum = 0; trace.forEach(function (p) { sum += distToLineM(p, piece); });
+        var dmean = sum / trace.length;
+        if (dmean > MATCH_MAX_M) return;
+        var pen = 0;
+        if (want != null) {
+          var pb = lineBearing(piece[0], piece[piece.length - 1]);
+          var diff = c.oneway ? Math.abs(((pb - want) % 360 + 540) % 360 - 180)      // 單行道(含雙向分隔道路的一側)要同方向
+                              : Math.abs(((pb - want) % 180 + 270) % 180 - 90);    // 雙向道路看 180 度
+          if (diff > 55) pen = 25;
+        }
+        if (!best || dmean + pen < best.score) best = { score: dmean + pen, piece: piece };
+      });
+    });
+    return best && best.piece;
+  }
   function trafficDataForDisplay() {
     var data = _trafficData || { type: 'FeatureCollection', features: [] };
-    var route = window.plannedRouteCoordinates;
-    if (!isNavigating() || !route || route.length < 2) return data;
-    return {
-      type: 'FeatureCollection',
-      features: data.features.filter(function (f) {
-        var g = f.geometry, c = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
-        return nearRoute(c, route);
-      }),
-    };
+    var route = window.plannedRouteCoordinates, nav = isNavigating() && route && route.length > 1;
+    var cands = null, out = [];
+    data.features.forEach(function (f) {
+      var p = f.properties || {};
+      if (p.trafficLevel === 'free') return;                       // 順暢：道路本來就是藍色
+      var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
+      if (nav && !nearRoute(mid, route)) return;                   // 導航中只看路線上的
+      if (!cands) cands = roadCandidates();
+      var piece = matchRoadPiece(f, cands);
+      out.push(piece ? { type: 'Feature', geometry: { type: 'LineString', coordinates: piece }, properties: p } : f);
+    });
+    return { type: 'FeatureCollection', features: out };
   }
   function applyTrafficDisplay() {
     var m = window.map;
@@ -7982,6 +8121,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     // 點路況線段顯示資訊(事件綁在 map 上，換地圖樣式後不會失效，只綁一次)
     if (!_trafficHandlersBound) {
       _trafficHandlersBound = true;
+      // 道路資料是移動地圖時陸續載入的；新的道路圖磚載完後重新對齊塞車路段(最多 2 秒一次)
+      var refreshShapes = throttle(function () {
+        var src = m.getSource(TRAFFIC_SOURCE);
+        if (src && _trafficData && _trafficData.features.length) src.setData(trafficDataForDisplay());
+      }, 2000);
+      m.on('sourcedata', function (e) { if (e.sourceId === ROADS_SOURCE && e.isSourceLoaded) refreshShapes(); });
       [TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) {
         m.on('click', id, showTrafficPopup);
         m.on('mouseenter', id, function () { m.getCanvas().style.cursor = 'pointer'; });
