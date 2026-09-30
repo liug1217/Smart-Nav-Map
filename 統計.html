@@ -6,43 +6,21 @@
 <title>智行地圖使用統計</title>
 <link rel="icon" href="圖片/智行地圖.png">
 <style>
+  /* 固定深色(不跟手機的淺色/深色設定走) */
   :root {
-    color-scheme: light;
-    --page:           #f3f3f1;
-    --surface-1:      #fcfcfb;
-    --border:         #e4e3de;
-    --grid:           #ebeae6;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #7a7975;
-    --series-1:       #2a78d6;   /* 使用人數 / 在線 */
-    --series-2:       #eb6834;   /* 開車 */
-    --good:           #1a7f37;
-    --bad:            #c62828;
-    --shadow:         0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --page:           #111110;
-      --surface-1:      #1a1a19;
-      --border:         #2c2c2a;
-      --grid:           #2a2a28;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #8f8e86;
-      --series-1:       #3987e5;
-      --series-2:       #d95926;
-      --good:           #3fb950;
-      --bad:            #ff6b6b;
-      --shadow:         none;
-    }
-  }
-  :root[data-theme="dark"] {
     color-scheme: dark;
-    --page: #111110; --surface-1: #1a1a19; --border: #2c2c2a; --grid: #2a2a28;
-    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
-    --series-1: #3987e5; --series-2: #d95926; --good: #3fb950; --bad: #ff6b6b; --shadow: none;
+    --page:           #111110;
+    --surface-1:      #1a1a19;
+    --border:         #2c2c2a;
+    --grid:           #2a2a28;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8f8e86;
+    --series-1:       #3987e5;   /* 使用人數 / 在線 */
+    --series-2:       #d95926;   /* 開車 */
+    --good:           #3fb950;
+    --bad:            #ff6b6b;
+    --shadow:         none;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--page); color: var(--text-primary);
@@ -276,11 +254,13 @@
       if (i % (labelEvery || 1) === 0) xLabel(f, M.left + band * i + band / 2, lab);
       // 感應區比長條大：整組都能觸發提示
       var hit = svgEl('rect', { x: M.left + band * i, y: M.top, width: band, height: f.ih, fill: 'transparent' });
-      hit.addEventListener('mouseenter', function () {
+      var showBar = function () {
         showTip(f, M.left + band * i + band / 2, f.y(Math.max.apply(null, series.map(function (s) { return s.values[i] || 0; }))),
           tipTitle(i), series.map(function (s) { return { name: s.name, color: css(s.color), value: fmt(s.values[i]) }; }));
-      });
-      hit.addEventListener('mouseleave', function () { hideTip(f); });
+      };
+      hit.addEventListener('pointerenter', showBar);   // 滑鼠移入
+      hit.addEventListener('pointerdown', showBar);    // 手機用手指點一下
+      hit.addEventListener('pointerleave', function (ev) { if (ev.pointerType === 'mouse') hideTip(f); });
       f.svg.appendChild(hit);
     });
   }
@@ -301,15 +281,17 @@
     var dots = series.map(function (s) { var c = svgEl('circle', { r: 4.5, fill: css(s.color), stroke: css('--surface-1'), 'stroke-width': 2, opacity: 0 }); f.svg.appendChild(c); return c; });
     f.svg.appendChild(cross);
     var hit = svgEl('rect', { x: M.left, y: M.top, width: f.iw, height: f.ih, fill: 'transparent' });
-    hit.addEventListener('mousemove', function (ev) {
+    var showAt = function (ev) {
       var r = f.svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (f.W / r.width);
       var i = Math.max(0, Math.min(n - 1, Math.round((px - M.left) / (n === 1 ? 1 : f.iw / (n - 1)))));
       cross.setAttribute('x1', xOf(i)); cross.setAttribute('x2', xOf(i)); cross.setAttribute('opacity', 1);
       dots.forEach(function (c, j) { c.setAttribute('cx', xOf(i)); c.setAttribute('cy', f.y(series[j].values[i])); c.setAttribute('opacity', 1); });
       showTip(f, xOf(i), f.y(Math.max.apply(null, series.map(function (s) { return s.values[i]; }))), labels[i],
         series.map(function (s) { return { name: s.name, color: css(s.color), value: fmt(s.values[i]) + ' 人' }; }));
-    });
-    hit.addEventListener('mouseleave', function () { hideTip(f); cross.setAttribute('opacity', 0); dots.forEach(function (c) { c.setAttribute('opacity', 0); }); });
+    };
+    hit.addEventListener('pointermove', showAt);
+    hit.addEventListener('pointerdown', showAt);   // 手機用手指點一下
+    hit.addEventListener('pointerleave', function (ev) { if (ev.pointerType !== 'mouse') return; hideTip(f); cross.setAttribute('opacity', 0); dots.forEach(function (c) { c.setAttribute('opacity', 0); }); });
     f.svg.appendChild(hit);
   }
 
@@ -407,7 +389,6 @@
 
   var resizeTimer = null;
   window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { if (last) render(last); }, 150); });
-  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { if (last) render(last); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
   load();
   setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
