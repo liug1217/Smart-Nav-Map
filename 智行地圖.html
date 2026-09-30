@@ -2145,7 +2145,8 @@ if (navigator.geolocation) {
   // ===== 🔊 測速照相語音播報 =====
   // 流程：進入 1 公里 → 「1公里後有測速照相，固定式，限速XX公里。」(超速再加「您已超速」)
   //       → 每跨進一個 100 公尺整數倍區間念一次「900公尺」…「100公尺」(只念整百，不念 960/850 這種實際距離)
-  //       → 抵達測速照相位置：專用提示音 → 「通過」
+  //       → 抵達測速照相位置：專用提示音 → 「您已通過」
+  //       「您已超速」同一支測速照相只念一次(首次提醒時已超速就跟在首次提醒後；之後才超速就跟在下一個距離後)
   const SPEED_CAM_WARN_KM = 1.0;    // 1 公里：首次完整語音
   const SPEED_CAM_PRELOAD_KM = 1.6; // 進入 1.6 公里先在背景合成首次提醒，播報時不用等
   const SPEED_CAM_PASS_KM = 0.03;   // 30 公尺內：視為抵達測速照相位置
@@ -2169,7 +2170,8 @@ if (navigator.geolocation) {
   function getSpeedCameraState(cameraId) {
     let state = speedCameraVoiceState.get(cameraId);
     if (!state) {
-      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false };
+      // overSpeedAnnounced：同一支測速照相「您已超速」只念一次(不跟著每個距離重念)
+      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false, overSpeedAnnounced: false };
       speedCameraVoiceState.set(cameraId, state);
     }
     return state;
@@ -2181,9 +2183,11 @@ if (navigator.geolocation) {
     speedCameraVoiceState.clear();
   }
 
-  // 首次提醒。meters > 900 念「1公里後」；導航開始時已經比較近，就念目前所在的整百區間(例如 430 公尺 → 「500公尺後」)
+  // 首次提醒念的距離：取最接近的 100 公尺整數倍(例如 300 → 300、430 → 400、460 → 500)，最少 100
+  function speedCamIntroMeters(meters) { return Math.max(100, Math.round(meters / 100) * 100); }
+  // 首次提醒。meters > 900 念「1公里後」；導航開始時已經比較近，就念最接近的整百距離(例如 300 公尺 →「300公尺後」)
   function speedCamIntroText(p, meters) {
-    const lead = meters > 900 ? '1公里後' : (Math.max(1, Math.ceil(meters / 100)) * 100) + '公尺後';
+    const lead = meters > 900 ? '1公里後' : speedCamIntroMeters(meters) + '公尺後';
     return lead + '有測速照相，' + SPEED_CAM_TYPE + (p.limit ? '，限速' + p.limit + '公里' : '') + '。';
   }
 
@@ -2208,7 +2212,8 @@ if (navigator.geolocation) {
       }
       // 沒預告過(導航開始時就在照相機旁)就不念，避免突然冒出一句「通過」
       // 同一個 key：還沒念的距離播報會被取代，不會在通過後才念「100公尺」
-      if (state.announced) speakQueue([playSpeedCameraPassBeep, '通過'], { key, maxAgeMs: 6000 });
+      // 提示音播完才念「您已通過」；state.passed 已先設好，之後 GPS 在附近漂移也不會再念
+      if (state.announced) speakQueue([playSpeedCameraPassBeep, '您已通過'], { key, maxAgeMs: 6000 });
       return;
     }
 
@@ -2225,6 +2230,9 @@ if (navigator.geolocation) {
       state.announced = true;
       // GPS 第一次更新就已在較近區間：目前與更遠的整百距離都算念過，不補念舊距離
       SPEED_CAM_STAGES.forEach(stage => { if (distanceMeters <= stage) state.stages.add(stage); });
+      // 首次提醒已經念了「300公尺後」，300 這個距離就算念過，不會馬上又念一次「300公尺」
+      if (distanceMeters <= 900) { const said = speedCamIntroMeters(distanceMeters); SPEED_CAM_STAGES.forEach(s => { if (s >= said) state.stages.add(s); }); }
+      if (overSpeed) state.overSpeedAnnounced = true;
       speakQueue([speedCamIntroText(p, distanceMeters), overSpeed ? '您已超速' : null], { key: 'speedcam-intro:' + cameraId });
       return;
     }
@@ -2234,7 +2242,10 @@ if (navigator.geolocation) {
     const stage = crossed[crossed.length - 1];
     if (stage != null) {
       SPEED_CAM_STAGES.forEach(s => { if (s >= stage) state.stages.add(s); });
-      speakQueue([stage + '公尺', overSpeed ? '您已超速' : null], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
+      // 距離播報只念距離。首次提醒時沒超速、之後才開始超速的，在「第一次」發現超速的那個距離後面補念一次，之後不再念
+      const addOverSpeed = overSpeed && !state.overSpeedAnnounced;
+      if (addOverSpeed) state.overSpeedAnnounced = true;
+      speakQueue([stage + '公尺', addOverSpeed ? '您已超速' : null], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
       if (stage <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
     }
   }
@@ -3072,7 +3083,7 @@ if (navigator.geolocation) {
   });
   NavTTS.init();
   // 固定會用到的播報先在背景合成好(測速照相距離、通過、超速、抵達)，播報時不用等
-  NavTTS.preload(SPEED_CAM_STAGES.map(m => m + '公尺').concat(['通過', '您已超速', '已到達目的地。']));
+  NavTTS.preload(SPEED_CAM_STAGES.map(m => m + '公尺').concat(['您已通過', '您已超速', '已到達目的地。']));
 
   // 頁面載入後背景預載所有錄音音檔，消除首次播放的載入延遲
   VP.prefetch(['1','2','3','4','5','6','7','8','9',
@@ -3113,7 +3124,7 @@ if (navigator.geolocation) {
         const t0 = ctx.currentTime + 0.02;
         note(784, t0, 0.30);        // G5
         note(1046.5, t0 + 0.12, 0.34); // C6
-        setTimeout(resolve, 520);   // 提示音結束後再接「通過」
+        setTimeout(resolve, 520);   // 提示音結束後再接「您已通過」
       } catch (e) { resolve(); /* 瀏覽器不支援則靜音 */ }
     });
   }
