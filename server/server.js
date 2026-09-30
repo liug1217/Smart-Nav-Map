@@ -41,7 +41,10 @@ const LOG_OFF     = process.env.SNM_LOG === '0';
 const SLOW_MS     = 500;
 const SUMMARY_MS  = 10 * 60 * 1000;
 const stats = { n: 0, errors: 0, slow: 0, byPath: {} };
+const serverMetrics = require('../lib/server-metrics');
+serverMetrics.markStarted();
 function logRequest(method, pathname, status, ms) {
+  serverMetrics.countRequest(status);
   stats.n++;
   stats.byPath[pathname] = (stats.byPath[pathname] || 0) + 1;
   if (status >= 500) stats.errors++;

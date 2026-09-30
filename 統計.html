@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>智行地圖使用統計</title>
+<link rel="icon" href="圖片/智行地圖.png">
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f3f3f1;
+    --surface-1:      #fcfcfb;
+    --border:         #e4e3de;
+    --grid:           #ebeae6;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #7a7975;
+    --series-1:       #2a78d6;   /* 使用人數 / 在線 */
+    --series-2:       #eb6834;   /* 開車 */
+    --good:           #1a7f37;
+    --bad:            #c62828;
+    --shadow:         0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:           #111110;
+      --surface-1:      #1a1a19;
+      --border:         #2c2c2a;
+      --grid:           #2a2a28;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8f8e86;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --good:           #3fb950;
+      --bad:            #ff6b6b;
+      --shadow:         none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #111110; --surface-1: #1a1a19; --border: #2c2c2a; --grid: #2a2a28;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --series-1: #3987e5; --series-2: #d95926; --good: #3fb950; --bad: #ff6b6b; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand img { width: 40px; height: 40px; border-radius: 10px; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: .3px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+  .status { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+    background: var(--surface-1); border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); }
+  .status.ok .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+  .status.down .dot { background: var(--bad); }
+  .status b { color: var(--text-primary); font-weight: 600; }
+
+  .grid { display: grid; gap: 12px; }
+  .tiles-hero { grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
+  .tiles { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  .tile { padding: 16px 18px; }
+  .tile .label { font-size: 13px; color: var(--text-secondary); }
+  .tile .value { font-size: 30px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+  .tiles-hero .tile .value { font-size: 44px; }
+  .tile .note { font-size: 12px; color: var(--text-muted); margin-top: 4px; min-height: 1em; }
+  .unit { font-size: 15px; font-weight: 500; color: var(--text-secondary); margin-left: 4px; letter-spacing: 0; }
+
+  section.card { padding: 18px 18px 14px; margin-bottom: 16px; }
+  .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  h2 { margin: 0; font-size: 16px; }
+  .legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--text-secondary); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .chart { position: relative; width: 100%; height: 220px; }
+  .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .chart .axis text { fill: var(--text-muted); font-size: 11px; }
+  .chart .gridline { stroke: var(--grid); stroke-width: 1; }
+  .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 13px; text-align: center; padding: 0 16px; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px; font-size: 12.5px; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    white-space: nowrap; opacity: 0; transition: opacity .1s; z-index: 2; color: var(--text-primary); }
+  .tip .t { color: var(--text-muted); margin-bottom: 3px; }
+  .tip .r { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .tip .r i { width: 8px; height: 8px; border-radius: 2px; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-size: 12.5px; color: var(--text-secondary); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 600; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .two section.card { margin-bottom: 0; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; font-size: 14px; margin-top: 6px; }
+  .kv div:nth-child(odd) { color: var(--text-secondary); }
+  .kv div:nth-child(even) { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .foot { color: var(--text-muted); font-size: 12px; margin-top: 24px; line-height: 1.6; }
+  .err { background: color-mix(in srgb, var(--bad) 10%, var(--surface-1)); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent);
+    color: var(--text-primary); border-radius: 12px; padding: 12px 14px; font-size: 14px; margin-bottom: 16px; display: none; }
+  @media (max-width: 760px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .two { grid-template-columns: 1fr; }
+    .two section.card { margin-bottom: 16px; }
+  }
+  @media (max-width: 480px) {
+    .tiles-hero { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .tiles-hero .tile { padding: 12px; }
+    .tiles-hero .tile .value { font-size: 30px; }
+    .tile .value { font-size: 24px; }
+    h1 { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <img src="圖片/智行地圖.png" alt="">
+      <div>
+        <h1>智行地圖使用統計</h1>
+        <div class="sub">每 30 秒自動更新 · 只有人數與總量，不含任何個人資料或位置</div>
+      </div>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">連線中…</span></div>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <div class="grid tiles-hero">
+    <div class="card tile"><div class="label">現在在線</div><div class="value" id="vOnline">–</div><div class="note">正在開地圖的人</div></div>
+    <div class="card tile"><div class="label">開車中</div><div class="value" id="vMoving">–</div><div class="note">時速 5 公里以上</div></div>
+    <div class="card tile"><div class="label">分享位置的車友</div><div class="value" id="vSharing">–</div><div class="note">有按 🚗 同意分享</div></div>
+  </div>
+  <div class="grid tiles">
+    <div class="card tile"><div class="label">今天使用人數</div><div class="value" id="vTodayUsers">–</div><div class="note">不同的人</div></div>
+    <div class="card tile"><div class="label">今天開車人數</div><div class="value" id="vTodayDrivers">–</div><div class="note">有回報路況</div></div>
+    <div class="card tile"><div class="label">累計使用人數</div><div class="value" id="vTotal">–</div><div class="note" id="vTotalNote">開始記錄以來</div></div>
+    <div class="card tile"><div class="label">最多同時在線</div><div class="value" id="vPeak">–</div><div class="note" id="vPeakWhen"></div></div>
+  </div>
+
+  <section class="card">
+    <div class="sec-head"><h2>今天在線人數</h2>
+      <div class="legend"><span><i style="background:var(--series-1)"></i>在線</span><span><i style="background:var(--series-2)"></i>開車中</span></div></div>
+    <div class="chart" id="chToday"></div>
+    <details><summary>查看數據表</summary><div id="tbToday"></div></details>
+  </section>
+
+  <section class="card">
+    <div class="sec-head"><h2>最近 14 天每日人數</h2>
+      <div class="legend"><span><i style="background:var(--series-1)"></i>使用人數</span><span><i style="background:var(--series-2)"></i>開車人數</span></div></div>
+    <div class="chart" id="chDays"></div>
+    <details><summary>查看數據表</summary><div id="tbDays"></div></details>
+  </section>
+
+  <section class="card">
+    <div class="sec-head"><h2>各時段平均在線人數</h2><div class="legend" style="color:var(--text-muted)">最近 14 天平均，看出一天中哪個時段最多人</div></div>
+    <div class="chart" id="chHours"></div>
+    <details><summary>查看數據表</summary><div id="tbHours"></div></details>
+  </section>
+
+  <div class="two">
+    <section class="card">
+      <h2>路況資料</h2>
+      <div class="kv">
+        <div>已記錄路段</div><div id="tSeg">–</div>
+        <div>道路總長</div><div id="tKm">–</div>
+        <div>車速紀錄</div><div id="tSamp">–</div>
+        <div>近 30 分鐘有路況的路段</div><div id="tActive">–</div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>伺服器</h2>
+      <div class="kv">
+        <div>狀態</div><div id="sState">–</div>
+        <div>已連續運作</div><div id="sUptime">–</div>
+        <div>啟動以來請求數</div><div id="sReq">–</div>
+        <div>資料大小</div><div id="sSize">–</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="foot" id="foot">統計從 2026/9/30 開始記錄；伺服器關機的時段不會被記到。</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  // 後端網址：跟智行地圖用同一台(你電腦上的伺服器)；網址加 ?server=… 可以指定別台
+  var DEFAULT_SERVER = 'https://node.tailfdfee1.ts.net';
+  var SERVER = (new URLSearchParams(location.search).get('server') || DEFAULT_SERVER).replace(/\/+$/, '');
+  var REFRESH_MS = 30000;
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return n == null ? '–' : Number(n).toLocaleString('zh-TW'); };
+  var css = function (name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); };
+
+  function durationText(s) {
+    if (s == null) return '–';
+    var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+    return (d ? d + ' 天 ' : '') + (d || h ? h + ' 小時 ' : '') + m + ' 分';
+  }
+  function mdText(date) { var p = date.split('-'); return +p[1] + '/' + +p[2]; }
+
+  // ── 圖表共用：尺寸、刻度、提示框 ──────────────────────────────────────────
+  var M = { top: 12, right: 10, bottom: 26, left: 34 };
+  function niceMax(v) {
+    if (v <= 4) return 4;
+    var p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
+    return (n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+  }
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function frame(el, yMax) {
+    el.innerHTML = '';
+    var W = el.clientWidth, H = el.clientHeight;
+    var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img' });
+    var iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+    var g = svgEl('g', { 'class': 'axis' });
+    // 刻度盡量用整數(人數)：25 → 0,5,10…；20 → 0,5,10…；其他用 4 格
+    var steps = (yMax % 5 === 0 && yMax / 5 >= 1 && yMax % 4 !== 0) ? 5 : 4;
+    for (var i = 0; i <= steps; i++) {
+      var v = yMax * i / steps, y = M.top + ih - ih * i / steps;
+      g.appendChild(svgEl('line', { 'class': 'gridline', x1: M.left, x2: W - M.right, y1: y, y2: y }));
+      var t = svgEl('text', { x: M.left - 6, y: y + 4, 'text-anchor': 'end' });
+      t.textContent = Number.isInteger(v) ? v : v.toFixed(1);
+      g.appendChild(t);
+    }
+    svg.appendChild(g);
+    el.appendChild(svg);
+    var tip = document.createElement('div'); tip.className = 'tip'; el.appendChild(tip);
+    return { svg: svg, W: W, H: H, iw: iw, ih: ih, tip: tip, y: function (v) { return M.top + ih - ih * v / yMax; } };
+  }
+  function xLabel(f, x, text) {
+    var t = svgEl('text', { x: x, y: f.H - 8, 'text-anchor': 'middle', 'class': 'axis' });
+    t.textContent = text; t.style.fill = css('--text-muted'); t.style.fontSize = '11px';
+    f.svg.appendChild(t);
+  }
+  function showTip(f, x, y, title, rows) {
+    f.tip.innerHTML = '<div class="t">' + title + '</div>' + rows.map(function (r) {
+      return '<div class="r"><i style="background:' + r.color + '"></i>' + r.name + '<b style="margin-left:auto;padding-left:10px">' + r.value + '</b></div>';
+    }).join('');
+    f.tip.style.opacity = 1;
+    var tw = f.tip.offsetWidth, left = Math.min(Math.max(x - tw / 2, 0), f.W - tw);
+    f.tip.style.left = left + 'px'; f.tip.style.top = Math.max(y - f.tip.offsetHeight - 10, 0) + 'px';
+  }
+  function hideTip(f) { f.tip.style.opacity = 0; }
+  function empty(el, msg) { el.innerHTML = '<div class="empty">' + msg + '</div>'; }
+  // 長條頂端 4px 圓角、底部貼齊基準線
+  function barPath(x, y, w, h) {
+    var r = Math.min(4, w / 2, h);
+    return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y +
+           'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+  }
+
+  // 分組長條圖：labels[i] 一組，series 每組並排
+  function barChart(el, labels, series, tipTitle, labelEvery) {
+    var maxV = 0;
+    series.forEach(function (s) { s.values.forEach(function (v) { if (v > maxV) maxV = v; }); });
+    var f = frame(el, niceMax(maxV));
+    var n = labels.length, band = f.iw / n, gap = 2;
+    var groupW = Math.min(band * 0.72, 44), bw = (groupW - gap * (series.length - 1)) / series.length;
+    labels.forEach(function (lab, i) {
+      var x0 = M.left + band * i + (band - groupW) / 2;
+      series.forEach(function (s, j) {
+        var v = s.values[i] || 0; if (!v) return;
+        var y = f.y(v), h = M.top + f.ih - y;
+        f.svg.appendChild(svgEl('path', { d: barPath(x0 + j * (bw + gap), y, bw, h), fill: css(s.color) }));
+      });
+      if (i % (labelEvery || 1) === 0) xLabel(f, M.left + band * i + band / 2, lab);
+      // 感應區比長條大：整組都能觸發提示
+      var hit = svgEl('rect', { x: M.left + band * i, y: M.top, width: band, height: f.ih, fill: 'transparent' });
+      hit.addEventListener('mouseenter', function () {
+        showTip(f, M.left + band * i + band / 2, f.y(Math.max.apply(null, series.map(function (s) { return s.values[i] || 0; }))),
+          tipTitle(i), series.map(function (s) { return { name: s.name, color: css(s.color), value: fmt(s.values[i]) }; }));
+      });
+      hit.addEventListener('mouseleave', function () { hideTip(f); });
+      f.svg.appendChild(hit);
+    });
+  }
+
+  // 折線圖(含十字線提示)
+  function lineChart(el, labels, series) {
+    var maxV = 0;
+    series.forEach(function (s) { s.values.forEach(function (v) { if (v > maxV) maxV = v; }); });
+    var f = frame(el, niceMax(maxV));
+    var n = labels.length, xOf = function (i) { return M.left + (n === 1 ? f.iw / 2 : f.iw * i / (n - 1)); };
+    series.forEach(function (s) {
+      var d = s.values.map(function (v, i) { return (i ? 'L' : 'M') + xOf(i) + ',' + f.y(v); }).join('');
+      f.svg.appendChild(svgEl('path', { d: d, fill: 'none', stroke: css(s.color), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    });
+    var every = Math.max(1, Math.ceil(n / (f.W < 520 ? 5 : 8))); // 手機寬度標籤少一點才不會擠在一起
+    labels.forEach(function (lab, i) { if (i % every === 0) xLabel(f, xOf(i), lab); });
+    var cross = svgEl('line', { y1: M.top, y2: M.top + f.ih, stroke: css('--text-muted'), 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0 });
+    var dots = series.map(function (s) { var c = svgEl('circle', { r: 4.5, fill: css(s.color), stroke: css('--surface-1'), 'stroke-width': 2, opacity: 0 }); f.svg.appendChild(c); return c; });
+    f.svg.appendChild(cross);
+    var hit = svgEl('rect', { x: M.left, y: M.top, width: f.iw, height: f.ih, fill: 'transparent' });
+    hit.addEventListener('mousemove', function (ev) {
+      var r = f.svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (f.W / r.width);
+      var i = Math.max(0, Math.min(n - 1, Math.round((px - M.left) / (n === 1 ? 1 : f.iw / (n - 1)))));
+      cross.setAttribute('x1', xOf(i)); cross.setAttribute('x2', xOf(i)); cross.setAttribute('opacity', 1);
+      dots.forEach(function (c, j) { c.setAttribute('cx', xOf(i)); c.setAttribute('cy', f.y(series[j].values[i])); c.setAttribute('opacity', 1); });
+      showTip(f, xOf(i), f.y(Math.max.apply(null, series.map(function (s) { return s.values[i]; }))), labels[i],
+        series.map(function (s) { return { name: s.name, color: css(s.color), value: fmt(s.values[i]) + ' 人' }; }));
+    });
+    hit.addEventListener('mouseleave', function () { hideTip(f); cross.setAttribute('opacity', 0); dots.forEach(function (c) { c.setAttribute('opacity', 0); }); });
+    f.svg.appendChild(hit);
+  }
+
+  function table(el, head, rows) {
+    el.innerHTML = '<table><thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '</tbody></table>';
+  }
+
+  // ── 畫面 ──────────────────────────────────────────────────────────────────
+  var last = null;
+  function render(d) {
+    var st = d.stats, now = d.now;
+    $('vOnline').textContent = fmt(now.online);
+    $('vMoving').textContent = fmt(now.moving);
+    $('vSharing').textContent = fmt(now.sharingCars);
+    var todayDate = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); // 台灣時間的今天
+    var today = st.days.filter(function (x) { return x.date === todayDate; })[0];
+    $('vTodayUsers').textContent = fmt(today ? today.users : 0);
+    $('vTodayDrivers').textContent = fmt(today ? today.drivers : 0);
+    $('vTotal').textContent = fmt(st.totalUsers);
+    if (st.peak) {
+      $('vPeak').innerHTML = fmt(st.peak.online) + '<span class="unit">人</span>';
+      $('vPeakWhen').textContent = mdText(st.peak.date) + ' ' + st.peak.time;
+    } else { $('vPeak').textContent = '–'; $('vPeakWhen').textContent = '還沒有紀錄'; }
+
+    // 今天在線人數(每 5 分鐘)
+    var t = st.today || [];
+    if (t.length < 2) empty($('chToday'), '今天的紀錄還不夠畫圖（每 5 分鐘記一次）');
+    else lineChart($('chToday'), t.map(function (p) { return p[0]; }), [
+      { name: '在線',   color: '--series-1', values: t.map(function (p) { return p[1]; }) },
+      { name: '開車中', color: '--series-2', values: t.map(function (p) { return p[2]; }) },
+    ]);
+    table($('tbToday'), ['時間', '在線', '開車中'], t.slice().reverse().map(function (p) { return [p[0], fmt(p[1]), fmt(p[2])]; }));
+
+    // 最近 14 天
+    var days = [];
+    for (var i = 13; i >= 0; i--) {
+      var dt = new Date(Date.now() + 8 * 3600e3 - i * 86400e3).toISOString().slice(0, 10);
+      var rec = st.days.filter(function (x) { return x.date === dt; })[0];
+      days.push({ date: dt, users: rec ? rec.users : 0, drivers: rec ? rec.drivers : 0, peak: rec ? rec.peakOnline : 0, peakTime: rec ? rec.peakTime : null });
+    }
+    if (!st.days.length) empty($('chDays'), '還沒有每日紀錄');
+    else barChart($('chDays'), days.map(function (x) { return mdText(x.date); }), [
+      { name: '使用人數', color: '--series-1', values: days.map(function (x) { return x.users; }) },
+      { name: '開車人數', color: '--series-2', values: days.map(function (x) { return x.drivers; }) },
+    ], function (i) { return mdText(days[i].date); }, $('chDays').clientWidth < 520 ? 2 : 1);
+    table($('tbDays'), ['日期', '使用人數', '開車人數', '最多同時在線'], days.slice().reverse().map(function (x) {
+      return [mdText(x.date), fmt(x.users), fmt(x.drivers), x.peakTime ? fmt(x.peak) + ' 人（' + x.peakTime + '）' : '–'];
+    }));
+
+    // 各時段平均
+    var hours = st.avgOnlineByHour || [];
+    if (!hours.some(function (h) { return h.avg != null; })) empty($('chHours'), '還沒有紀錄');
+    else barChart($('chHours'), hours.map(function (h) { return String(h.hour); }), [
+      { name: '平均在線', color: '--series-1', values: hours.map(function (h) { return h.avg || 0; }) },
+    ], function (i) { return i + ':00–' + (i + 1) + ':00'; }, $('chHours').clientWidth < 520 ? 3 : 2);
+    table($('tbHours'), ['時段', '平均在線'], hours.map(function (h) { return [h.hour + ':00–' + (h.hour + 1) + ':00', h.avg == null ? '–' : h.avg]; }));
+
+    var tr = d.traffic || {};
+    $('tSeg').textContent = tr.segments != null ? fmt(tr.segments) + ' 段' : '–';
+    $('tKm').textContent = tr.km != null ? fmt(tr.km) + ' 公里' : '–';
+    $('tSamp').textContent = tr.speedSamples != null ? fmt(tr.speedSamples) + ' 筆' : '–';
+    $('tActive').textContent = fmt(tr.activeSegments) + ' 段';
+    var sv = d.server;
+    $('sState').textContent = '運作中';
+    $('sUptime').textContent = sv ? durationText(sv.uptimeS) : '–';
+    $('sReq').textContent = sv ? fmt(sv.requests) + ' 次' : '–';
+    $('sSize').textContent = tr.storeKB != null ? fmt(tr.storeKB) + ' KB' : '–';
+  }
+
+  function setStatus(ok, text) {
+    var s = $('status');
+    s.className = 'status ' + (ok ? 'ok' : 'down');
+    $('statusText').innerHTML = text;
+  }
+
+  function load() {
+    var ctl = new AbortController(); setTimeout(function () { ctl.abort(); }, 15000);
+    fetch(SERVER + '/api/stats/overview', { signal: ctl.signal, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        last = j.data; render(last);
+        $('err').style.display = 'none';
+        setStatus(true, '<b>伺服器運作中</b> · ' + new Date(last.updatedAt).toLocaleTimeString('zh-TW', { hour12: false }) + ' 更新');
+      })
+      .catch(function () {
+        setStatus(false, '<b>伺服器離線</b>');
+        $('sState').textContent = '離線';
+        var e = $('err'); e.style.display = 'block';
+        e.textContent = '連不到伺服器（' + SERVER + '）。可能是電腦關機、睡眠，或伺服器視窗被關掉了；' +
+          (last ? '下面顯示的是最後一次成功取得的資料。' : '恢復後這頁會自動更新。');
+      });
+  }
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { if (last) render(last); }, 150); });
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { if (last) render(last); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+  load();
+  setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
