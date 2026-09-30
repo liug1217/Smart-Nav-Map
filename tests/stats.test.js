@@ -28,3 +28,20 @@ test('counts distinct users and drivers per day, and finds the busiest time', as
   assert.equal(s.peak.online, 2);
   assert.match(s.peak.time, /^\d\d:\d\d$/);
 });
+
+test('returning users: someone seen on an earlier day counts as 回訪 today; a brand-new user does not', async () => {
+  const { redisCmd } = require('../lib/redis');
+  const { backfillFirstSeen, twDate } = require('../lib/stats');
+  const yesterday = twDate(Date.now() - 24 * 3600 * 1000), today = twDate();
+  // 昨天就用過的人(加上回訪統計之前的舊資料，只有每日名單)
+  await redisCmd('ZADD', `stats:users:${yesterday}`, String(Date.now() - 86400000), 'oldUser0001');
+  await backfillFirstSeen(3);
+  await markUser('oldUser0001');   // 今天又回來
+  await markUser('newUser0001');   // 今天第一次來
+  await markUser('newUser0001');   // 同一天再來一次，還是新人
+  const s = await summary(2);
+  const t = s.days.find(d => d.date === today);
+  assert.equal(t.returning, 1);
+  assert.equal(await redisCmd('GET', 'stats:first:oldUser0001'), yesterday);
+  assert.equal(await redisCmd('GET', 'stats:first:newUser0001'), today);
+});

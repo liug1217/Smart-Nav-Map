@@ -18,6 +18,7 @@
     --text-muted:     #8f8e86;
     --series-1:       #3987e5;   /* 使用人數 / 在線 */
     --series-2:       #d95926;   /* 開車 */
+    --series-3:       #199e70;   /* 回訪 */
     --good:           #3fb950;
     --bad:            #ff6b6b;
     --shadow:         none;
@@ -115,7 +116,7 @@
     <div class="card tile"><div class="label">分享位置的車友</div><div class="value" id="vSharing">–</div><div class="note">有按 🚗 同意分享</div></div>
   </div>
   <div class="grid tiles">
-    <div class="card tile"><div class="label">今天使用人數</div><div class="value" id="vTodayUsers">–</div><div class="note">不同的人</div></div>
+    <div class="card tile"><div class="label">今天使用人數</div><div class="value" id="vTodayUsers">–</div><div class="note" id="vTodayUsersNote">不同的人</div></div>
     <div class="card tile"><div class="label">今天開車人數</div><div class="value" id="vTodayDrivers">–</div><div class="note">有回報路況</div></div>
     <div class="card tile"><div class="label">累計使用人數</div><div class="value" id="vTotal">–</div><div class="note" id="vTotalNote">開始記錄以來</div></div>
     <div class="card tile"><div class="label">最多同時在線</div><div class="value" id="vPeak">–</div><div class="note" id="vPeakWhen"></div></div>
@@ -130,7 +131,7 @@
 
   <section class="card">
     <div class="sec-head"><h2>最近 14 天每日人數</h2>
-      <div class="legend"><span><i style="background:var(--series-1)"></i>使用人數</span><span><i style="background:var(--series-2)"></i>開車人數</span></div></div>
+      <div class="legend"><span><i style="background:var(--series-1)"></i>使用人數</span><span><i style="background:var(--series-3)"></i>回訪人數</span><span><i style="background:var(--series-2)"></i>開車人數</span></div></div>
     <div class="chart" id="chDays"></div>
     <details><summary>查看數據表</summary><div id="tbDays"></div></details>
   </section>
@@ -313,6 +314,9 @@
     var todayDate = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); // 台灣時間的今天
     var today = st.days.filter(function (x) { return x.date === todayDate; })[0];
     $('vTodayUsers').textContent = fmt(today ? today.users : 0);
+    // 回訪：今天來的人裡，之前某一天就用過的
+    var ret = today ? (today.returning || 0) : 0, usersToday = today ? today.users : 0;
+    $('vTodayUsersNote').textContent = usersToday ? '新 ' + fmt(Math.max(0, usersToday - ret)) + ' 人 · 回訪 ' + fmt(ret) + ' 人' : '不同的人';
     $('vTodayDrivers').textContent = fmt(today ? today.drivers : 0);
     $('vTotal').textContent = fmt(st.totalUsers);
     if (st.peak) {
@@ -334,15 +338,16 @@
     for (var i = 13; i >= 0; i--) {
       var dt = new Date(Date.now() + 8 * 3600e3 - i * 86400e3).toISOString().slice(0, 10);
       var rec = st.days.filter(function (x) { return x.date === dt; })[0];
-      days.push({ date: dt, users: rec ? rec.users : 0, drivers: rec ? rec.drivers : 0, peak: rec ? rec.peakOnline : 0, peakTime: rec ? rec.peakTime : null });
+      days.push({ date: dt, users: rec ? rec.users : 0, returning: rec ? (rec.returning || 0) : 0, drivers: rec ? rec.drivers : 0, peak: rec ? rec.peakOnline : 0, peakTime: rec ? rec.peakTime : null });
     }
     if (!st.days.length) empty($('chDays'), '還沒有每日紀錄');
     else barChart($('chDays'), days.map(function (x) { return mdText(x.date); }), [
       { name: '使用人數', color: '--series-1', values: days.map(function (x) { return x.users; }) },
+      { name: '回訪人數', color: '--series-3', values: days.map(function (x) { return x.returning; }) },
       { name: '開車人數', color: '--series-2', values: days.map(function (x) { return x.drivers; }) },
     ], function (i) { return mdText(days[i].date); }, $('chDays').clientWidth < 520 ? 2 : 1);
-    table($('tbDays'), ['日期', '使用人數', '開車人數', '最多同時在線'], days.slice().reverse().map(function (x) {
-      return [mdText(x.date), fmt(x.users), fmt(x.drivers), x.peakTime ? fmt(x.peak) + ' 人（' + x.peakTime + '）' : '–'];
+    table($('tbDays'), ['日期', '使用人數', '回訪人數', '開車人數', '最多同時在線'], days.slice().reverse().map(function (x) {
+      return [mdText(x.date), fmt(x.users), fmt(x.returning), fmt(x.drivers), x.peakTime ? fmt(x.peak) + ' 人（' + x.peakTime + '）' : '–'];
     }));
 
     // 各時段平均
