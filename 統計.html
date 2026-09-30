@@ -169,7 +169,9 @@
 (function () {
   'use strict';
   // 後端網址：跟智行地圖用同一台(你電腦上的伺服器)；網址加 ?server=… 可以指定別台
-  var DEFAULT_SERVER = 'https://node.tailfdfee1.ts.net';
+  // 放在 GitHub 上時連你電腦的伺服器；由伺服器自己提供這頁時，就用同一個網址(不會被瀏覽器擋)
+  var DEFAULT_SERVER = (/github\.io$/.test(location.hostname) || location.port === '5178')
+    ? 'https://node.tailfdfee1.ts.net' : location.origin;
   var SERVER = (new URLSearchParams(location.search).get('server') || DEFAULT_SERVER).replace(/\/+$/, '');
   var REFRESH_MS = 30000;
   var $ = function (id) { return document.getElementById(id); };
@@ -369,8 +371,14 @@
     $('statusText').innerHTML = text;
   }
 
+  // 從 GitHub 版開、而且一連就「瞬間」失敗(不是逾時)：多半是瀏覽器擋掉「公開網站連區域網路」
+  // (這台裝置裝了 Tailscale)，伺服器其實是好的 → 自動改開伺服器上的同一頁
+  var ON_GITHUB = /github\.io$/.test(location.hostname);
+  var DIRECT_URL = SERVER + '/';
+  var triedDirect = false;
   function load() {
     var ctl = new AbortController(); setTimeout(function () { ctl.abort(); }, 15000);
+    var t0 = Date.now();
     fetch(SERVER + '/api/stats/overview', { signal: ctl.signal, cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (j) {
@@ -378,12 +386,15 @@
         $('err').style.display = 'none';
         setStatus(true, '<b>' + (liveOk() ? '即時連線中' : '伺服器運作中') + '</b> · ' + new Date(last.updatedAt).toLocaleTimeString('zh-TW', { hour12: false }) + ' 更新');
       })
-      .catch(function () {
+      .catch(function (err) {
+        var blocked = ON_GITHUB && !last && err && err.name === 'TypeError' && Date.now() - t0 < 1500;
+        if (blocked && !triedDirect) { triedDirect = true; location.replace(DIRECT_URL); return; }
         setStatus(false, '<b>伺服器離線</b>');
         $('sState').textContent = '離線';
         var e = $('err'); e.style.display = 'block';
-        e.textContent = '連不到伺服器（' + SERVER + '）。可能是電腦關機、睡眠，或伺服器視窗被關掉了；' +
-          (last ? '下面顯示的是最後一次成功取得的資料。' : '恢復後這頁會自動更新。');
+        e.innerHTML = '連不到伺服器（' + SERVER + '）。可能是電腦關機、睡眠，或伺服器視窗被關掉了；' +
+          (last ? '下面顯示的是最後一次成功取得的資料。' : '恢復後這頁會自動更新。') +
+          (ON_GITHUB ? '<br>如果伺服器明明有開，請改用這個網址：<a href="' + DIRECT_URL + '" style="color:inherit;font-weight:600">' + DIRECT_URL + '</a>' : '');
       });
   }
 

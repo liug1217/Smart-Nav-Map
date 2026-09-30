@@ -128,7 +128,18 @@ const server = http.createServer(async (req, res) => {
   const t0  = Date.now();
   const url = new URL(req.url, 'http://localhost');
   try {
-    if (url.pathname === '/' || url.pathname === '/api' || url.pathname === '/api/') {
+    // 統計網站直接由伺服器提供(跟資料同一個網址)：裝了 Tailscale 的電腦/手機從 GitHub 版開時，
+    // 瀏覽器會把「公開網站連區域網路位址」擋掉而顯示離線；同一個網址就沒有這個問題
+    const PAGES = { '/': '統計.html', '/stats': '統計.html', '/圖片/智行地圖.png': '圖片/智行地圖.png' };
+    const page = PAGES[decodeURIComponent(url.pathname)];
+    if (page && req.method === 'GET') {
+      const file = path.join(ROOT, page);
+      res.setHeader('Content-Type', page.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', page.endsWith('.png') ? 'public, max-age=86400' : 'no-cache');
+      fs.createReadStream(file).on('error', () => { res.statusCode = 404; res.end(); }).pipe(res);
+      return;
+    }
+    if (url.pathname === '/api' || url.pathname === '/api/') {
       cors(res);
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.end('智行地圖後端伺服器運作中。健康檢查：/api/health\n');
