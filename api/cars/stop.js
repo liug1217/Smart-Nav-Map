@@ -17,6 +17,7 @@ module.exports = async (req, res) => {
 
   try {
     await removeCar(pubId);
+    require('../../lib/live').notify('cars'); // 即時推送：這台車從別人的地圖上消失
     return ok(res, { ok: true });
   } catch (e) {
     console.error('[cars/stop]', e.message);

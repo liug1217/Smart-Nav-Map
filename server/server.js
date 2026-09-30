@@ -30,6 +30,7 @@ const API_DIR = path.join(ROOT, 'api');
 
 const PORT = Number(process.env.PORT) || 8787;
 if (!process.env.SNM_DATA_DIR) process.env.SNM_DATA_DIR = 'C:\\SmartNavData';
+const live = require('../lib/live');
 
 const MAX_BODY = 100 * 1024;
 const GZIP_MIN_BYTES = 1024;
@@ -134,6 +135,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (!url.pathname.startsWith('/api/')) { res.statusCode = 404; res.end(); return; }
+    // 瀏覽器的預檢請求一律在這裡回答。重點是「私人網路存取」：用裝了 Tailscale 的電腦或手機開網頁時，
+    // 這個網址會連到 Tailscale 內部位址(100.x.x.x)，Chrome 把它當私人網路，從 github.io 這種公開網站
+    // 連過來前會先問一次；沒回答 Access-Control-Allow-Private-Network 就直接擋掉 → 網頁顯示「伺服器離線」
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin':  '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || 'Content-Type',
+        'Access-Control-Allow-Private-Network': 'true',
+        'Access-Control-Max-Age': '600',
+      });
+      res.end();
+      return;
+    }
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    // 即時推送：常駐連線，不走一般的 API 流程(也不壓縮)
+    if (url.pathname === '/api/live' && req.method === 'GET') { await live.handle(req, res); return; }
 
     const handler = findHandler(url.pathname);
     if (!handler) { cors(res); res.statusCode = 404; res.setHeader('Content-Type', 'application/json'); res.end('{"ok":false,"error":{"code":"not_found"}}'); return; }
@@ -156,6 +174,8 @@ const server = http.createServer(async (req, res) => {
 
 // 使用統計：每 5 分鐘記一次在線人數(找出最多人用的時段)
 require('../lib/stats').startSampling();
+// 即時推送(/api/live)
+live.start();
 
 server.listen(PORT, () => {
   console.log('────────────────────────────────────────────');

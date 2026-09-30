@@ -25,6 +25,7 @@ module.exports = async (req, res) => {
     // isTrafficSource is maintained by position.js; heartbeat only updates moving flag
     await refreshPresence(sessionId, !!moving, false);
     markUser(sessionId).catch(() => {}); // 使用統計(只記匿名編號與人數)，失敗不影響心跳
+    require('../../lib/live').notify('presence'); // 即時推送：人數可能變了
     return ok(res, { ts: Date.now() });
   } catch (e) {
     console.error('[heartbeat]', e.message);

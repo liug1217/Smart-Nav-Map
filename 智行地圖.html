@@ -7531,7 +7531,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     HEARTBEAT_INTERVAL_MS:     15000,  // 15 秒 heartbeat
     ONLINE_COUNT_INTERVAL_MS:  30000,  // 30 秒更新在線人數
     GPS_POLL_INTERVAL_MS:      3000,   // 每 3 秒輪詢一次（內部有自己的節流）
-    GPS_MIN_INTERVAL_MS:       10000,  // GPS 上傳最短間隔 10 秒
+    GPS_MIN_INTERVAL_MS:       5000,   // GPS 上傳最短間隔 5 秒(路況更即時；伺服器限速 4 秒)
     GPS_MIN_DISTANCE_M:        30,     // 移動超過 30 公尺也觸發上傳
     TRAFFIC_FETCH_INTERVAL_MS: 30000,  // 30 秒更新路況
     MOVING_SPEED_KMH:          5,      // 低於此速度視為靜止
@@ -7641,7 +7641,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
 
   fetchOnlineCount();
-  setInterval(fetchOnlineCount, TCFG.ONLINE_COUNT_INTERVAL_MS);
+  setInterval(function () { if (!liveConnected()) fetchOnlineCount(); }, TCFG.ONLINE_COUNT_INTERVAL_MS);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GPS 上傳（匿名路況資料貢獻）
@@ -8021,7 +8021,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       .catch(function () {}); // API 不可用時不影響導航
   }
 
-  setInterval(fetchTrafficSegments, TCFG.TRAFFIC_FETCH_INTERVAL_MS);
+  setInterval(function () { if (!liveConnected()) fetchTrafficSegments(); }, TCFG.TRAFFIC_FETCH_INTERVAL_MS);
 
   // ── 路況切換按鈕 ─────────────────────────────────────────────────────────
   var _trafficBtn = document.getElementById('trafficBtn');
@@ -8048,7 +8048,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 伺服器只留最近 30 秒的位置；編號每次開 App 隨機產生，不是使用者身分
   // ═══════════════════════════════════════════════════════════════════════════
   var CARS_SOURCE = 'snm-cars-src', CARS_LAYER = 'snm-cars', CAR_ICON = 'snm-other-car';
-  var CAR_SHARE_MS = 5000, CAR_FETCH_MS = 5000;
+  var CAR_SHARE_MS = 3000, CAR_FETCH_MS = 5000; // 分享位置每 3 秒(伺服器限速 2 秒)；別人的位置由即時推送通知
   var _carPubId = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID() : 'car_' + Date.now() + '_' + Math.random().toString(36).slice(2);
   var _shareOn = false;
@@ -8185,9 +8185,38 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   scheduleCars(CAR_FETCH_MS);
 
-  // 回到畫面(開螢幕、切回 App)時立刻更新一次，不用等下一輪
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 即時推送：跟伺服器保持一條連線(/api/live)，有人回報新車速、車友移動、人數變化時
+  // 伺服器主動通知，畫面馬上更新，不用等 30 秒。螢幕關掉時斷開省電，打開再接上；
+  // 連線斷掉期間，原本的定時更新當備用
+  // ═══════════════════════════════════════════════════════════════════════════
+  function throttle(fn, ms) {
+    var last = 0, timer = null;
+    return function () {
+      var wait = ms - (Date.now() - last);
+      if (wait <= 0) { last = Date.now(); fn(); }
+      else if (!timer) timer = setTimeout(function () { timer = null; last = Date.now(); fn(); }, wait);
+    };
+  }
+  var liveTraffic = throttle(fetchTrafficSegments, 3000);   // 一群人同時回報時，最多 3 秒重抓一次
+  var liveCars    = throttle(fetchNearbyCars, 1000);
+  var _live = null;
+  function liveConnected() { return !!(_live && _live.readyState === 1); }
+  function openLive() {
+    if (_live || document.hidden || typeof EventSource === 'undefined') return;
+    _live = new EventSource(TCFG.API_BASE + '/live');
+    _live.addEventListener('counts', function (e) { try { updateOnlineUI(JSON.parse(e.data)); } catch (_) {} });
+    _live.addEventListener('traffic', liveTraffic);
+    _live.addEventListener('cars', liveCars);
+    // 斷線時瀏覽器會自己重連(伺服器設定 3 秒)
+  }
+  function closeLive() { if (_live) { _live.close(); _live = null; } }
+  openLive();
+
+  // 回到畫面(開螢幕、切回 App)時立刻更新一次並接回即時連線；螢幕關掉時斷開省電
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) return;
+    if (document.hidden) { closeLive(); return; }
+    openLive();
     fetchOnlineCount();
     fetchTrafficSegments();
     fetchNearbyCars();

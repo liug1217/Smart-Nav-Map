@@ -28,6 +28,7 @@ module.exports = async (req, res) => {
       speed:   typeof speed === 'number' && isFinite(speed) && speed >= 0 && speed < 250 ? Math.round(speed) : null,
       ts:      Date.now(),
     });
+    require('../../lib/live').notify('cars'); // 即時推送：車友位置更新
     return ok(res, { ok: true });
   } catch (e) {
     console.error('[cars/position]', e.message);

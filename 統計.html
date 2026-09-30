@@ -101,7 +101,7 @@
       <img src="圖片/智行地圖.png" alt="">
       <div>
         <h1>智行地圖使用統計</h1>
-        <div class="sub">每 30 秒自動更新 · 只有人數與總量，不含任何個人資料或位置</div>
+        <div class="sub">即時更新 · 只有人數與總量，不含任何個人資料或位置</div>
       </div>
     </div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">連線中…</span></div>
@@ -376,7 +376,7 @@
       .then(function (j) {
         last = j.data; render(last);
         $('err').style.display = 'none';
-        setStatus(true, '<b>伺服器運作中</b> · ' + new Date(last.updatedAt).toLocaleTimeString('zh-TW', { hour12: false }) + ' 更新');
+        setStatus(true, '<b>' + (liveOk() ? '即時連線中' : '伺服器運作中') + '</b> · ' + new Date(last.updatedAt).toLocaleTimeString('zh-TW', { hour12: false }) + ' 更新');
       })
       .catch(function () {
         setStatus(false, '<b>伺服器離線</b>');
@@ -387,11 +387,50 @@
       });
   }
 
+  // ── 即時推送：伺服器一有變化就通知 ─────────────────────────────────────────
+  // counts(在線/開車/分享人數)直接帶在通知裡，畫面立刻更新；路況、車友有變化時重抓完整資料(最多 3 秒一次)
+  var reloadSoon = (function () {
+    var lastAt = 0, timer = null;
+    return function () {
+      var wait = 3000 - (Date.now() - lastAt);
+      if (wait <= 0) { lastAt = Date.now(); load(); }
+      else if (!timer) timer = setTimeout(function () { timer = null; lastAt = Date.now(); load(); }, wait);
+    };
+  })();
+  var live = null;
+  function liveOk() { return !!(live && live.readyState === 1); }
+  function openLive() {
+    if (live || document.hidden || typeof EventSource === 'undefined') return;
+    live = new EventSource(SERVER + '/api/live');
+    live.addEventListener('counts', function (e) {
+      try {
+        var c = JSON.parse(e.data);
+        $('vOnline').textContent = fmt(c.online);
+        $('vMoving').textContent = fmt(c.moving);
+        $('vSharing').textContent = fmt(c.sharingCars);
+        $('err').style.display = 'none';
+        setStatus(true, '<b>即時連線中</b> · ' + new Date().toLocaleTimeString('zh-TW', { hour12: false }) + ' 更新');
+        reloadSoon();   // 今天人數、圖表也跟著更新
+      } catch (_) {}
+    });
+    live.addEventListener('traffic', reloadSoon);
+    live.addEventListener('cars', reloadSoon);
+    live.onopen = function () { setStatus(true, '<b>即時連線中</b>'); };
+    // 斷線時瀏覽器會自己每 3 秒重連；期間靠下面的定時更新當備用
+  }
+  function closeLive() { if (live) { live.close(); live = null; } }
+
   var resizeTimer = null;
   window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { if (last) render(last); }, 150); });
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { closeLive(); return; }   // 看不到時斷開省電
+    openLive(); load();
+  });
   load();
-  setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
+  openLive();
+  // 備用：即時連線沒接上時才定時整頁更新；接上時每分鐘補一次(連續運作時間、圖表等不會觸發通知的資料)
+  setInterval(function () { if (!document.hidden && !liveOk()) load(); }, REFRESH_MS);
+  setInterval(function () { if (!document.hidden && liveOk()) load(); }, 60000);
 })();
 </script>
 </body>

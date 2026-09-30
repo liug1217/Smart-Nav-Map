@@ -79,6 +79,8 @@ module.exports = async (req, res) => {
     ]);
 
     markDriver(sessionId).catch(() => {}); // 使用統計：今天有開車的人數(只記匿名編號)
+    require('../../lib/live').notify('traffic');  // 即時推送：路況有新資料
+    require('../../lib/live').notify('presence'); // 開車中人數可能變了
 
     // ── 學習這段路的順暢車速(長期車速分布) ──────────────────────────────
     const fk = ffKey(sample.gh, sample.dir);
