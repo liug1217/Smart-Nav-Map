@@ -9,6 +9,7 @@ const { validateSessionId, validateCoords, validateTimestamp } = require('../../
 const { checkRateLimit } = require('../../lib/rate-limit');
 const { redisCmd } = require('../../lib/redis');
 const { normalizeGps } = require('../../lib/traffic/normalize');
+const { markDriver } = require('../../lib/stats');
 const { haversineKm } = require('../../lib/traffic/geohash');
 const { ffKey, addSpeed, LEARN_TTL_S, rcKey, ROAD_INFO_TTL_S, encodeRoadInfo } = require('../../lib/traffic/baseline');
 const { ROLLING_WINDOW_MS, SAMPLE_TTL_S, CONTRIB_TTL_MS, RATE_LIMIT_MS,
@@ -76,6 +77,8 @@ module.exports = async (req, res) => {
       // update moving status
       redisCmd('ZADD', 'hb:moving', String(contribExpiry), sessionId),
     ]);
+
+    markDriver(sessionId).catch(() => {}); // 使用統計：今天有開車的人數(只記匿名編號)
 
     // ── 學習這段路的順暢車速(長期車速分布) ──────────────────────────────
     const fk = ffKey(sample.gh, sample.dir);

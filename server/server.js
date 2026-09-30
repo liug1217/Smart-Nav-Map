@@ -151,6 +151,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// 使用統計：每 5 分鐘記一次在線人數(找出最多人用的時段)
+require('../lib/stats').startSampling();
+
 server.listen(PORT, () => {
   console.log('────────────────────────────────────────────');
   console.log(' 智行地圖後端伺服器已啟動');

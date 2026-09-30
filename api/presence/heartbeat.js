@@ -6,6 +6,7 @@
 const { corsHeaders, handlePreflight, ok, err, methodNotAllowed } = require('../../lib/response');
 const { validateSessionId, validateTimestamp } = require('../../lib/validation');
 const { refreshPresence } = require('../../lib/presence/presence');
+const { markUser } = require('../../lib/stats');
 
 module.exports = async (req, res) => {
   corsHeaders(res);
@@ -23,6 +24,7 @@ module.exports = async (req, res) => {
   try {
     // isTrafficSource is maintained by position.js; heartbeat only updates moving flag
     await refreshPresence(sessionId, !!moving, false);
+    markUser(sessionId).catch(() => {}); // 使用統計(只記匿名編號與人數)，失敗不影響心跳
     return ok(res, { ts: Date.now() });
   } catch (e) {
     console.error('[heartbeat]', e.message);
