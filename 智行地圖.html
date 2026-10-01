@@ -4696,6 +4696,8 @@ if (navigator.geolocation) {
 
   if (navigator.geolocation) {
     // 具名以便測試時用 window._simulateGpsFix({coords:{...}}) 走完全相同的 GPS 更新流程
+    let _lastRawFix = null;  // 上一個用來算行進方向的原始 GPS 點(移動 8 公尺以上才更新)
+    let _flipVotes = 0;      // 連續幾次判斷要掉頭(防止 GPS 雜訊讓畫面突然逆向)
     const onGpsPosition = (pos) => {
       if (window._kbDriving) return; // 試開模式(鍵盤 WASD / 手機觸控)中暫停真實 GPS，避免兩邊搶位置
       const now = Date.now();
@@ -4750,27 +4752,54 @@ if (navigator.geolocation) {
       // 更新車子目標位置（rAF 插值迴圈會平滑插值到此）
       {
         const prevTgt = window._vehicleTarget;
-        let gpsBearing = window.compassHeading != null ? window.compassHeading : 0;
-        let moveBearing = null; // 由移動算出的行進方向(停著時沒有)
-        if (prevTgt) {
-          const dist = calculateDistance(prevTgt.lat, prevTgt.lng, currentLat, currentLon);
-          if (dist > 0.003 && currentSpeed >= 1) { // > 3 公尺、而且真的在動才計算方位角(停車時 GPS 飄移不算)
-            const dLng = (currentLon - prevTgt.lng) * Math.PI / 180;
-            const lat1R = prevTgt.lat * Math.PI / 180;
-            const lat2R = currentLat * Math.PI / 180;
-            const y = Math.sin(dLng) * Math.cos(lat2R);
-            const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
-            gpsBearing = moveBearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
-          }
+        // 行進方向(決定車頭朝道路的哪一邊)：
+        //  1. 優先用 GPS 晶片給的航向(有在動時很準)
+        //  2. 沒有的話，用「兩個原始 GPS 點」之間的方向，而且要累積移動 8 公尺以上才算
+        // 不能用「上次吸附在路中線的點 → 這次原始 GPS 點」：GPS 常偏在路邊，開得慢時這段斜向偏移
+        // 比實際前進還大，算出的方向會歪 90 度以上 → 車頭被判成反方向、畫面突然逆向又轉回來
+        // 兩個原始點要相距 20 公尺以上才拿來算方向：GPS 左右飄移常有 ±8 公尺，太近的兩點算出來的方向會很歪
+        const MOVE_MIN_M = 20;
+        let moveBearing = null;
+        const course = pos.coords.heading;
+        if (typeof course === 'number' && isFinite(course) && currentSpeed >= 2) {
+          moveBearing = (course + 360) % 360;
+        } else if (_lastRawFix && currentSpeed >= 1 &&
+                   calculateDistance(_lastRawFix.lat, _lastRawFix.lon, currentLat, currentLon) * 1000 >= MOVE_MIN_M) {
+          const dLng = (currentLon - _lastRawFix.lon) * Math.PI / 180;
+          const lat1R = _lastRawFix.lat * Math.PI / 180;
+          const lat2R = currentLat * Math.PI / 180;
+          const y = Math.sin(dLng) * Math.cos(lat2R);
+          const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
+          moveBearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
         }
+        // 原始點只在移動夠遠時才往前推，慢速時距離會累積，不會每次都只差幾公尺
+        if (!_lastRawFix || calculateDistance(_lastRawFix.lat, _lastRawFix.lon, currentLat, currentLon) * 1000 >= MOVE_MIN_M) {
+          _lastRawFix = { lat: currentLat, lon: currentLon };
+        }
+        const prevBearing = prevTgt ? prevTgt.bearing : null;
+        let gpsBearing = moveBearing != null ? moveBearing
+          : (prevBearing != null ? prevBearing : (window.compassHeading != null ? window.compassHeading : 0));
         // 沒導航時也吸附到道路中線(跟導航時一樣)：找 20 公尺內方向相符的道路；
         // 停著時沿用上一次的車頭方向，避免 GPS 飄移讓車子原地轉向
+        // 道路是雙向的，車頭朝哪一邊：有「可靠的」行進方向(GPS 航向，或實際移動 20 公尺以上)就照它
+        // (轉進十字路口的橫向道路時才判斷得對)；沒有的話延續目前車頭，車子不會自己掉頭
+        const angDiff = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
         const road = (typeof window._snapToRoad === 'function')
-          ? window._snapToRoad(currentLon, currentLat, moveBearing != null ? moveBearing : (prevTgt ? prevTgt.bearing : null))
+          ? window._snapToRoad(currentLon, currentLat, moveBearing != null ? moveBearing : prevBearing)
           : null;
         const tgtLng = road ? road.lng : currentLon;
         const tgtLat = road ? road.lat : currentLat;
-        const tgtBearing = road ? road.bearing : gpsBearing;
+        let tgtBearing = road ? road.bearing : gpsBearing;
+        // 防掉頭：車頭要轉 150 度以上(等於迴轉)時，必須連續 2 次都這樣判斷才真的轉；
+        // 只出現一次多半是 GPS 雜訊 → 維持原本方向。真的迴轉大約 1~2 秒後就會轉過去
+        // (只有可靠的行進方向才算票/清票；中間沒有可靠方向的那幾次定位不影響)
+        if (prevBearing != null && angDiff(tgtBearing, prevBearing) > 150) {
+          if (moveBearing != null) _flipVotes++;
+          if (_flipVotes < 2) tgtBearing = road ? (tgtBearing + 180) % 360 : prevBearing;
+          else _flipVotes = 0;
+        } else if (moveBearing != null) {
+          _flipVotes = 0;
+        }
         if (prevTgt) {
           const dt = now - prevTgt.timestamp;
           if (dt > 0 && dt < 5000) {
