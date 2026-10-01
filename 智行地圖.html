@@ -7802,7 +7802,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 沒在導航時也顯示(預設開啟，🚦 可以關掉並記住)；畫在導航路線上方，路線上塞車的那段會變色
   // ═══════════════════════════════════════════════════════════════════════════
   var TRAFFIC_SOURCE = 'snm-traffic-src';
-  var TRAFFIC_CASING = 'snm-traffic-casing';  // 舊版塞車外框圖層(已停用，只用來移除舊圖層)
+  var TRAFFIC_CASING = 'snm-traffic-casing';  // 塞車路段的外框(同色系深色)
+  // 塞車外框：跟塞車顏色同色系的深色，不沿用道路/導航路線的藍色外框
+  var CASING_BY_LEVEL = { moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' };
   var TRAFFIC_LAYER  = 'snm-traffic-lines';   // 道路線段
   var TRAFFIC_POINTS = 'snm-traffic-points';  // 方向不明、只能畫成點的少數路段
   // 沒人開過(沒有車速資料)的道路也要顯示成「順暢」的藍色：道路形狀取自 OpenFreeMap 的向量道路資料，
@@ -8085,10 +8087,24 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       }, roadsBeforeId());
     }
 
-    // ── 有車速資料的路段：只畫跟導航路線內線一樣粗的塞車色，不另外加外框。
-    //    外框沿用底下道路/導航路線本身的深藍外框 —— 兩層各自有外框時，只要沒完全重疊，
-    //    兩側就會各出現兩道邊框(共 4 道)。舊版的外框圖層若還在(換樣式前建立的)就移除 ──
-    if (m.getLayer(TRAFFIC_CASING)) m.removeLayer(TRAFFIC_CASING);
+    // ── 沒導航時的塞車路段：塞車色內線 + 同色系深色外框(不沿用道路的藍色外框)。
+    //    塞車路段是從道路本身裁出來的，形狀跟道路完全重疊，外框剛好蓋住道路的藍色外框，只看得到一道邊框。
+    //    (導航中塞車直接畫在導航路線上，見 colorizeNavRoute) ──
+    if (!m.getLayer(TRAFFIC_CASING)) {
+      m.addLayer({
+        id:     TRAFFIC_CASING,
+        type:   'line',
+        source: TRAFFIC_SOURCE,
+        filter: ['==', ['geometry-type'], 'LineString'],
+        layout: { visibility: vis, 'line-cap': 'square', 'line-join': 'round' },
+        paint: {
+          'line-color':   ['match', ['get', 'trafficLevel'], 'moderate', CASING_BY_LEVEL.moderate, 'slow', CASING_BY_LEVEL.slow,
+                           'congested', CASING_BY_LEVEL.congested, 'severe', CASING_BY_LEVEL.severe, NAV_OUTLINE_C],
+          'line-width':   NAV_OUTLINE_W,
+          'line-opacity': 1,
+        },
+      }, trafficBeforeId());
+    }
     if (!m.getLayer(TRAFFIC_LAYER)) {
       m.addLayer({
         id:     TRAFFIC_LAYER,
@@ -8419,6 +8435,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if (!isNavigating() || !src || !route || route.length < 2 || !m.getLayer('navRoute-line')) return;
     // 每一段路線的顏色由資料決定，沒有顏色的就是原本的藍色
     m.setPaintProperty('navRoute-line', 'line-color', ['coalesce', ['get', 'color'], NAV_LINE_C]);
+    // 外框也分段：塞車那段用同色系深色外框，其他段維持藍色外框
+    if (m.getLayer('navRoute-outline')) m.setPaintProperty('navRoute-outline', 'line-color', ['coalesce', ['get', 'casing'], NAV_OUTLINE_C]);
     alongRoute(route, route[0]);                 // 確保 _routeCum 是這條路線的累積距離
     var cum = _routeCum, total = cum[cum.length - 1];
     var spans = [];
@@ -8433,7 +8451,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         if (!piece) return;
         var a = alongRoute(route, piece[0]), b = alongRoute(route, piece[piece.length - 1]);
         if (b < a) { var t = a; a = b; b = t; }
-        if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color });
+        if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel] });
       });
     }
     // 依所有切點把路線切成小段，每段取覆蓋它的最嚴重塞車顏色；相鄰同色的再合併
@@ -8446,14 +8464,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (b - a < 0.5) continue;
       var midD = (a + b) / 2, worst = null;
       spans.forEach(function (s) { if (s.a <= midD && s.b >= midD && (!worst || s.rank > worst.rank)) worst = s; });
-      var color = worst ? worst.color : null, last = parts[parts.length - 1];
-      if (last && last.color === color) last.b = b; else parts.push({ a: a, b: b, color: color });
+      var color = worst ? worst.color : null, casing = worst ? worst.casing : null, last = parts[parts.length - 1];
+      if (last && last.color === color) last.b = b; else parts.push({ a: a, b: b, color: color, casing: casing });
     }
     src.setData({
       type: 'FeatureCollection',
       features: parts.map(function (pt) {
         return { type: 'Feature', geometry: { type: 'LineString', coordinates: sliceRoute(route, cum, pt.a, pt.b) },
-                 properties: pt.color ? { color: pt.color } : {} };
+                 properties: pt.color ? { color: pt.color, casing: pt.casing } : {} };
       }),
     });
   }
