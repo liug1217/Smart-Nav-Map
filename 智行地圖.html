@@ -3280,10 +3280,20 @@ if (navigator.geolocation) {
     searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋中...</div>';
     searchResultsList.style.display = 'block';
 
-    const fmMatches = getFmMatches(query);
-    const pxMatches = getPxmartMatches(query);
-    const toiMatches = getToiletMatches(query);
-    const cpcMatches = getCpcMatches(query);
+    // 全台幾千家店：每個品牌只列離我(沒定位時用地圖中心)最近的 10 家，地址也只查這幾家
+    const nearest = function (list) {
+      const c = window.map && window.map.getCenter ? window.map.getCenter() : null;
+      const lat0 = window.currentLat != null ? window.currentLat : (c ? c.lat : 24);
+      const lon0 = window.currentLon != null ? window.currentLon : (c ? c.lng : 121);
+      const kx = Math.cos(lat0 * Math.PI / 180);
+      const d2 = function (it) { const dx = (it.lon - lon0) * kx, dy = it.lat - lat0; return dx * dx + dy * dy; };
+      return list.map(function (it) { return { it: it, d: d2(it) }; })
+        .sort(function (a, b) { return a.d - b.d; }).slice(0, 10).map(function (x) { return x.it; });
+    };
+    const fmMatches = nearest(getFmMatches(query));
+    const pxMatches = nearest(getPxmartMatches(query));
+    const toiMatches = nearest(getToiletMatches(query));
+    const cpcMatches = nearest(getCpcMatches(query));
 
     try {
       const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=tw&accept-language=zh-TW&q=' + encodeURIComponent(query);
@@ -3349,7 +3359,7 @@ if (navigator.geolocation) {
 
     // 大全聯（紅色）
     if (pxMatches.length) {
-      addLabel('🛒 大全聯', '#e60012');
+      addLabel('🛒 全聯', '#e60012');
       pxMatches.forEach(function(item) {
         const { el, addrId } = _makeLocalItem(
           item,
@@ -7057,7 +7067,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="family_mart_data.js?v=ml13"></script>
+<script src="family_mart_data.js?v=osm1"></script>
 <script>
 /* ===== 🏪 全家便利商店圖層 ===== */
 (function(){
@@ -7104,13 +7114,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
       m.addSource('family-mart', { type:'geojson', data:data, cluster:false });
 
-      // 單點圖示（不叢集，所有門市直接顯示 logo）
-      m.addLayer({ id:'fm-points', type:'symbol', source:'family-mart',
+      // 全台幾千家店：放大到 13 級以上才顯示；圖示重疊時自動避開(縮小時不會疊成一團，放大就全部出現)
+      m.addLayer({ id:'fm-points', type:'symbol', source:'family-mart', minzoom: 13,
         filter:['!',['has','point_count']],
         layout:{
           'icon-image': ICON_ID,
           'icon-size': 1,
-          'icon-allow-overlap': true
+          'icon-allow-overlap': false,
+          'icon-padding': 0
         },
         paint:{}
       });
@@ -7270,7 +7281,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="pxmart_data.js?v=ty2"></script>
+<script src="pxmart_data.js?v=osm1"></script>
 <script>
 /* ===== 🛒 大全聯圖層 ===== */
 (function(){
@@ -7316,14 +7327,17 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     function _setup() {
       if (m.getSource('pxmart')) return;
       m.addSource('pxmart', { type:'geojson', data:data, cluster:false });
+      // 全台幾千家店：放大到 13 級以上才顯示；圖示重疊時自動避開(縮小時不會疊成一團，放大就全部出現)
       m.addLayer({
         id: 'pxmart-points',
         type: 'symbol',
         source: 'pxmart',
+        minzoom: 13,
         layout: {
           'icon-image': ICON_ID,
           'icon-size': 1,
-          'icon-allow-overlap': true,
+          'icon-allow-overlap': false,
+          'icon-padding': 0,
         }
       });
 
@@ -7381,7 +7395,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   tryInit();
 })();
 </script>
-<script src="cpc_data.js?v=1"></script>
+<script src="cpc_data.js?v=osm1"></script>
 <script>
 /* ===== ⛽ 中油加油站圖層 ===== */
 (function(){
@@ -7430,14 +7444,17 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     function _setup() {
       if (m.getSource('cpc')) return;
       m.addSource('cpc', { type:'geojson', data:data, cluster:false });
+      // 全台幾千家店：放大到 13 級以上才顯示；圖示重疊時自動避開(縮小時不會疊成一團，放大就全部出現)
       m.addLayer({
         id: 'cpc-points',
         type: 'symbol',
         source: 'cpc',
+        minzoom: 13,
         layout: {
           'icon-image': ICON_ID,
           'icon-size': 1,
-          'icon-allow-overlap': true,
+          'icon-allow-overlap': false,
+          'icon-padding': 0,
         }
       });
 
