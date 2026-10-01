@@ -4309,6 +4309,8 @@ if (navigator.geolocation) {
           type: 'FeatureCollection',
           features: [{ type: 'Feature', geometry: route.geometry }]
         });
+        // 新路線也立刻把塞車路段畫上去(塞車直接是導航路線的顏色)
+        if (typeof window._snmColorizeRoute === 'function') setTimeout(window._snmColorizeRoute, 0);
       }
 
       // 更新底部面板的時間/距離/到達時間顯示
@@ -7966,7 +7968,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (m.getLayoutProperty(id, 'visibility') !== v) m.setLayoutProperty(id, 'visibility', v);
     });
     var src = m.getSource(TRAFFIC_SOURCE);
-    if (src) src.setData(trafficDataForDisplay());
+    // 導航中塞車直接畫在導航路線上(colorizeNavRoute)，獨立的塞車圖層清空
+    if (src) src.setData(isNavigating() ? { type: 'FeatureCollection', features: [] } : trafficDataForDisplay());
+    colorizeNavRoute();
     keepTrafficOnTop();
   }
   // 開始/結束導航時(body 的 navigating class 改變)馬上切換
@@ -8122,7 +8126,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       // 道路資料是移動地圖時陸續載入的；新的道路圖磚載完後重新對齊塞車路段(最多 2 秒一次)
       var refreshShapes = throttle(function () {
         var src = m.getSource(TRAFFIC_SOURCE);
-        if (src && _trafficData && _trafficData.features.length) src.setData(trafficDataForDisplay());
+        if (src && _trafficData && _trafficData.features.length && !isNavigating()) src.setData(trafficDataForDisplay());
       }, 2000);
       m.on('sourcedata', function (e) { if (e.sourceId === ROADS_SOURCE && e.isSourceLoaded) refreshShapes(); });
       [TRAFFIC_LAYER, TRAFFIC_POINTS].forEach(function (id) {
@@ -8392,6 +8396,68 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     }
     return along;
   }
+
+  // ── 導航中塞車直接畫在「導航路線本身」：把路線在塞車路段的起訖點切開，塞車那幾段帶上顏色，
+  //    其他段維持藍色。只有一條線，不會跟另一層對不齊、也不會多出邊框 ──
+  var LEVEL_RANK = { moderate: 1, slow: 2, congested: 3, severe: 4 };
+  function pointAlong(route, cum, d) {
+    var lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid; }
+    var seg = cum[hi] - cum[lo], t = seg > 0 ? (d - cum[lo]) / seg : 0;
+    return [route[lo][0] + (route[hi][0] - route[lo][0]) * t, route[lo][1] + (route[hi][1] - route[lo][1]) * t];
+  }
+  function sliceRoute(route, cum, a, b) {
+    var out = [pointAlong(route, cum, a)];
+    for (var i = 0; i < route.length; i++) if (cum[i] > a && cum[i] < b) out.push(route[i]);
+    out.push(pointAlong(route, cum, b));
+    return out;
+  }
+  function colorizeNavRoute() {
+    var m = window.map, route = window.plannedRouteCoordinates;
+    var src = m && m.getSource('navRoute');
+    // 只在導航中處理：結束導航時主程式會把路線清掉，這裡不能再把它畫回來
+    if (!isNavigating() || !src || !route || route.length < 2 || !m.getLayer('navRoute-line')) return;
+    // 每一段路線的顏色由資料決定，沒有顏色的就是原本的藍色
+    m.setPaintProperty('navRoute-line', 'line-color', ['coalesce', ['get', 'color'], NAV_LINE_C]);
+    alongRoute(route, route[0]);                 // 確保 _routeCum 是這條路線的累積距離
+    var cum = _routeCum, total = cum[cum.length - 1];
+    var spans = [];
+    if (_trafficOn && isNavigating() && _trafficData) {
+      var cands = [{ coords: route, oneway: true }];
+      _trafficData.features.forEach(function (f) {
+        var p = f.properties || {};
+        if (!LEVEL_RANK[p.trafficLevel]) return;  // 順暢：維持藍色
+        var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
+        if (!nearRoute(mid, route)) return;
+        var piece = matchRoadPiece(f, cands);
+        if (!piece) return;
+        var a = alongRoute(route, piece[0]), b = alongRoute(route, piece[piece.length - 1]);
+        if (b < a) { var t = a; a = b; b = t; }
+        if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color });
+      });
+    }
+    // 依所有切點把路線切成小段，每段取覆蓋它的最嚴重塞車顏色；相鄰同色的再合併
+    var cuts = [0, total];
+    spans.forEach(function (s) { cuts.push(s.a, s.b); });
+    cuts = cuts.filter(function (c, i, arr) { return arr.indexOf(c) === i; }).sort(function (x, y) { return x - y; });
+    var parts = [];
+    for (var i = 1; i < cuts.length; i++) {
+      var a = cuts[i - 1], b = cuts[i];
+      if (b - a < 0.5) continue;
+      var midD = (a + b) / 2, worst = null;
+      spans.forEach(function (s) { if (s.a <= midD && s.b >= midD && (!worst || s.rank > worst.rank)) worst = s; });
+      var color = worst ? worst.color : null, last = parts[parts.length - 1];
+      if (last && last.color === color) last.b = b; else parts.push({ a: a, b: b, color: color });
+    }
+    src.setData({
+      type: 'FeatureCollection',
+      features: parts.map(function (pt) {
+        return { type: 'Feature', geometry: { type: 'LineString', coordinates: sliceRoute(route, cum, pt.a, pt.b) },
+                 properties: pt.color ? { color: pt.color } : {} };
+      }),
+    });
+  }
+  window._snmColorizeRoute = colorizeNavRoute;   // 重新規劃路線後由主程式呼叫
 
   // 導航中：只播報「導航路線上、在車子前方」100m~3km 內的壅塞，距離照沿路線計算、最近的先播。
   // 不再要求 3 人以上回報：地圖上已經畫成紅色的，語音就要講，兩邊才一致
