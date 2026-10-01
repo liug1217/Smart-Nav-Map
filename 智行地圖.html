@@ -7955,7 +7955,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (nav && !nearRoute(mid, route)) return;                   // 導航中只看路線上的
       if (!cands) cands = roadCandidates();
       var piece = matchRoadPiece(f, cands);
-      out.push(piece ? { type: 'Feature', geometry: { type: 'LineString', coordinates: piece }, properties: p } : f);
+      // 只畫對得到道路的：塞車一定是從道路本身裁出來、跟道路完全重疊(合為一體)。
+      // 對不到就不畫，不再退回畫原始 GPS 軌跡 —— 軌跡跟道路平行但偏幾公尺，會變成兩組邊框(4 道)
+      if (piece) out.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: piece }, properties: p });
     });
     return { type: 'FeatureCollection', features: out };
   }
@@ -8096,7 +8098,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         type:   'line',
         source: TRAFFIC_SOURCE,
         filter: ['==', ['geometry-type'], 'LineString'],
-        layout: { visibility: vis, 'line-cap': 'square', 'line-join': 'round' },
+        layout: { visibility: vis, 'line-cap': 'butt', 'line-join': 'round' },
         paint: {
           'line-color':   ['match', ['get', 'trafficLevel'], 'moderate', CASING_BY_LEVEL.moderate, 'slow', CASING_BY_LEVEL.slow,
                            'congested', CASING_BY_LEVEL.congested, 'severe', CASING_BY_LEVEL.severe, NAV_OUTLINE_C],
@@ -8111,7 +8113,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         type:   'line',
         source: TRAFFIC_SOURCE,
         filter: ['==', ['geometry-type'], 'LineString'],
-        layout: { visibility: vis, 'line-cap': 'square', 'line-join': 'round' },
+        layout: { visibility: vis, 'line-cap': 'butt', 'line-join': 'round' },
         paint: {
           'line-color':   ['get', 'color'],
           'line-width':   NAV_LINE_W,
