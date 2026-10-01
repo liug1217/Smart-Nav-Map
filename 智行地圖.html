@@ -7800,7 +7800,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 沒在導航時也顯示(預設開啟，🚦 可以關掉並記住)；畫在導航路線上方，路線上塞車的那段會變色
   // ═══════════════════════════════════════════════════════════════════════════
   var TRAFFIC_SOURCE = 'snm-traffic-src';
-  var TRAFFIC_CASING = 'snm-traffic-casing';  // 路況線段的深色外框(跟導航路線一樣有外框)
+  var TRAFFIC_CASING = 'snm-traffic-casing';  // 舊版塞車外框圖層(已停用，只用來移除舊圖層)
   var TRAFFIC_LAYER  = 'snm-traffic-lines';   // 道路線段
   var TRAFFIC_POINTS = 'snm-traffic-points';  // 方向不明、只能畫成點的少數路段
   // 沒人開過(沒有車速資料)的道路也要顯示成「順暢」的藍色：道路形狀取自 OpenFreeMap 的向量道路資料，
@@ -8081,23 +8081,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       }, roadsBeforeId());
     }
 
-    // ── 有車速資料的路段：依塞車程度上色，粗細跟導航路線一樣，外框用同色系的深色 ──
-    if (!m.getLayer(TRAFFIC_CASING)) {
-      m.addLayer({
-        id:     TRAFFIC_CASING,
-        type:   'line',
-        source: TRAFFIC_SOURCE,
-        filter: ['==', ['geometry-type'], 'LineString'],
-        layout: { visibility: vis, 'line-cap': 'square', 'line-join': 'round' },
-        paint: {
-          'line-color': ['match', ['get', 'trafficLevel'],
-            'moderate', '#B07C00', 'slow', '#B34C00', 'congested', '#A32020', 'severe', '#4F0000',
-            NAV_OUTLINE_C],
-          'line-width':   NAV_OUTLINE_W,
-          'line-opacity': 0.9,
-        },
-      }, trafficBeforeId());
-    }
+    // ── 有車速資料的路段：只畫跟導航路線內線一樣粗的塞車色，不另外加外框。
+    //    外框沿用底下道路/導航路線本身的深藍外框 —— 兩層各自有外框時，只要沒完全重疊，
+    //    兩側就會各出現兩道邊框(共 4 道)。舊版的外框圖層若還在(換樣式前建立的)就移除 ──
+    if (m.getLayer(TRAFFIC_CASING)) m.removeLayer(TRAFFIC_CASING);
     if (!m.getLayer(TRAFFIC_LAYER)) {
       m.addLayer({
         id:     TRAFFIC_LAYER,
@@ -8108,7 +8095,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         paint: {
           'line-color':   ['get', 'color'],
           'line-width':   NAV_LINE_W,
-          'line-opacity': 0.95,
+          'line-opacity': 1,          // 不透明：底下的藍色不會透出來
         },
       }, trafficBeforeId());
     }
