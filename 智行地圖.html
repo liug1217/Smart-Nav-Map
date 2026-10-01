@@ -4698,6 +4698,7 @@ if (navigator.geolocation) {
     // 具名以便測試時用 window._simulateGpsFix({coords:{...}}) 走完全相同的 GPS 更新流程
     let _lastRawFix = null;  // 上一個用來算行進方向的原始 GPS 點(移動 8 公尺以上才更新)
     let _flipVotes = 0;      // 連續幾次判斷要掉頭(防止 GPS 雜訊讓畫面突然逆向)
+    let _headingTrusted = false; // 車頭方向是否已被可靠的行進方向確認過(剛開始或 GPS 跳點後還沒有)
     const onGpsPosition = (pos) => {
       if (window._kbDriving) return; // 試開模式(鍵盤 WASD / 手機觸控)中暫停真實 GPS，避免兩邊搶位置
       const now = Date.now();
@@ -4759,6 +4760,10 @@ if (navigator.geolocation) {
         // 比實際前進還大，算出的方向會歪 90 度以上 → 車頭被判成反方向、畫面突然逆向又轉回來
         // 兩個原始點要相距 20 公尺以上才拿來算方向：GPS 左右飄移常有 ±8 公尺，太近的兩點算出來的方向會很歪
         const MOVE_MIN_M = 20;
+        // GPS 跳點(例如出隧道、重新定位)：一次跳得比合理車速還遠 → 之前的位置與車頭方向都不能參考
+        const dtJump = prevTgt ? Math.max(1, (Date.now() - prevTgt.timestamp) / 1000) : 0;
+        const jumped = !!prevTgt && calculateDistance(prevTgt.lat, prevTgt.lng, currentLat, currentLon) * 1000 > Math.max(80, 60 * dtJump);
+        if (jumped) { _lastRawFix = null; _flipVotes = 0; _headingTrusted = false; }
         let moveBearing = null;
         const course = pos.coords.heading;
         if (typeof course === 'number' && isFinite(course) && currentSpeed >= 2) {
@@ -4776,7 +4781,7 @@ if (navigator.geolocation) {
         if (!_lastRawFix || calculateDistance(_lastRawFix.lat, _lastRawFix.lon, currentLat, currentLon) * 1000 >= MOVE_MIN_M) {
           _lastRawFix = { lat: currentLat, lon: currentLon };
         }
-        const prevBearing = prevTgt ? prevTgt.bearing : null;
+        const prevBearing = (prevTgt && !jumped) ? prevTgt.bearing : null;
         let gpsBearing = moveBearing != null ? moveBearing
           : (prevBearing != null ? prevBearing : (window.compassHeading != null ? window.compassHeading : 0));
         // 沒導航時也吸附到道路中線(跟導航時一樣)：找 20 公尺內方向相符的道路；
@@ -4795,11 +4800,13 @@ if (navigator.geolocation) {
         // (只有可靠的行進方向才算票/清票；中間沒有可靠方向的那幾次定位不影響)
         if (prevBearing != null && angDiff(tgtBearing, prevBearing) > 150) {
           if (moveBearing != null) _flipVotes++;
-          if (_flipVotes < 2) tgtBearing = road ? (tgtBearing + 180) % 360 : prevBearing;
+          // 車頭還沒被確認過時，第一次可靠的方向就直接採用
+          if (_flipVotes < (_headingTrusted ? 2 : 1)) tgtBearing = road ? (tgtBearing + 180) % 360 : prevBearing;
           else _flipVotes = 0;
         } else if (moveBearing != null) {
           _flipVotes = 0;
         }
+        if (moveBearing != null) _headingTrusted = true;
         if (prevTgt) {
           const dt = now - prevTgt.timestamp;
           if (dt > 0 && dt < 5000) {
@@ -7707,7 +7714,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 找 25 公尺內最近、而且方向跟車頭大致相同的道路(交流道、高架橋上下重疊時才不會認錯)
   var ROAD_MATCH_M = 25, ROAD_MISALIGN_PENALTY_M = 20;
   // 回傳最近的道路：等級(cls)、是否匝道(ramp)、吸附點(lng/lat，道路中線上最近的點)、道路方向(segBearing)、距離(d)
-  function roadAtPosition(lng, lat, bearing, maxM) {
+  // prefer(可省略)：上一次吸附在哪條路 {lng, lat, segBearing}。經過路口時優先留在同一條路上，
+  // 換到別條路(例如十字路口的橫向道路)要多 ROAD_SWITCH_PENALTY_M 公尺的代價
+  var ROAD_SWITCH_PENALTY_M = 12, SAME_ROAD_NEAR_M = 10, SAME_ROAD_ANGLE = 45;
+  function roadAtPosition(lng, lat, bearing, maxM, prefer) {
     maxM = maxM || ROAD_MATCH_M;
     var m = window.map;
     if (!m || !m.getSource || !m.getSource(ROADS_SOURCE)) return null;
@@ -7720,6 +7730,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     } catch (e) { return null; }
     var kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;
     var px = lng * kx, py = lat * ky, best = null;
+    var qx = prefer ? prefer.lng * kx : 0, qy = prefer ? prefer.lat * ky : 0;
     var near = 0.0005; // 約 50 公尺，先粗篩
     for (var i = 0; i < feats.length; i++) {
       var g = feats[i].geometry;
@@ -7736,9 +7747,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           if (d > maxM) continue;
           var score = d;
           var segB = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+          var sameRoad = false;
+          if (prefer && l > 0) {
+            // 同一條路 = 這段經過上次吸附點附近、而且方向差不多(轉彎的下一段也算)
+            var tq = Math.max(0, Math.min(1, ((qx - ax) * dx + (qy - ay) * dy) / l));
+            var dq = Math.hypot(qx - ax - tq * dx, qy - ay - tq * dy);
+            var dPrev = Math.abs(((segB - prefer.segBearing) % 180 + 270) % 180 - 90);
+            sameRoad = dq <= SAME_ROAD_NEAR_M && dPrev <= SAME_ROAD_ANGLE;
+            if (!sameRoad) score += ROAD_SWITCH_PENALTY_M;
+          }
           if (typeof bearing === 'number' && l > 0) {
             var diff = Math.abs(((segB - bearing) % 180 + 270) % 180 - 90); // 0~90，道路是雙向的所以看 180 度
-            if (diff > 35) score += ROAD_MISALIGN_PENALTY_M;
+            // 慢速時算出的行進方向可能歪 40 度左右：目前這條路要差很多(真的轉彎)才扣分
+            if (diff > (sameRoad ? 60 : 35)) score += ROAD_MISALIGN_PENALTY_M;
           }
           if (!best || score < best.score) best = {
             score: score, d: d, cls: feats[i].properties['class'], ramp: feats[i].properties.ramp == 1,
@@ -7751,10 +7772,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   // 沒導航時也把車子吸附到道路中線(跟導航時一樣)：主程式每次 GPS 更新時呼叫。
   // 20 公尺內才吸附；已經吸附時放寬到 30 公尺才放開(遲滯，避免在邊界來回跳)，例如開進停車場就放開
-  var FREE_SNAP_ENTER_M = 20, FREE_SNAP_EXIT_M = 30, _freeSnapped = false;
+  var FREE_SNAP_ENTER_M = 20, FREE_SNAP_EXIT_M = 30, _freeLast = null;
   window._snapToRoad = function (lng, lat, moveBearing) {
-    var r = roadAtPosition(lng, lat, moveBearing, _freeSnapped ? FREE_SNAP_EXIT_M : FREE_SNAP_ENTER_M);
-    _freeSnapped = !!r;
+    // GPS 一次跳很遠(例如出隧道)：上次在哪條路已經沒參考價值
+    if (_freeLast && haversineM(lat, lng, _freeLast.lat, _freeLast.lng) > 80) _freeLast = null;
+    var r = roadAtPosition(lng, lat, moveBearing, _freeLast ? FREE_SNAP_EXIT_M : FREE_SNAP_ENTER_M, _freeLast);
+    _freeLast = r ? { lng: r.lng, lat: r.lat, segBearing: r.segBearing } : null;
     if (!r) return null;
     // 道路是雙向的：車頭取跟行進方向比較接近的那一邊
     var b = r.segBearing;
