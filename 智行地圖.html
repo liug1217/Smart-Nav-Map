@@ -2953,8 +2953,14 @@ if (navigator.geolocation) {
     },
 
     // 在背景預載所有已知音檔（頁面啟動後呼叫）
+    // 先試第一個：語音包目前沒放上去(404)時，其他的就直接記成沒有，不再發 20 幾個注定失敗的請求
     prefetch(names) {
-      names.forEach(n => this._load(n));
+      this._load(names[0]).then(buf => {
+        names.slice(1).forEach(n => {
+          if (buf) this._load(n);
+          else if (!(n in this._bufs)) this._bufs[n] = null;
+        });
+      });
     },
 
     // 中文數字拼接（支援 1–9999）
@@ -4759,19 +4765,35 @@ if (navigator.geolocation) {
 
       if (!startTime) {
         startTime = now;
-        lastPosition = { lat: currentLat, lon: currentLon };
+        lastPosition = { lat: currentLat, lon: currentLon, t: now };
         routeCoordinates = [[currentLon, currentLat]];
       }
 
       if (lastPosition) {
+        // 行駛距離(也決定金幣：每 50 公尺 1 枚)只算「真的有在開」的移動：
+        //  - 定位很不準(誤差 50 公尺以上，例如剛開 App 用基地台/Wi-Fi 定位)：這筆不算
+        //  - 一下跳太遠(換算超過時速 250 公里，例如定位從錯的地方跳回來、出隧道)：不算，從新位置重新起算
+        //  - 停著時 GPS 會在原地飄：要真的移動 10 公尺以上、而且有速度，才算一段
+        // 以前直接累加每兩點的直線距離：一次跳 50 公里就瞬間多 1000 枚金幣，停車時也會慢慢加
         const distance = calculateDistance(lastPosition.lat, lastPosition.lon, currentLat, currentLon);
-        totalDistance += distance;
-        if (distance > 0.005) {
+        const distM = distance * 1000;
+        const dtS = Math.max(0.5, (now - (lastPosition.t || now)) / 1000);
+        const acc = pos.coords.accuracy;
+        if (typeof acc === 'number' && acc > 50) {
+          // 不準的定位：忽略，不移動起算點
+        } else if (distM > 100 && distM / dtS > 70) {
+          lastPosition = { lat: currentLat, lon: currentLon, t: now }; // 定位跳點：重新起算
+        } else if (distM >= 10 && (
+            // 手機有回報速度就以它為準(停著時是 0)；沒有才看移動量，而且要大於定位誤差的 2 倍(不然是原地飄)
+            typeof pos.coords.speed === 'number' && isFinite(pos.coords.speed)
+              ? pos.coords.speed >= 1
+              : distM >= Math.max(10, 2 * (typeof acc === 'number' ? acc : 10)) && distM / dtS >= 1.5)) {
+          totalDistance += distance;
           routeCoordinates.push([currentLon, currentLat]);
+          lastPosition = { lat: currentLat, lon: currentLon, t: now };
+          if (typeof window._coinCheckDist === 'function') window._coinCheckDist(totalDistance);
+          if (typeof window._coinDriveHeartbeat === 'function') window._coinDriveHeartbeat();
         }
-        lastPosition = { lat: currentLat, lon: currentLon };
-        if (typeof window._coinCheckDist === 'function') window._coinCheckDist(totalDistance);
-        if (typeof window._coinDriveHeartbeat === 'function') window._coinDriveHeartbeat();
       }
 
       if (routeSource) {
