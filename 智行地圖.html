@@ -7300,6 +7300,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (m.getSource('toilets')) return;
       m.addSource('toilets', { type:'geojson', data:data });
       // 全台 2 萬多個：放大到 14 級以上才顯示；圖示重疊時自動避開
+      // 很多公廁就在店裡(麥當勞、加油站…)，圖示重疊時要讓店家 logo 顯示：放在所有店家圖層下面
+      // (公廁資料是背景載入，通常最後才加，不指定位置會疊在最上面把店家擋掉)
+      var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|pxmart|cpc)-points$/;
+      var below = (m.getStyle().layers || []).find(function(l){ return STORE_LAYERS.test(l.id); });
       m.addLayer({
         id: 'toilet-points',
         type: 'symbol',
@@ -7311,7 +7315,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           'icon-allow-overlap': false,
           'icon-padding': 0,
         }
-      });
+      }, below ? below.id : undefined);
 
       _onceOn(m,'click', 'toilet-points', function(e) {
         var props = e.features[0].properties;
@@ -7633,12 +7637,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="seven_data.js?v=osm1"></script>
+<script src="seven_data.js?v=osm2"></script>
 <script src="okmart_data.js?v=osm1"></script>
 <script src="hilife_data.js?v=osm1"></script>
 <script src="times_data.js?v=osm1"></script>
 <script src="simplemart_data.js?v=osm1"></script>
 <script src="dodohome_data.js?v=osm1"></script>
+<script src="mcd_data.js?v=osm1"></script>
 <script>
 /* ===== 🏪 7-ELEVEN／OK超商／萊爾富／美廉社／Times／嘟嘟房／麥當勞／八方雲集圖層(資料由 tools/update-stores.js 產生) ===== */
 (function(){

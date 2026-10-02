@@ -1,4 +1,4 @@
-// 7-ELEVEN：5919 家。由 tools/update-stores.js 產生，不要手動改(手動的店請加在 tools/stores-manual.json)
+// 7-ELEVEN：5918 家。由 tools/update-stores.js 產生，不要手動改(手動的店請加在 tools/stores-manual.json)
 // 資料來源：© OpenStreetMap 貢獻者(ODbL)＋手動加入
 window.sevenData = {
   type: 'FeatureCollection',
@@ -13,7 +13,6 @@ window.sevenData = {
     {type:'Feature',geometry:{type:'Point',coordinates:[119.951789,26.156126]},properties:{name:"7-ELEVEN 山隴門市"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[119.952144,26.155883]},properties:{name:"7-ELEVEN 馬祖門市"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[119.937515,26.152947]},properties:{name:"7-ELEVEN 南竿門市"}},
-    {type:'Feature',geometry:{type:'Point',coordinates:[119.30044,26.072256]},properties:{name:"7-ELEVEN"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[119.973122,25.960336]},properties:{name:"7-ELEVEN 東莒門市"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[121.567898,25.291866]},properties:{name:"7-ELEVEN 石門門市"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[121.549486,25.289516]},properties:{name:"7-ELEVEN"}},

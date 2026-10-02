@@ -54,7 +54,10 @@ async function load(key) {
     : await overpass(QUERIES[key]);
   return json.elements
     .map(e => ({ lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon, t: e.tags || {} }))
-    .filter(e => e.lat != null && e.lng != null);
+    .filter(e => e.lat != null && e.lng != null)
+    // 查詢範圍為了包到馬祖會碰到福建沿海(福州、平潭…)：經度 119.9 以西、北緯 24 度以北都是中國，排除
+    // (澎湖在北緯 24 度以南、馬祖在 119.9 以東，不受影響)
+    .filter(e => !(e.lng < 119.9 && e.lat > 24));
 }
 
 function distM(aLat, aLng, bLat, bLng) {
