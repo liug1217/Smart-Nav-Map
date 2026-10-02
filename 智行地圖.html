@@ -8082,6 +8082,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   // ── 寫留言 ──────────────────────────────────────────
   // 照片：JPEG 直接傳原檔(不壓縮；伺服器只拿掉 GPS 等資料)；其他格式轉成高畫質 JPEG。另做一張小縮圖給列表用
+  // 記憶體：手機照片一張解開約 50MB，一次選很多張時同時解開會讓瀏覽器把網頁重開。
+  // 所以一張一張處理：選照片時只做 400px 縮圖(預覽也用它)，做完立刻放掉原圖；上傳 JPEG 時直接送檔案，不再解開
   function loadImg(file) {
     return new Promise(function (ok, bad) {
       var url = URL.createObjectURL(file), img = new Image();
@@ -8095,25 +8097,40 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); // 瀏覽器會依照片方向畫正
-    return new Promise(function (ok) { c.toBlob(ok, 'image/jpeg', quality); });
+    return new Promise(function (ok) {
+      c.toBlob(function (b) { c.width = c.height = 0; ok(b); }, 'image/jpeg', quality); // 用完立刻釋放畫布記憶體
+    });
+  }
+  function release(o) { URL.revokeObjectURL(o.url); o.img.src = ''; }
+  // 選照片時：做縮圖(預覽＋上傳給列表用)
+  function makeThumb(file) {
+    return loadImg(file).then(function (o) {
+      return toJpeg(o.img, 400, 0.8).then(function (b) { release(o); return b; },
+                                          function (e) { release(o); throw e; });
+    });
+  }
+  // 上傳用的原圖：JPEG 原檔照送；其他格式(PNG、HEIC…)才解開轉成高畫質 JPEG
+  function fullJpeg(file) {
+    if (file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name)) return Promise.resolve(file);
+    return loadImg(file).then(function (o) {
+      return toJpeg(o.img, 0, 0.95).then(function (b) { release(o); return b; },
+                                         function (e) { release(o); throw e; });
+    });
   }
   function postJpeg(path, blob) {
     return fetch(base() + path, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob })
       .then(function (r) { return r.json(); });
   }
-  function uploadPhoto(file) {
-    return loadImg(file).then(function (o) {
-      var orig = file.type === 'image/jpeg' ? Promise.resolve(file) : toJpeg(o.img, 0, 0.95);
-      return Promise.all([orig, toJpeg(o.img, 400, 0.8)]).then(function (b) {
-        URL.revokeObjectURL(o.url);
-        var sid = encodeURIComponent(window._snmSid || '');
-        return postJpeg('/comments/photo?sessionId=' + sid, b[0]).then(function (r) {
-          if (!r || !r.ok) throw new Error((r && r.error && r.error.code) || 'upload');
-          return postJpeg('/comments/photo?sessionId=' + sid + '&thumbOf=' + r.data.id, b[1])
-            .catch(function () {}) // 縮圖失敗不影響，列表會改用原圖
-            .then(function () { return r.data.id; });
-        });
-      });
+  function uploadPhoto(item) {
+    var sid = encodeURIComponent(window._snmSid || '');
+    return fullJpeg(item.file).then(function (full) {
+      return postJpeg('/comments/photo?sessionId=' + sid, full);
+    }).then(function (r) {
+      if (!r || !r.ok) throw new Error((r && r.error && r.error.code) || 'upload');
+      if (!item.thumb) return r.data.id;
+      return postJpeg('/comments/photo?sessionId=' + sid + '&thumbOf=' + r.data.id, item.thumb)
+        .catch(function () {}) // 縮圖失敗不影響，列表會改用原圖
+        .then(function () { return r.data.id; });
     });
   }
   function profile() {
@@ -8156,16 +8173,24 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
     function check() { send.disabled = busy || !stars; }
 
+    // 一張一張做縮圖(同時只解開一張原圖)；預覽用縮圖，不用原圖
+    var thumbQueue = Promise.resolve();
     input.onchange = function () {
       Array.prototype.forEach.call(input.files || [], function (f) {
         if (!/^image\//.test(f.type) && !/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name)) return;
-        var item = { file: f };
+        var item = { file: f, thumb: null, url: '' };
         files.push(item);
         var p = el('div', 'p'), im = new Image(); im.alt = '';
-        im.src = item.url = URL.createObjectURL(f);
         var rm = el('button', null, '✕');
-        rm.onclick = function () { files.splice(files.indexOf(item), 1); URL.revokeObjectURL(item.url); p.remove(); };
+        rm.onclick = function () { files.splice(files.indexOf(item), 1); if (item.url) URL.revokeObjectURL(item.url); p.remove(); };
         p.appendChild(im); p.appendChild(rm); prev.appendChild(p);
+        thumbQueue = thumbQueue.then(function () {
+          if (files.indexOf(item) < 0) return; // 已經被移除
+          return makeThumb(f).then(function (b) {
+            item.thumb = b;
+            im.src = item.url = URL.createObjectURL(b);
+          }).catch(function () { p.style.outline = '2px solid #ff3b30'; item.bad = true; });
+        });
       });
       input.value = '';
     };
@@ -8175,10 +8200,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       busy = true; check();
       var ids = [], n = 0;
       var chain = Promise.resolve();
+      send.textContent = '準備照片…';
+      chain = thumbQueue; // 等縮圖都做好
       files.forEach(function (it) {
         chain = chain.then(function () {
+          if (it.bad) throw new Error('decode');
           send.textContent = '上傳照片 ' + (++n) + '/' + files.length + '…';
-          return uploadPhoto(it.file).then(function (id) { ids.push(id); });
+          return uploadPhoto(it).then(function (id) { ids.push(id); });
         });
       });
       chain.then(function () {
@@ -8191,7 +8219,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         });
       }).then(function (r) {
         if (!r || !r.ok) throw new Error((r && r.error && r.error.code) || 'add');
-        busy = false; files.forEach(function (it) { URL.revokeObjectURL(it.url); });
+        busy = false; files.forEach(function (it) { if (it.url) URL.revokeObjectURL(it.url); });
         mask.remove(); toast('留言成功，謝謝分享！');
         if (done) done();
       }).catch(function (e) {
