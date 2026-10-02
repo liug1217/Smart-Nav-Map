@@ -104,7 +104,9 @@ function build({ osm, manual, prefix, brandRe, suffix }) {
     };
     const hit = find((s, d) => sameBranch(s.branch, br) && d < MATCH_NAME_M) ||
                 find((s, d) => !s.branch && d < MATCH_NEAR_M);
-    if (hit) { hit.name = m.name; hit.manual = true; moved++; }
+    // fixed: true = 位置以手動為準(自己校正過的店，OpenStreetMap 的位置不覆蓋)
+    if (hit && m.fixed) { hit.name = m.name; hit.lat = m.lat; hit.lng = m.lng; hit.manual = true; kept++; }
+    else if (hit) { hit.name = m.name; hit.manual = true; moved++; }
     else { uniq.push({ lat: m.lat, lng: m.lng, name: m.name, manual: true }); kept++; }
   }
   return { list: uniq, moved, kept };
