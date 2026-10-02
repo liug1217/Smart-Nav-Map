@@ -3,7 +3,6 @@
 // reason：gone(已經沒了) / duplicate(重複) / position(位置不對) / name(名稱不對) / other
 
 const { corsHeaders, handlePreflight, ok, err, methodNotAllowed } = require('../../lib/response');
-const { checkRateLimit } = require('../../lib/rate-limit');
 const { cleanReport, addReport } = require('../../lib/reports');
 
 module.exports = async (req, res) => {
@@ -15,9 +14,7 @@ module.exports = async (req, res) => {
   if (typeof r === 'string') return err(res, 400, r, 'Invalid report');
 
   try {
-    if (await checkRateLimit('report:' + r.sid, 5000)) return err(res, 429, 'too_fast', 'Please wait a moment');
-    const e = await addReport(r);
-    if (e) return err(res, 429, e, 'Too many reports today');
+    await addReport(r);
     return ok(res, { ok: true });
   } catch (e) {
     console.error('[reports/submit]', e.message);

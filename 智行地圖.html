@@ -7787,7 +7787,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       }).then(function (res) {
         close();
         if (res && res.ok) toast('感謝回報！我們會盡快處理');
-        else if (res && res.error && res.error.code === 'too_many') toast('今天回報太多次了，明天再來');
         else toast('回報失敗，請稍後再試');
       }).catch(function () { close(); toast('回報失敗，請檢查網路'); });
     });
