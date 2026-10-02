@@ -7598,8 +7598,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script src="seven_data.js?v=osm1"></script>
 <script src="okmart_data.js?v=osm1"></script>
 <script src="hilife_data.js?v=osm1"></script>
+<script src="times_data.js?v=osm1"></script>
 <script>
-/* ===== 🏪 7-ELEVEN／OK超商／萊爾富圖層(資料由 tools/update-stores.js 產生) ===== */
+/* ===== 🏪 7-ELEVEN／OK超商／萊爾富／Times 停車場圖層(資料由 tools/update-stores.js 產生) ===== */
 (function(){
   // crop：logo 四周留白太多時只取中間這塊 [x, y, 寬, 高](原圖像素)
   var BRANDS = [
@@ -7609,6 +7610,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       kw: /(^|[^a-z])ok( ?(超商|mart))?(?![a-z])/i },
     { key: 'hilife', data: 'hilifeData', name: '萊爾富',   logo: '圖片/hilife.png', color: '#e60012', crop: [88, 78, 224, 232],
       kw: /萊爾富|hi-?life/i },
+    { key: 'times',  data: 'timesData',  name: 'Times 停車場', logo: '圖片/times.png', color: '#1a1a1a',
+      kw: /times|タイムズ|停車場?/i },
   ];
   window._storeBrands = BRANDS; // 搜尋也用這份清單
 
@@ -7708,7 +7711,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script>
 /* ===== 📝 地標回報：點開地標(超商、加油站、廁所、測速照相…)右下角「回報錯誤」 ===== */
 (function(){
-  var LAYERS = ['fm-points', 'seven-points', 'okmart-points', 'hilife-points', 'pxmart-points',
+  var LAYERS = ['fm-points', 'seven-points', 'okmart-points', 'hilife-points', 'times-points', 'pxmart-points',
                 'cpc-points', 'toilet-points', 'speed-point'];
   var REASONS = [
     ['gone',      '這裡已經沒有了'],

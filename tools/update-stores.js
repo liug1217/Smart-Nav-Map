@@ -1,11 +1,11 @@
-// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富，跟手動加的店(tools/stores-manual.json)合併，
-// 產生 family_mart_data.js / pxmart_data.js / cpc_data.js / seven_data.js / okmart_data.js / hilife_data.js。
+// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、Times 停車場，跟手動加的店(tools/stores-manual.json)合併，
+// 產生 family_mart_data.js / pxmart_data.js / cpc_data.js / seven_data.js / okmart_data.js / hilife_data.js / times_data.js。
 // 之後要更新店家：node tools/update-stores.js
 // 資料來源 OpenStreetMap(ODbL)，地圖右下角已有「© OpenStreetMap」標示，不能拿掉。
 //
 // 手動的店：用分店名(1 公里內)或 60 公尺內同品牌、沒寫分店名的店比對；
 //   對到 → 用 OpenStreetMap 的位置、保留手動的店名；對不到 → 照手動的位置保留。
-// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json(不用再連網)
+// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json(不用再連網)
 
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +21,7 @@ const QUERIES = {
   fm:   `[out:json][timeout:180];nwr[shop=convenience]${BBOX};out center tags;`,
   px:   `[out:json][timeout:180];nwr[shop~"supermarket|convenience"]${BBOX};out center tags;`,
   fuel: `[out:json][timeout:180];nwr[amenity=fuel]${BBOX};out center tags;`,
+  parking: `[out:json][timeout:180];nwr[amenity=parking]${BBOX};out center tags;`,
 };
 const MATCH_NEAR_M = 60, MATCH_NAME_M = 1000, DEDUPE_M = 15, DEDUPE_NAMED_M = 300;
 
@@ -69,7 +70,7 @@ function branchOf(t, brandRe) {
     .replace(/加油站$/, '站')
     .replace(/\s+/g, '')
     .replace(/^[\-－]+|[\-－]+$/g, '');
-  if (/^(站|店|門市|便利商店|超商)$/.test(n)) n = '';
+  if (/^(站|店|門市|便利商店|超商|停車場)$/.test(n)) n = '';
   return /[一-鿿]/.test(n) ? n : '';
 }
 
@@ -77,11 +78,11 @@ function branchOf(t, brandRe) {
 const manualBranch = name => name.split(/\s+/).pop();
 const sameBranch = (a, b) => a && b && a.replace(/[店站]$/, '') === b.replace(/[店站]$/, '');
 
-function build({ osm, manual, prefix, brandRe, suffix }) {
+function build({ osm, manual, prefix, brandRe, suffix, plain }) {
   const stores = osm.map(e => {
     let branch = branchOf(e.t, brandRe);
-    if (branch && !/(店|站|門市)$/.test(branch)) branch += suffix; // 例如「新基隆一」→「新基隆一店」
-    return { lat: e.lat, lng: e.lng, branch, name: branch ? `${prefix(e.t)} ${branch}` : prefix(e.t), manual: false };
+    if (branch && !/(店|站|門市)$/.test(branch) && !branch.endsWith(suffix)) branch += suffix; // 例如「新基隆一」→「新基隆一店」
+    return { lat: e.lat, lng: e.lng, branch, name: branch ? `${prefix(e.t)} ${branch}` : (plain || prefix(e.t)), manual: false };
   });
   // 同一家店有時同時標成點和建築(重複)：有分店名的 300 公尺內同名只留一個，沒分店名的 15 公尺內
   const uniq = [];
@@ -128,7 +129,7 @@ function writeData(file, varName, title, list) {
 
 async function main() {
   const manual = JSON.parse(fs.readFileSync(path.join(__dirname, 'stores-manual.json'), 'utf8'));
-  const [cv, sm, fu] = [await load('fm'), await load('px'), await load('fuel')];
+  const [cv, sm, fu, pk] = [await load('fm'), await load('px'), await load('fuel'), await load('parking')];
 
   const isFm = e => e.t.brand === '全家便利商店' || e.t['brand:wikidata'] === 'Q10891564' ||
                     (!e.t.brand && /^全家/.test(e.t.name || ''));
@@ -138,6 +139,7 @@ async function main() {
                        (!e.t.brand && /7-?ELEVEN|7-11|統一超商/i.test(e.t.name || ''));
   const isOk = e => e.t.brand === 'OK超商' || e.t['brand:wikidata'] === 'Q10851968' ||
                     (!e.t.brand && /^OK/i.test(e.t.name || ''));
+  const isTimes = e => /times|タイムズ|普客二四|park ?24/i.test([e.t.brand, e.t.operator, e.t.name, e.t['name:en']].filter(Boolean).join(' '));
   const isHilife = e => e.t.brand === '萊爾富' || e.t['brand:wikidata'] === 'Q11326216' ||
                         (!e.t.brand && /萊爾富|Hi-?Life/i.test(e.t.name || ''));
 
@@ -154,6 +156,8 @@ async function main() {
       prefix: () => 'OK超商', suffix: '店', brandRe: /OK超商|OK ?mart|OK/gi },
     { file: 'hilife_data.js', v: 'hilifeData', title: '萊爾富', osm: cv.filter(isHilife), manual: manual.hilife || [],
       prefix: () => '萊爾富', suffix: '店', brandRe: /萊爾富便利商店|萊爾富|Hi-?Life/gi },
+    { file: 'times_data.js', v: 'timesData', title: 'Times 停車場', osm: pk.filter(isTimes), manual: manual.times || [],
+      prefix: () => 'Times', plain: 'Times 停車場', suffix: '停車場', brandRe: /台灣普客二四股份有限公司|普客二四停車場股份有限公司|普客二四|Times ?24 ?h?|24 ?h ?Times|Times|タイムズ|parking lot/gi },
   ];
   for (const j of jobs) {
     const { list, moved, kept } = build(j);
