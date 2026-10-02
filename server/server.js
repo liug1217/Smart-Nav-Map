@@ -33,6 +33,7 @@ if (!process.env.SNM_DATA_DIR) process.env.SNM_DATA_DIR = 'C:\\SmartNavData';
 const live = require('../lib/live');
 
 const MAX_BODY = 100 * 1024;
+const MAX_PHOTO_BODY = 31 * 1024 * 1024; // 留言照片是原圖(不壓縮)，只有上傳照片的網址放寬
 const GZIP_MIN_BYTES = 1024;
 
 // ── 視窗紀錄：不再每個請求印一行(車友功能每 5 秒就有一次，會把視窗刷滿)；
@@ -98,16 +99,18 @@ function adapt(req, res, url, body) {
   res.send = data => { res.end(typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); return res; };
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = MAX_BODY) {
   return new Promise((resolve, reject) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return resolve(undefined);
     let size = 0; const chunks = [];
     req.on('data', c => {
       size += c.length;
-      if (size > MAX_BODY) { reject(Object.assign(new Error('body too large'), { status: 413 })); req.destroy(); return; }
+      if (size > maxBytes) { reject(Object.assign(new Error('body too large'), { status: 413 })); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => {
+      // 圖片(留言照片)原封不動交給程式，不能當文字解碼
+      if ((req.headers['content-type'] || '').startsWith('image/')) return resolve(Buffer.concat(chunks));
       const raw = Buffer.concat(chunks).toString('utf8');
       if (!raw) return resolve(undefined);
       if ((req.headers['content-type'] || '').includes('application/json')) {
@@ -161,6 +164,16 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    // 留言照片：/api/photos/{編號}.jpg(原圖)、{編號}_t.jpg(縮圖)。檔名固定不變，手機可以長期快取
+    if (url.pathname.startsWith('/api/photos/') && req.method === 'GET') {
+      const file = require('../lib/comments').photoPath(url.pathname.slice('/api/photos/'.length));
+      cors(res);
+      if (!file) { res.statusCode = 404; res.end(); return; }
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      fs.createReadStream(file).on('error', () => { res.statusCode = 404; res.end(); }).pipe(res);
+      return;
+    }
     // 即時推送：常駐連線，不走一般的 API 流程(也不壓縮)
     if (url.pathname === '/api/live' && req.method === 'GET') { await live.handle(req, res); return; }
 
@@ -168,7 +181,7 @@ const server = http.createServer(async (req, res) => {
     if (!handler) { cors(res); res.statusCode = 404; res.setHeader('Content-Type', 'application/json'); res.end('{"ok":false,"error":{"code":"not_found"}}'); return; }
 
     let body;
-    try { body = await readBody(req); }
+    try { body = await readBody(req, url.pathname === '/api/comments/photo' ? MAX_PHOTO_BODY : MAX_BODY); }
     catch (e) { cors(res); res.statusCode = e.status || 400; res.end(); return; }
 
     adapt(req, res, url, body);
