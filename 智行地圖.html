@@ -3282,11 +3282,15 @@ if (navigator.geolocation) {
   // 搜尋本地公共廁所資料
   function getToiletMatches(query) {
     if (!window.toiletData || !window.toiletData.features) return [];
+    // 2 萬多個公廁大多以所在場所命名(麥當勞、加油站…)：要打「廁所/公廁/WC」才列，後面接地名就再篩名稱或地址
     const q = query.trim().toLowerCase();
-    const matchAll = q === '廁所' || q === '公廁' || q === '公共廁所' || q.includes('廁所') || q.includes('公廁');
+    const kw = /公共廁所|廁所|公廁|洗手間|化妝室|wc|toilet/i;
+    if (!kw.test(q)) return [];
+    const rest = q.replace(kw, '').trim();
     return window.toiletData.features.filter(function(f) {
-      const n = (f.properties.name || '').toLowerCase();
-      return matchAll || n.includes(q);
+      if (!rest) return true;
+      const n = ((f.properties.name || '') + ' ' + (f.properties.addr || '')).toLowerCase();
+      return n.includes(rest);
     }).map(function(f) {
       return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || '公共廁所' };
     });
@@ -7222,7 +7226,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="toilet_data.js"></script>
+<!-- 全台 2 萬多個公廁(約 500KB)：背景載入，不拖慢地圖開啟；載好圖層才出現 -->
+<script async src="toilet_data.js?v=moenv1"></script>
 <script>
 /* ===== 🚾 公共廁所圖層 ===== */
 (function(){
@@ -7256,14 +7261,17 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     function _setup() {
       if (m.getSource('toilets')) return;
       m.addSource('toilets', { type:'geojson', data:data });
+      // 全台 2 萬多個：放大到 14 級以上才顯示；圖示重疊時自動避開
       m.addLayer({
         id: 'toilet-points',
         type: 'symbol',
         source: 'toilets',
+        minzoom: 14,
         layout: {
           'icon-image': ICON_ID,
           'icon-size': 1,
-          'icon-allow-overlap': true,
+          'icon-allow-overlap': false,
+          'icon-padding': 0,
         }
       });
 
@@ -7278,8 +7286,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
         var container = document.createElement('div');
         container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;';
+        var esc = function(t){ return String(t || '').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
         container.innerHTML =
-          '<div style="font-weight:600;font-size:14px;margin-bottom:8px;">🚾 ' + (props.name || '公共廁所') + '</div>' +
+          '<div style="font-weight:600;font-size:14px;margin-bottom:4px;">🚾 ' + esc(props.name || '公共廁所') + '</div>' +
+          (props.addr ? '<div style="font-size:12px;color:#666;margin-bottom:4px;line-height:1.4">' + esc(props.addr) + '</div>' : '') +
+          (props.cat || props.tags ? '<div style="font-size:11px;color:#1a4fa0;margin-bottom:6px">' + esc([props.cat, props.tags].filter(Boolean).join('｜')) + '</div>' : '') +
+          '<div style="font-size:10px;color:#aaa;margin-bottom:6px">資料來源：環境部</div>' +
           '<button id="toiletNavBtn" style="width:100%;padding:7px 0;background:#007aff;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">🧭 導航前往</button>';
 
         _popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: '220px' })
