@@ -1761,6 +1761,16 @@ function updateUserLocation(position) {
 if (navigator.geolocation) {
   navigator.geolocation.watchPosition(updateUserLocation, null, { enableHighAccuracy: true });
 }
+
+// 圖層的點擊/滑鼠事件只綁一次。切換地圖樣式時各圖層會整個重建，事件卻是綁在地圖上、會一直留著；
+// 以前每切一次就多綁一份 → 點一下全家連查 N 次地址、監視器疊出 N 個視窗和 N 條影像串流
+function _onceOn(m, type, layer, fn) {
+  m.__onceOn = m.__onceOn || {};
+  var k = type + '|' + layer;
+  if (m.__onceOn[k]) return;
+  m.__onceOn[k] = true;
+  m.on(type, layer, fn);
+}
 </script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-geocoder/dist/maplibre-gl-geocoder.min.js"></script>
 <script>
@@ -6173,7 +6183,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       }
     });
 
-    m.on('click','cctv-clusters',function(e){
+    _onceOn(m,'click','cctv-clusters',function(e){
       var f=m.queryRenderedFeatures(e.point,{layers:['cctv-clusters']});
       if(!f.length) return;
       m.getSource('cctv').getClusterExpansionZoom(f[0].properties.cluster_id,function(err,zoom){
@@ -6183,7 +6193,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
 
     var cctvPopup = null;
-    m.on('click','cctv-point',function(e){
+    _onceOn(m,'click','cctv-point',function(e){
       var props=e.features[0].properties;
       var coords=e.features[0].geometry.coordinates.slice();
       if(cctvPopup) cctvPopup.remove();
@@ -6303,7 +6313,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       }
     });
 
-    m.on('click','speed-clusters',function(e){
+    _onceOn(m,'click','speed-clusters',function(e){
       var f=m.queryRenderedFeatures(e.point,{layers:['speed-clusters']});
       if(!f.length) return;
       m.getSource('speed-cam').getClusterExpansionZoom(f[0].properties.cluster_id,function(err,zoom){
@@ -6311,7 +6321,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         m.easeTo({center:f[0].geometry.coordinates,zoom:zoom+0.5});
       });
     });
-    m.on('click','speed-point',function(e){
+    _onceOn(m,'click','speed-point',function(e){
       var p=e.features[0].properties;
       var coords=e.features[0].geometry.coordinates.slice();
       new maplibregl.Popup({closeButton:true,maxWidth:'260px'})
@@ -6489,7 +6499,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
 
     // 點擊群集 → 縮放進去
-    m.on('click','signal-clusters',function(e){
+    _onceOn(m,'click','signal-clusters',function(e){
       var feat = m.queryRenderedFeatures(e.point,{layers:['signal-clusters']})[0];
       m.getSource(SOURCE).getClusterExpansionZoom(feat.properties.cluster_id,function(err,zoom){
         if(err) return;
@@ -6498,7 +6508,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
 
     // 點擊單一號誌 → popup
-    m.on('click','signal-single',function(e){
+    _onceOn(m,'click','signal-single',function(e){
       var p = e.features[0].properties;
       var coord = e.features[0].geometry.coordinates.slice();
       if(_popup) _popup.remove();
@@ -6508,10 +6518,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         .setLngLat(coord).setHTML(html).addTo(m);
     });
 
-    m.on('mouseenter','signal-clusters',function(){ m.getCanvas().style.cursor='pointer'; });
-    m.on('mouseleave','signal-clusters',function(){ m.getCanvas().style.cursor=''; });
-    m.on('mouseenter','signal-single',function(){ m.getCanvas().style.cursor='pointer'; });
-    m.on('mouseleave','signal-single',function(){ m.getCanvas().style.cursor=''; });
+    _onceOn(m,'mouseenter','signal-clusters',function(){ m.getCanvas().style.cursor='pointer'; });
+    _onceOn(m,'mouseleave','signal-clusters',function(){ m.getCanvas().style.cursor=''; });
+    _onceOn(m,'mouseenter','signal-single',function(){ m.getCanvas().style.cursor='pointer'; });
+    _onceOn(m,'mouseleave','signal-single',function(){ m.getCanvas().style.cursor=''; });
   }
 
   function tryInit(){
@@ -7190,7 +7200,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       });
 
       // 點擊單點 → popup（logo + 名稱 + 地址 + 導航按鈕）
-      m.on('click', 'fm-points', function(e){
+      _onceOn(m,'click', 'fm-points', function(e){
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
@@ -7229,8 +7239,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
             if(el) el.textContent = '';
           });
       });
-      m.on('mouseenter','fm-points', function(){ m.getCanvas().style.cursor='pointer'; });
-      m.on('mouseleave','fm-points', function(){ m.getCanvas().style.cursor=''; });
+      _onceOn(m,'mouseenter','fm-points', function(){ m.getCanvas().style.cursor='pointer'; });
+      _onceOn(m,'mouseleave','fm-points', function(){ m.getCanvas().style.cursor=''; });
     }
     if (m.hasImage(ICON_ID)) { _setup(); }
     else { var _t = setInterval(function(){ if(m.hasImage(ICON_ID)){ clearInterval(_t); _setup(); } }, 50); }
@@ -7297,7 +7307,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }
       });
 
-      m.on('click', 'toilet-points', function(e) {
+      _onceOn(m,'click', 'toilet-points', function(e) {
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
@@ -7332,8 +7342,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }, 0);
       });
 
-      m.on('mouseenter', 'toilet-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
-      m.on('mouseleave', 'toilet-points', function(){ m.getCanvas().style.cursor = ''; });
+      _onceOn(m,'mouseenter', 'toilet-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
+      _onceOn(m,'mouseleave', 'toilet-points', function(){ m.getCanvas().style.cursor = ''; });
     }
 
     if (m.hasImage(ICON_ID)) { _setup(); }
@@ -7443,7 +7453,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }
       });
 
-      m.on('click', 'pxmart-points', function(e) {
+      _onceOn(m,'click', 'pxmart-points', function(e) {
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
@@ -7479,8 +7489,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }, 0);
       });
 
-      m.on('mouseenter', 'pxmart-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
-      m.on('mouseleave', 'pxmart-points', function(){ m.getCanvas().style.cursor = ''; });
+      _onceOn(m,'mouseenter', 'pxmart-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
+      _onceOn(m,'mouseleave', 'pxmart-points', function(){ m.getCanvas().style.cursor = ''; });
     }
 
     var _ready = function(){ return m.hasImage(ICON_ID) && m.hasImage(FC_ICON_ID); };
@@ -7562,7 +7572,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }
       });
 
-      m.on('click', 'cpc-points', function(e) {
+      _onceOn(m,'click', 'cpc-points', function(e) {
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
@@ -7597,8 +7607,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         }, 0);
       });
 
-      m.on('mouseenter', 'cpc-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
-      m.on('mouseleave', 'cpc-points', function(){ m.getCanvas().style.cursor = ''; });
+      _onceOn(m,'mouseenter', 'cpc-points', function(){ m.getCanvas().style.cursor = 'pointer'; });
+      _onceOn(m,'mouseleave', 'cpc-points', function(){ m.getCanvas().style.cursor = ''; });
     }
 
     if (m.hasImage(ICON_ID)) { _setup(); }
@@ -7817,10 +7827,24 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
   }
 
-  // 地標的彈出視窗是各圖層自己開的：點下去之後，在最新開的那個視窗右下角加上「回報錯誤」
+  // 地標的彈出視窗是各圖層自己開的：記下開過的視窗，點下去之後找「開在這個地標位置上」的那個，
+  // 在它右下角加上「回報錯誤」(同一點有測速照相和監視器兩個視窗時，才不會加錯到別的視窗)
+  var _opened = [];
+  var _addTo = maplibregl.Popup.prototype.addTo;
+  maplibregl.Popup.prototype.addTo = function (m) {
+    var r = _addTo.apply(this, arguments);
+    _opened.push(this);
+    if (_opened.length > 20) _opened.shift();
+    return r;
+  };
   function attach(layer, f) {
-    var boxes = document.querySelectorAll('.maplibregl-popup-content');
-    var box = boxes[boxes.length - 1];
+    var c = f.geometry.coordinates, box = null;
+    for (var i = _opened.length - 1; i >= 0 && !box; i--) {
+      var p = _opened[i], ll = p.isOpen() && p.getLngLat();
+      if (ll && Math.abs(ll.lng - c[0]) < 1e-7 && Math.abs(ll.lat - c[1]) < 1e-7) {
+        box = p.getElement() && p.getElement().querySelector('.maplibregl-popup-content');
+      }
+    }
     if (!box || box.querySelector('.snmRptBtn')) return;
     var p = f.properties || {};
     var poi = {
