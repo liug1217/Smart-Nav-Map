@@ -2101,6 +2101,7 @@ if (navigator.geolocation) {
     if (typeof window._reloadToiletLayer === 'function') window._reloadToiletLayer();
     if (typeof window._reloadPxmartLayer === 'function') window._reloadPxmartLayer();
     if (typeof window._reloadCpcLayer === 'function') window._reloadCpcLayer();
+    if (typeof window._reloadStoreBrandLayers === 'function') window._reloadStoreBrandLayers();
     if (typeof window._reloadTrafficLayer === 'function') window._reloadTrafficLayer();
     if (typeof window._reloadCarsLayer === 'function') window._reloadCarsLayer();
   };
@@ -3262,6 +3263,22 @@ if (navigator.geolocation) {
     });
   }
 
+  // 搜尋 7-ELEVEN／OK／萊爾富：打品牌名就列全部(之後只取最近的)，品牌名後面接分店名就再篩分店
+  function getBrandMatches(b, query) {
+    var data = window[b.data];
+    if (!data || !data.features) return [];
+    var q = query.trim();
+    var hasKw = b.kw.test(q);
+    var rest = q.replace(b.kw, '').replace(/便利商店|超商|門市|店$/g, '').trim().toLowerCase();
+    if (!hasKw && q.length < 2) return [];
+    return data.features.filter(function (f) {
+      var n = (f.properties.name || '').toLowerCase();
+      return hasKw ? (!rest || n.includes(rest)) : n.includes(q.toLowerCase());
+    }).map(function (f) {
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || b.name };
+    });
+  }
+
   // 搜尋本地公共廁所資料
   function getToiletMatches(query) {
     if (!window.toiletData || !window.toiletData.features) return [];
@@ -3294,16 +3311,19 @@ if (navigator.geolocation) {
     const pxMatches = nearest(getPxmartMatches(query));
     const toiMatches = nearest(getToiletMatches(query));
     const cpcMatches = nearest(getCpcMatches(query));
+    const brandMatches = (window._storeBrands || []).map(function (b) {
+      return { b: b, items: nearest(getBrandMatches(b, query)) };
+    }).filter(function (x) { return x.items.length; });
 
     try {
       const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=tw&accept-language=zh-TW&q=' + encodeURIComponent(query);
       const res = await fetch(url);
       const list = await res.json();
-      renderSearchResults(list, fmMatches, pxMatches, toiMatches, cpcMatches);
+      renderSearchResults(list, fmMatches, pxMatches, toiMatches, cpcMatches, brandMatches);
     } catch (e) {
       console.error('搜尋地點失敗:', e);
-      if (fmMatches.length || pxMatches.length || toiMatches.length || cpcMatches.length) {
-        renderSearchResults([], fmMatches, pxMatches, toiMatches, cpcMatches);
+      if (fmMatches.length || pxMatches.length || toiMatches.length || cpcMatches.length || brandMatches.length) {
+        renderSearchResults([], fmMatches, pxMatches, toiMatches, cpcMatches, brandMatches);
       } else {
         searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋失敗,請檢查網路連線</div>';
       }
@@ -3323,12 +3343,13 @@ if (navigator.geolocation) {
     return { el, addrId };
   }
 
-  function renderSearchResults(list, fmMatches, pxMatches, toiMatches, cpcMatches){
+  function renderSearchResults(list, fmMatches, pxMatches, toiMatches, cpcMatches, brandMatches){
     fmMatches  = fmMatches  || [];
     pxMatches  = pxMatches  || [];
     toiMatches = toiMatches || [];
     cpcMatches = cpcMatches || [];
-    const hasLocal = fmMatches.length || pxMatches.length || toiMatches.length || cpcMatches.length;
+    brandMatches = brandMatches || [];
+    const hasLocal = fmMatches.length || pxMatches.length || toiMatches.length || cpcMatches.length || brandMatches.length;
     if ((!list || !list.length) && !hasLocal) {
       searchResultsList.innerHTML = '<div class="searchResultsEmpty">找不到符合的地點</div>';
       return;
@@ -3386,6 +3407,21 @@ if (navigator.geolocation) {
         _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
       });
     }
+
+    // 7-ELEVEN／OK／萊爾富
+    brandMatches.forEach(function (g) {
+      addLabel('🏪 ' + g.b.name, g.b.color);
+      g.items.forEach(function (item) {
+        const { el, addrId } = _makeLocalItem(
+          item,
+          '<img src="' + g.b.logo + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff" onerror="this.style.display=\'none\'">',
+          g.b.color,
+          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || g.b.name, g.b.logo); }
+        );
+        searchResultsList.appendChild(el);
+        _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
+      });
+    });
 
     // 公共廁所（深藍）
     if (toiMatches.length) {
@@ -7509,6 +7545,116 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     else { m.once('styledata', function(){ initCpc(m); }); }
   }
   window._reloadCpcLayer = tryInit;
+  tryInit();
+})();
+</script>
+
+<script src="seven_data.js?v=osm1"></script>
+<script src="okmart_data.js?v=osm1"></script>
+<script src="hilife_data.js?v=osm1"></script>
+<script>
+/* ===== 🏪 7-ELEVEN／OK超商／萊爾富圖層(資料由 tools/update-stores.js 產生) ===== */
+(function(){
+  // crop：logo 四周留白太多時只取中間這塊 [x, y, 寬, 高](原圖像素)
+  var BRANDS = [
+    { key: 'seven',  data: 'sevenData',  name: '7-ELEVEN', logo: '圖片/seven.jpg',  color: '#008163',
+      kw: /7-?11|7-?eleven|seven|小七|統一超商/i },
+    { key: 'okmart', data: 'okmartData', name: 'OK超商',   logo: '圖片/okmart.png', color: '#e60012',
+      kw: /(^|[^a-z])ok( ?(超商|mart))?(?![a-z])/i },
+    { key: 'hilife', data: 'hilifeData', name: '萊爾富',   logo: '圖片/hilife.png', color: '#e60012', crop: [88, 78, 224, 232],
+      kw: /萊爾富|hi-?life/i },
+  ];
+  window._storeBrands = BRANDS; // 搜尋也用這份清單
+
+  function addIcon(m, b, done) {
+    var id = b.key + '-icon';
+    if (m.hasImage(id)) { done(); return; }
+    var raw = new Image();
+    raw.onload = function () {
+      var S = 60, c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, S, S);
+      var cr = b.crop || [0, 0, raw.naturalWidth, raw.naturalHeight];
+      ctx.drawImage(raw, cr[0], cr[1], cr[2], cr[3], 0, 0, S, S);
+      if (!m.hasImage(id)) m.addImage(id, ctx.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      done();
+    };
+    raw.onerror = function () {
+      var S = 60, c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = b.color; ctx.fillRect(0, 0, S, S);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(b.name.slice(0, 3), S / 2, S / 2);
+      if (!m.hasImage(id)) m.addImage(id, ctx.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      done();
+    };
+    raw.src = b.logo;
+  }
+
+  function showPopup(m, b, f) {
+    var lon = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
+    var name = f.properties.name || b.name;
+    if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
+    document.querySelectorAll('.maplibregl-popup').forEach(function (el) { el.remove(); });
+    var box = document.createElement('div');
+    box.style.cssText = 'text-align:center;min-width:180px;padding:4px 2px';
+    var img = document.createElement('img');
+    img.src = b.logo;
+    img.style.cssText = 'width:48px;height:48px;object-fit:contain;display:block;margin:0 auto 6px';
+    img.onerror = function () { img.style.display = 'none'; };
+    var title = document.createElement('div');
+    title.style.cssText = 'font-size:14px;font-weight:700;margin-bottom:4px;color:' + b.color;
+    title.textContent = name;
+    var addr = document.createElement('div');
+    addr.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
+    addr.textContent = '查詢地址中...';
+    var btn = document.createElement('button');
+    btn.style.cssText = 'color:#fff;border:none;border-radius:8px;padding:8px 0;font-size:14px;cursor:pointer;width:100%;font-weight:600;background:' + b.color;
+    btn.textContent = '🗺 導航到這裡';
+    box.appendChild(img); box.appendChild(title); box.appendChild(addr); box.appendChild(btn);
+    var popup = new maplibregl.Popup({ offset: 20, closeButton: true }).setLngLat([lon, lat]).setDOMContent(box).addTo(m);
+    btn.addEventListener('click', function () { popup.remove(); window._navigateToCoord(lat, lon, name, b.logo); });
+    fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&accept-language=zh-TW')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var a = d.address || {};
+        var road = a.road || a.pedestrian || a.path || a.suburb || '';
+        var district = a.suburb || a.quarter || a.city_district || '';
+        var city = a.city || a.town || a.county || '';
+        addr.textContent = [road, district !== road ? district : '', city].filter(Boolean).join('，') ||
+          (d.display_name || '').split(',').slice(0, 2).join('，');
+      })
+      .catch(function () { addr.textContent = ''; });
+  }
+
+  function initBrand(m, b) {
+    var src = b.key + '-stores', layer = b.key + '-points';
+    if (m.getSource(src) || !window[b.data]) return;
+    addIcon(m, b, function () {
+      if (m.getSource(src)) return;
+      m.addSource(src, { type: 'geojson', data: window[b.data] });
+      // 全台幾千家店：放大到 13 級以上才顯示；圖示重疊時自動避開
+      m.addLayer({ id: layer, type: 'symbol', source: src, minzoom: 13,
+        layout: { 'icon-image': b.key + '-icon', 'icon-size': 1, 'icon-allow-overlap': false, 'icon-padding': 0 } });
+      if (!b._clickBound) { // 換地圖樣式後圖層會重建，事件只綁一次
+        b._clickBound = true;
+        m.on('click', layer, function (e) { showPopup(m, b, e.features[0]); });
+        m.on('mouseenter', layer, function () { m.getCanvas().style.cursor = 'pointer'; });
+        m.on('mouseleave', layer, function () { m.getCanvas().style.cursor = ''; });
+      }
+    });
+  }
+
+  function tryInit() {
+    var m = window.map;
+    if (!m) { setTimeout(tryInit, 300); return; }
+    var run = function () { BRANDS.forEach(function (b) { initBrand(m, b); }); };
+    if (m.isStyleLoaded()) run(); else m.once('styledata', run);
+  }
+  window._reloadStoreBrandLayers = tryInit;
   tryInit();
 })();
 </script>

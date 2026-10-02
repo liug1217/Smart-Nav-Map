@@ -1,5 +1,5 @@
-// 從 OpenStreetMap 抓全台的全家、全聯、中油，跟手動加的店(tools/stores-manual.json)合併，
-// 產生 family_mart_data.js / pxmart_data.js / cpc_data.js。
+// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富，跟手動加的店(tools/stores-manual.json)合併，
+// 產生 family_mart_data.js / pxmart_data.js / cpc_data.js / seven_data.js / okmart_data.js / hilife_data.js。
 // 之後要更新店家：node tools/update-stores.js
 // 資料來源 OpenStreetMap(ODbL)，地圖右下角已有「© OpenStreetMap」標示，不能拿掉。
 //
@@ -69,7 +69,7 @@ function branchOf(t, brandRe) {
     .replace(/加油站$/, '站')
     .replace(/\s+/g, '')
     .replace(/^[\-－]+|[\-－]+$/g, '');
-  if (n === '站') n = '';
+  if (/^(站|店|門市|便利商店|超商)$/.test(n)) n = '';
   return /[一-鿿]/.test(n) ? n : '';
 }
 
@@ -130,6 +130,12 @@ async function main() {
                     (!e.t.brand && /^全家/.test(e.t.name || ''));
   const isPx = e => /全聯/.test(e.t.brand || '') || (!e.t.brand && /全聯/.test(e.t.name || ''));
   const isCpc = e => /中油|^CPC$/i.test(e.t.brand || '') || (!e.t.brand && /中油/.test(e.t.name || ''));
+  const isSeven = e => e.t.brand === '7-Eleven' || e.t['brand:wikidata'] === 'Q259340' ||
+                       (!e.t.brand && /7-?ELEVEN|7-11|統一超商/i.test(e.t.name || ''));
+  const isOk = e => e.t.brand === 'OK超商' || e.t['brand:wikidata'] === 'Q10851968' ||
+                    (!e.t.brand && /^OK/i.test(e.t.name || ''));
+  const isHilife = e => e.t.brand === '萊爾富' || e.t['brand:wikidata'] === 'Q11326216' ||
+                        (!e.t.brand && /萊爾富|Hi-?Life/i.test(e.t.name || ''));
 
   const jobs = [
     { file: 'family_mart_data.js', v: 'familyMartData', title: '全家便利商店', osm: cv.filter(isFm), manual: manual.familyMart,
@@ -138,6 +144,12 @@ async function main() {
       suffix: '店', prefix: t => /大全聯/.test(t.brand || t.name || '') ? '大全聯' : '全聯福利中心', brandRe: /大全聯|全聯福利中心|全聯|PX ?Mart/gi },
     { file: 'cpc_data.js', v: 'cpcData', title: '台灣中油加油站', osm: fu.filter(isCpc), manual: manual.cpc,
       prefix: () => '台灣中油', suffix: '站', brandRe: /[台臺]灣中油股份有限公司|[台臺]灣中油|中油加油站|中油|CPC/gi },
+    { file: 'seven_data.js', v: 'sevenData', title: '7-ELEVEN', osm: cv.filter(isSeven), manual: manual.seven || [],
+      prefix: () => '7-ELEVEN', suffix: '門市', brandRe: /7-?ELEVEN|7-11|統一超商/gi },
+    { file: 'okmart_data.js', v: 'okmartData', title: 'OK超商', osm: cv.filter(isOk), manual: manual.okmart || [],
+      prefix: () => 'OK超商', suffix: '店', brandRe: /OK超商|OK ?mart|OK/gi },
+    { file: 'hilife_data.js', v: 'hilifeData', title: '萊爾富', osm: cv.filter(isHilife), manual: manual.hilife || [],
+      prefix: () => '萊爾富', suffix: '店', brandRe: /萊爾富便利商店|萊爾富|Hi-?Life/gi },
   ];
   for (const j of jobs) {
     const { list, moved, kept } = build(j);

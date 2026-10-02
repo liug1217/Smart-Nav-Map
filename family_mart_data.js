@@ -3550,7 +3550,7 @@ window.familyMartData = {
     {type:'Feature',geometry:{type:'Point',coordinates:[120.360482,22.60882]},properties:{name:"全家便利商店 鳳山誠義店"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[120.389504,22.608792]},properties:{name:"全家便利商店 大發內厝店"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[120.329192,22.608673]},properties:{name:"全家便利商店 高雄瑞北店"}},
-    {type:'Feature',geometry:{type:'Point',coordinates:[120.328976,22.607767]},properties:{name:"全家便利商店 超商店"}},
+    {type:'Feature',geometry:{type:'Point',coordinates:[120.328976,22.607767]},properties:{name:"全家便利商店"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[120.310612,22.606196]},properties:{name:"全家便利商店"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[120.328036,22.606078]},properties:{name:"全家便利商店 高雄瑞和店"}},
     {type:'Feature',geometry:{type:'Point',coordinates:[120.337205,22.603602]},properties:{name:"全家便利商店 鳳山華興店"}},
