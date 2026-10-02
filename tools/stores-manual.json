@@ -1,5 +1,5 @@
 {
- "_說明": "手動加入或校正的店家。update-stores.js 會用分店名(1 公里內)或 60 公尺內同品牌、沒寫分店名的店比對 OpenStreetMap：對到就用 OpenStreetMap 的位置、保留這裡的店名；對不到就照這裡的位置保留。加上 \"fixed\": true 表示位置以這裡為準(自己校正過)，OpenStreetMap 不會覆蓋。可用的品牌：familyMart、pxmart、cpc、seven、okmart、hilife、times；加上 \"removed\": true 表示這個地點已經沒了，會從地圖拿掉(用來處理使用者回報，node tools/reports.js 可以看回報)",
+ "_說明": "手動加入或校正的店家。update-stores.js 會用分店名(1 公里內)或 60 公尺內同品牌、沒寫分店名的店比對 OpenStreetMap：對到就用 OpenStreetMap 的位置、保留這裡的店名；對不到就照這裡的位置保留。加上 \"fixed\": true 表示位置以這裡為準(自己校正過)，OpenStreetMap 不會覆蓋。可用的品牌：familyMart、pxmart、cpc、seven、okmart、hilife、times、simplemart、dodohome、mcd、bafang；加上 \"removed\": true 表示這個地點已經沒了，會從地圖拿掉(用來處理使用者回報，node tools/reports.js 可以看回報)",
  "familyMart": [
   {
    "name": "全家便利商店 高雄聖德店",
@@ -454,5 +454,9 @@
  "seven": [],
  "okmart": [],
  "hilife": [],
- "times": []
+ "times": [],
+ "simplemart": [],
+ "dodohome": [],
+ "mcd": [],
+ "bafang": []
 }

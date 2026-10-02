@@ -1,11 +1,12 @@
-// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、Times 停車場，跟手動加的店(tools/stores-manual.json)合併，
-// 產生 family_mart_data.js / pxmart_data.js / cpc_data.js / seven_data.js / okmart_data.js / hilife_data.js / times_data.js。
+// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、八方雲集，
+// 跟手動加的店(tools/stores-manual.json)合併，產生各品牌的 *_data.js。
 // 之後要更新店家：node tools/update-stores.js
 // 資料來源 OpenStreetMap(ODbL)，地圖右下角已有「© OpenStreetMap」標示，不能拿掉。
 //
 // 手動的店：用分店名(1 公里內)或 60 公尺內同品牌、沒寫分店名的店比對；
 //   對到 → 用 OpenStreetMap 的位置、保留手動的店名；對不到 → 照手動的位置保留。
-// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json(不用再連網)
+// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json / osm_food.json(不用再連網)
+// 某一類資料抓不到時(伺服器太忙)，那幾個品牌的檔案維持原樣，其他照常更新
 
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +23,8 @@ const QUERIES = {
   px:   `[out:json][timeout:180];nwr[shop~"supermarket|convenience"]${BBOX};out center tags;`,
   fuel: `[out:json][timeout:180];nwr[amenity=fuel]${BBOX};out center tags;`,
   parking: `[out:json][timeout:180];nwr[amenity=parking]${BBOX};out center tags;`,
+  // 餐廳全部抓太大，只抓要的品牌
+  food: `[out:json][timeout:180];nwr[amenity][~"^(brand|name|name:zh|name:en|operator)$"~"麥當勞|McDonald|八方雲集",i]${BBOX};out center tags;`,
 };
 const MATCH_NEAR_M = 60, MATCH_NAME_M = 1000, DEDUPE_M = 15, DEDUPE_NAMED_M = 300;
 
@@ -67,6 +70,7 @@ function branchOf(t, brandRe) {
     .replace(brandRe, '')
     .replace(/[(（][^)）]*[)）]/g, '')
     .replace(/直營|加盟|自助|\+/g, '')
+    .replace(/^(地下|平面)?停車場[\-－]?/, '') // 「停車場-內湖行善站」→「內湖行善站」
     .replace(/加油站$/, '站')
     .replace(/\s+/g, '')
     .replace(/^[\-－]+|[\-－]+$/g, '');
@@ -129,7 +133,12 @@ function writeData(file, varName, title, list) {
 
 async function main() {
   const manual = JSON.parse(fs.readFileSync(path.join(__dirname, 'stores-manual.json'), 'utf8'));
-  const [cv, sm, fu, pk] = [await load('fm'), await load('px'), await load('fuel'), await load('parking')];
+  // 每類資料各自抓；抓不到的記成 null，用到它的品牌就跳過
+  const src = {};
+  for (const k of Object.keys(QUERIES)) {
+    try { src[k] = await load(k); } catch (e) { src[k] = null; console.error(`${k} 資料抓不到：${e.message}`); }
+  }
+  const cv = src.fm, sm = src.px, fu = src.fuel, pk = src.parking, fd = src.food;
 
   const isFm = e => e.t.brand === '全家便利商店' || e.t['brand:wikidata'] === 'Q10891564' ||
                     (!e.t.brand && /^全家/.test(e.t.name || ''));
@@ -140,26 +149,41 @@ async function main() {
   const isOk = e => e.t.brand === 'OK超商' || e.t['brand:wikidata'] === 'Q10851968' ||
                     (!e.t.brand && /^OK/i.test(e.t.name || ''));
   const isTimes = e => /times|タイムズ|普客二四|park ?24/i.test([e.t.brand, e.t.operator, e.t.name, e.t['name:en']].filter(Boolean).join(' '));
+  const txt = e => [e.t.brand, e.t.operator, e.t.name, e.t['name:zh'], e.t['name:en']].filter(Boolean).join(' ');
+  const isSimple = e => /美廉社|simple ?mart/i.test(txt(e));
+  const isDodo = e => /嘟嘟房|dodohome/i.test(txt(e));
+  const isMcd = e => e.t['brand:wikidata'] === 'Q38076' || /麥當勞|McDonald/i.test(txt(e));
+  const isBafang = e => /八方雲集/.test(txt(e));
   const isHilife = e => e.t.brand === '萊爾富' || e.t['brand:wikidata'] === 'Q11326216' ||
                         (!e.t.brand && /萊爾富|Hi-?Life/i.test(e.t.name || ''));
 
   const jobs = [
-    { file: 'family_mart_data.js', v: 'familyMartData', title: '全家便利商店', osm: cv.filter(isFm), manual: manual.familyMart,
+    { file: 'family_mart_data.js', v: 'familyMartData', title: '全家便利商店', osm: [cv, isFm], manual: manual.familyMart,
       prefix: () => '全家便利商店', suffix: '店', brandRe: /全家便利商店|全家|FamilyMart/gi },
-    { file: 'pxmart_data.js', v: 'pxmartData', title: '全聯／大全聯', osm: sm.filter(isPx), manual: manual.pxmart,
+    { file: 'pxmart_data.js', v: 'pxmartData', title: '全聯／大全聯', osm: [sm, isPx], manual: manual.pxmart,
       suffix: '店', prefix: t => /大全聯/.test(t.brand || t.name || '') ? '大全聯' : '全聯福利中心', brandRe: /大全聯|全聯福利中心|全聯|PX ?Mart/gi },
-    { file: 'cpc_data.js', v: 'cpcData', title: '台灣中油加油站', osm: fu.filter(isCpc), manual: manual.cpc,
+    { file: 'cpc_data.js', v: 'cpcData', title: '台灣中油加油站', osm: [fu, isCpc], manual: manual.cpc,
       prefix: () => '台灣中油', suffix: '站', brandRe: /[台臺]灣中油股份有限公司|[台臺]灣中油|中油加油站|中油|CPC/gi },
-    { file: 'seven_data.js', v: 'sevenData', title: '7-ELEVEN', osm: cv.filter(isSeven), manual: manual.seven || [],
+    { file: 'seven_data.js', v: 'sevenData', title: '7-ELEVEN', osm: [cv, isSeven], manual: manual.seven || [],
       prefix: () => '7-ELEVEN', suffix: '門市', brandRe: /7-?ELEVEN|7-11|統一超商/gi },
-    { file: 'okmart_data.js', v: 'okmartData', title: 'OK超商', osm: cv.filter(isOk), manual: manual.okmart || [],
+    { file: 'okmart_data.js', v: 'okmartData', title: 'OK超商', osm: [cv, isOk], manual: manual.okmart || [],
       prefix: () => 'OK超商', suffix: '店', brandRe: /OK超商|OK ?mart|OK/gi },
-    { file: 'hilife_data.js', v: 'hilifeData', title: '萊爾富', osm: cv.filter(isHilife), manual: manual.hilife || [],
+    { file: 'hilife_data.js', v: 'hilifeData', title: '萊爾富', osm: [cv, isHilife], manual: manual.hilife || [],
       prefix: () => '萊爾富', suffix: '店', brandRe: /萊爾富便利商店|萊爾富|Hi-?Life/gi },
-    { file: 'times_data.js', v: 'timesData', title: 'Times 停車場', osm: pk.filter(isTimes), manual: manual.times || [],
+    { file: 'times_data.js', v: 'timesData', title: 'Times 停車場', osm: [pk, isTimes], manual: manual.times || [],
       prefix: () => 'Times', plain: 'Times 停車場', suffix: '停車場', brandRe: /台灣普客二四股份有限公司|普客二四停車場股份有限公司|普客二四|Times ?24 ?h?|24 ?h ?Times|Times|タイムズ|parking lot/gi },
+    { file: 'simplemart_data.js', v: 'simplemartData', title: '美廉社', osm: [sm, isSimple], manual: manual.simplemart || [],
+      prefix: () => '美廉社', suffix: '店', brandRe: /三商企業集團|美廉社|Simple ?Mart/gi },
+    { file: 'dodohome_data.js', v: 'dodohomeData', title: '嘟嘟房', osm: [pk, isDodo], manual: manual.dodohome || [],
+      prefix: () => '嘟嘟房', plain: '嘟嘟房停車場', suffix: '停車場', brandRe: /寶盛國際股份有限公司|嘟嘟房|dodohome|parking lot/gi },
+    { file: 'mcd_data.js', v: 'mcdData', title: '麥當勞', osm: [fd, isMcd], manual: manual.mcd || [],
+      prefix: () => '麥當勞', suffix: '店', brandRe: /台灣麥當勞|麥當勞|McDonald'?s?|得來速|餐廳/gi },
+    { file: 'bafang_data.js', v: 'bafangData', title: '八方雲集', osm: [fd, isBafang], manual: manual.bafang || [],
+      prefix: () => '八方雲集', suffix: '店', brandRe: /八方雲集鍋貼水餃專賣店|八方雲集|鍋貼水餃專賣店|鍋貼水餃/gi },
   ];
   for (const j of jobs) {
+    if (!j.osm[0]) { console.log(`${j.title}: 這次沒抓到資料，檔案維持原樣`); continue; }
+    j.osm = j.osm[0].filter(j.osm[1]);
     const { list, moved, kept } = build(j);
     writeData(j.file, j.v, j.title, list);
     console.log(`${j.title}: ${list.length} 家(手動的店 ${moved} 家改用 OpenStreetMap 位置、${kept} 家對不到照原位置保留)`);
