@@ -1982,13 +1982,13 @@ function _onceOn(m, type, layer, fn) {
         }
         return;
       }
-      const lons = routeCoordinates.map(c => c[0]);
-      const lats = routeCoordinates.map(c => c[1]);
-      const bounds = [
-        [Math.min(...lons), Math.min(...lats)],
-        [Math.max(...lons), Math.max(...lats)]
-      ];
-      map.fitBounds(bounds, { padding: 80, duration: 800 });
+      // 開很久軌跡會有十幾萬點：用迴圈算範圍(Math.min(...陣列) 點太多會直接出錯)
+      let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+      for (const c of routeCoordinates) {
+        if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+        if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+      }
+      map.fitBounds([[w, s], [e, n]], { padding: 80, duration: 800 });
     });
   }
 
@@ -4806,18 +4806,8 @@ function _onceOn(m, type, layer, fn) {
         }
       }
 
-      if (routeSource) {
-        routeSource.setData({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: routeCoordinates
-            }
-          }]
-        });
-      }
+      // 開過的軌跡(routeCoordinates)只給「全覽」縮放用，畫面上不顯示('route' 圖層看不到)：
+      // 以前每次 GPS 更新都把整條越來越長的軌跡重送給地圖，開越久越耗電，已拿掉
 
       // 導航中且在路線附近:車子目標改用吸附到路線中心的位置(沿路線距離),不直接用 GPS 原始座標
       const snap = snapVehicleToRoute(currentLat, currentLon, currentSpeed, now);
