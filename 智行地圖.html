@@ -1836,28 +1836,44 @@ function _onceOn(m, type, layer, fn) {
   // bug45: touchstart/mousedown 時立即暫停鏡頭跟隨，讓 MapLibre 能正常辨識拖曳手勢。
   // dragstart 觸發時機太晚（需要先移動一段距離），在那之前 _rafLoop 的 easeTo({duration:0})
   // 每幀都把地圖拉回 GPS 位置，導致手勢門檻永遠跨不過去。
-  var _ptrDragged = false;
+  // 放開時：手指(或滑鼠)總共移動不到 10px 就是「點一下」，恢復跟隨；移動更多才算拖曳地圖、停止跟隨。
+  // 以前用 MapLibre 的 drag 事件判斷，它移動 3px 就算拖曳；手機點一下手指本來就會晃幾 px，
+  // 結果點一下地圖就不再跟著人轉
+  var TAP_MOVE_PX = 10;
+  var _ptrDown = false, _ptrX = 0, _ptrY = 0, _ptrMoved = 0;
   var _prevFollow = true;
-  function _onMapPointerDown() {
-    _ptrDragged = false;
-    _prevFollow = followUser;
+  function _ptrPos(e) { var t = e.touches && e.touches[0]; return t ? [t.clientX, t.clientY] : [e.clientX, e.clientY]; }
+  function _onMapPointerDown(e) {
+    if (!_ptrDown) _prevFollow = followUser; // 第二根手指放下時不要蓋掉(那時 followUser 已經是 false)
+    _ptrDown = true;
+    var p = _ptrPos(e); _ptrX = p[0]; _ptrY = p[1]; _ptrMoved = 0;
     followUser = false;
     window._cameraFollow = false;
   }
-  function _onMapPointerUp() {
+  function _onMapPointerMove(e) {
+    if (!_ptrDown) return;
+    if (e.touches && e.touches.length > 1) { _ptrMoved = Infinity; return; } // 雙指縮放/旋轉：當成在操作地圖
+    var p = _ptrPos(e);
+    _ptrMoved = Math.max(_ptrMoved, Math.hypot(p[0] - _ptrX, p[1] - _ptrY));
+  }
+  function _onMapPointerUp(e) {
+    if (e.touches && e.touches.length) return; // 還有手指在螢幕上
+    _ptrDown = false;
+    var moved = _ptrMoved;
     setTimeout(function() {
-      if (!_ptrDragged && _prevFollow) {
+      if (moved < TAP_MOVE_PX && _prevFollow) {
         followUser = true;
         window._cameraFollow = true;
       }
-      _ptrDragged = false;
     }, 50);
   }
   map.getCanvas().addEventListener('mousedown', _onMapPointerDown);
   map.getCanvas().addEventListener('touchstart', _onMapPointerDown, { passive: true });
-  map.getCanvas().addEventListener('mouseup', _onMapPointerUp);
+  window.addEventListener('mousemove', _onMapPointerMove);
+  map.getCanvas().addEventListener('touchmove', _onMapPointerMove, { passive: true });
+  window.addEventListener('mouseup', function(e) { if (_ptrDown) _onMapPointerUp(e); });
   map.getCanvas().addEventListener('touchend', _onMapPointerUp, { passive: true });
-  map.on('drag', function() { _ptrDragged = true; });
+  map.getCanvas().addEventListener('touchcancel', _onMapPointerUp, { passive: true });
   map.on('dragstart', () => { followUser = false; window._cameraFollow = false; });
 
   map.on('load',()=>{
