@@ -8119,7 +8119,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   function postJpeg(path, blob) {
     return fetch(base() + path, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob })
-      .then(function (r) { return r.json(); });
+      .then(function (r) {
+        return r.text().then(function (t) { try { return JSON.parse(t); } catch (_) { throw new Error('HTTP ' + r.status); } });
+      });
   }
   function uploadPhoto(item) {
     var sid = encodeURIComponent(window._snmSid || '');
@@ -8224,7 +8226,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         if (done) done();
       }).catch(function (e) {
         busy = false; send.textContent = '送出'; check();
-        toast(e && e.message === 'decode' ? '這張照片格式不支援，請換一張' : '送出失敗，請稍後再試');
+        // 失敗原因直接顯示出來，回報問題時才知道卡在哪
+        var why = !e ? '' : e.message === 'decode' ? '' :
+                  /Failed to fetch|NetworkError|Load failed|network/i.test(e.message) ? '連不上伺服器' :
+                  /JSON|Unexpected/i.test(e.message) ? '伺服器回應異常' : e.message;
+        toast(e && e.message === 'decode' ? '這張照片格式不支援，請換一張' : '送出失敗（' + (why || '未知') + '）');
       });
     };
   }
