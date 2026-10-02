@@ -7705,6 +7705,130 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
+<script>
+/* ===== 📝 地標回報：點開地標(超商、加油站、廁所、測速照相…)右下角「回報錯誤」 ===== */
+(function(){
+  var LAYERS = ['fm-points', 'seven-points', 'okmart-points', 'hilife-points', 'pxmart-points',
+                'cpc-points', 'toilet-points', 'speed-point'];
+  var REASONS = [
+    ['gone',      '這裡已經沒有了'],
+    ['duplicate', '重複了(多一個)'],
+    ['position',  '位置不對'],
+    ['name',      '名稱不對'],
+    ['other',     '其他'],
+  ];
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.snmRptBtn{display:block;margin:8px 0 0 auto;padding:2px 0;background:none;border:none;color:#8e8e93;font-size:12px;cursor:pointer;text-decoration:underline}' +
+    '.snmRptMask{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}' +
+    '.snmRptSheet{width:100%;max-width:480px;background:#fff;color:#1c1c1e;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;font-family:-apple-system,sans-serif}' +
+    '.snmRptSheet h3{margin:0 0 2px;font-size:17px}' +
+    '.snmRptSheet .sub{font-size:12px;color:#8e8e93;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.snmRptOpt{display:block;width:100%;text-align:left;padding:11px 12px;margin-bottom:6px;border:1px solid #d1d1d6;border-radius:10px;background:#fff;color:#1c1c1e;font-size:15px;cursor:pointer}' +
+    '.snmRptOpt.on{border-color:#007aff;background:#eaf3ff;color:#007aff;font-weight:600}' +
+    '.snmRptSheet textarea{width:100%;box-sizing:border-box;margin:4px 0 12px;padding:10px;border:1px solid #d1d1d6;border-radius:10px;font-size:14px;resize:none;font-family:inherit}' +
+    '.snmRptRow{display:flex;gap:8px}' +
+    '.snmRptRow button{flex:1;padding:12px 0;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}' +
+    '.snmRptToast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:99999;background:rgba(0,0,0,.8);color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;pointer-events:none}';
+  document.head.appendChild(css);
+
+  function toast(msg) {
+    var t = document.createElement('div');
+    t.className = 'snmRptToast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.remove(); }, 2500);
+  }
+
+  function openSheet(poi) {
+    var reason = null;
+    var mask = document.createElement('div');
+    mask.className = 'snmRptMask';
+    var sheet = document.createElement('div');
+    sheet.className = 'snmRptSheet';
+    var h = document.createElement('h3'); h.textContent = '回報錯誤';
+    var sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = poi.name || '這個地標';
+    sheet.appendChild(h); sheet.appendChild(sub);
+    var send = document.createElement('button');
+    REASONS.forEach(function (r) {
+      var b = document.createElement('button');
+      b.className = 'snmRptOpt'; b.textContent = r[1];
+      b.addEventListener('click', function () {
+        reason = r[0];
+        sheet.querySelectorAll('.snmRptOpt').forEach(function (x) { x.classList.toggle('on', x === b); });
+        send.disabled = false; send.style.opacity = 1;
+      });
+      sheet.appendChild(b);
+    });
+    var note = document.createElement('textarea');
+    note.rows = 2; note.maxLength = 200;
+    note.placeholder = '補充說明(選填)，例如：正確位置在對面、已改名為…';
+    sheet.appendChild(note);
+    var row = document.createElement('div'); row.className = 'snmRptRow';
+    var cancel = document.createElement('button');
+    cancel.textContent = '取消'; cancel.style.cssText = 'background:#e5e5ea;color:#1c1c1e';
+    send.textContent = '送出'; send.style.cssText = 'background:#007aff;color:#fff;opacity:.4';
+    send.disabled = true;
+    row.appendChild(cancel); row.appendChild(send);
+    sheet.appendChild(row);
+    mask.appendChild(sheet);
+    document.body.appendChild(mask);
+
+    var close = function () { mask.remove(); };
+    cancel.addEventListener('click', close);
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+    send.addEventListener('click', function () {
+      if (!reason || typeof window._snmApiPost !== 'function') return;
+      send.disabled = true; send.textContent = '送出中…';
+      window._snmApiPost('/reports/submit', {
+        sessionId: window._snmSid, layer: poi.layer, name: poi.name,
+        lat: poi.lat, lng: poi.lng, reason: reason, note: note.value,
+      }).then(function (res) {
+        close();
+        if (res && res.ok) toast('感謝回報！我們會盡快處理');
+        else if (res && res.error && res.error.code === 'too_many') toast('今天回報太多次了，明天再來');
+        else toast('回報失敗，請稍後再試');
+      }).catch(function () { close(); toast('回報失敗，請檢查網路'); });
+    });
+  }
+
+  // 地標的彈出視窗是各圖層自己開的：點下去之後，在最新開的那個視窗右下角加上「回報錯誤」
+  function attach(layer, f) {
+    var boxes = document.querySelectorAll('.maplibregl-popup-content');
+    var box = boxes[boxes.length - 1];
+    if (!box || box.querySelector('.snmRptBtn')) return;
+    var p = f.properties || {};
+    var poi = {
+      layer: layer,
+      name: p.name || (p.limit ? '測速照相 限速' + p.limit + ' ' + (p.addr || '') : ''),
+      lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1],
+    };
+    var btn = document.createElement('button');
+    btn.className = 'snmRptBtn';
+    btn.textContent = '回報錯誤';
+    btn.addEventListener('click', function () { openSheet(poi); });
+    box.appendChild(btn);
+  }
+
+  var bound = false;
+  function bind() {
+    var m = window.map;
+    if (!m) { setTimeout(bind, 500); return; }
+    if (bound) return;
+    bound = true;
+    // 綁在地圖上(不是圖層物件)：換地圖樣式、圖層重建後一樣有效
+    LAYERS.forEach(function (id) {
+      m.on('click', id, function (e) {
+        var f = e.features && e.features[0];
+        if (f) setTimeout(function () { attach(id, f); }, 30);
+      });
+    });
+  }
+  bind();
+})();
+</script>
+
 <!-- PeerJS WebRTC -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <!-- QRCode.js -->
@@ -7839,6 +7963,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         return r.json();
       });
   }
+  window._snmApiPost = apiPost; // 地標回報也用
+  window._snmSid = _sid;
 
   // ── Haversine 距離（公尺）────────────────────────────────────────────────
   function haversineM(la1, ln1, la2, ln2) {

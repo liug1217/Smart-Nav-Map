@@ -75,6 +75,7 @@ async function main() {
       const d = distM(m.lat, m.lng, p.lat, p.lng);
       if (d < best) { best = d; hit = p; }
     }
+    if (m.removed) { if (hit) hit.removed = true; continue; } // 已經沒了：從地圖拿掉
     if (hit) {
       hit.name = m.name;
       if (m.fixed) { hit.lat = m.lat; hit.lng = m.lng; }
@@ -97,7 +98,7 @@ async function main() {
     return t.join('、');
   };
   const r6 = v => Math.round(v * 1e6) / 1e6;
-  const rowsOut = list
+  const rowsOut = list.filter(p => !p.removed)
     .sort((a, b) => b.lat - a.lat || a.lng - b.lng)
     .map(p => JSON.stringify([r6(p.lng), r6(p.lat), p.name, p.addr, p.cat, tags(p)]));
   const out =
