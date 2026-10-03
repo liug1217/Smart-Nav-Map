@@ -7,18 +7,30 @@ const test = require('node:test');
 const html = fs.readFileSync(path.join(__dirname, '..', '智行地圖.html'), 'utf8');
 const stateCode = html.match(/  const SPEED_CAM_WARN_KM[\s\S]*?\n  \/\/ 語音播報時平滑降低/)[0]
   .replace(/\n  \/\/ 語音播報時平滑降低[\s\S]*/, '');
-const checkStart = html.indexOf('  function checkSpeedCameraVoice');
+// 選照相機(沿路距離、方向、鎖定)＋播報入口
+const checkStart = html.indexOf('  // ── 測速照相：選哪一支');
 const checkEnd = html.indexOf('\n  // ===== 🧪 測試用:在瀏覽器主控台手動模擬', checkStart);
 const checkCode = html.slice(checkStart, checkEnd);
+const projStart = html.indexOf('  function projectOnRoute(');
+const projCode = html.slice(projStart, html.indexOf('\n  }\n', projStart) + 4);
+
+// 測試世界：一條往北的直路，照相機在第 N 公里；run(_, km, 車速) = 車子開到第 km 公里
+const LAT0 = 25, LNG = 121, KM_DEG = 1000 / 110540;
+const latAt = km => LAT0 + km * KM_DEG;
 
 function createHarness(features) {
   const events = [];
   const preloaded = [];
   function playSpeedCameraPassBeep() { return Promise.resolve(); }
   const context = {
-    window: { speedCameraData: { features }, NavTTS: { preload: t => preloaded.push(...t) } },
+    window: {
+      speedCameraData: { features }, NavTTS: { preload: t => preloaded.push(...t) },
+      // 沒導航模式：前方的路 = 從車子往北的直線
+      _roadPathAhead: (lng, lat, _b, maxM) => [[lng, lat], [lng, lat + maxM / 110540]],
+    },
     isNavigating: true,
-    calculateDistance: (_lat, lon, _camLat, camLon) => Math.abs(camLon - lon),
+    _snapState: { snapped: false }, _routeGeom: null,
+    calculateDistance: (la1, _lo1, la2) => Math.abs(la2 - la1) / KM_DEG,
     speakQueue: (items, opts) => events.push({
       text: items.filter(Boolean).map(i => (i === playSpeedCameraPassBeep ? '<chime>' : i)).join('|'),
       opts: opts || {},
@@ -29,15 +41,19 @@ function createHarness(features) {
   };
   context.NavTTS = context.window.NavTTS;
   vm.createContext(context);
-  vm.runInContext(`${stateCode}\n${checkCode}\nglobalThis.run = checkSpeedCameraVoice; globalThis.reset = clearSpeedCameraVoiceState;`, context);
-  return { events, preloaded, run: context.run, reset: context.reset, texts: () => events.map(e => e.text) };
+  vm.runInContext(`${stateCode}\n${projCode}\n${checkCode}\nglobalThis.check = checkSpeedCameraVoice; globalThis.reset = clearSpeedCameraVoiceState;`, context);
+  const run = (_lat, km, speed) => {
+    context.window._vehicleTarget = { lat: latAt(km), lng: LNG, bearing: 0 };
+    context.check(latAt(km), LNG, speed);
+  };
+  return { events, preloaded, run, reset: context.reset, texts: () => events.map(e => e.text) };
 }
 
-function camera(id, distanceKm, limit = 100) {
-  return { id, geometry: { coordinates: [distanceKm, 0] }, properties: { limit, addr: id } };
+function camera(id, distanceKm, limit = 100, dir) {
+  return { id, geometry: { coordinates: [LNG, latAt(distanceKm)] }, properties: { limit, addr: id, dir } };
 }
 
-// 以 20 公尺為一步從 1100 公尺開到照相機後 100 公尺(距離 = |camLon - lon| 公里)
+// 以 20 公尺為一步從照相機前 fromM 公尺開到照相機後(照相機在第 1 公里)
 function driveThrough(h, fromM, toM, speed, stepM = 20) {
   for (let m = fromM; m >= toM; m -= stepM) h.run(0, 1 - m / 1000, speed);
 }
@@ -164,4 +180,61 @@ test('only whole hundreds are ever spoken as distances, each at most once', () =
   const d = h.texts().filter(t => /^\d+公尺$/.test(t));
   assert.deepEqual(d, ['900公尺', '800公尺', '700公尺', '600公尺', '500公尺', '400公尺', '300公尺', '200公尺', '100公尺']);
   assert.equal(new Set(d).size, d.length);
+});
+
+// ── 選對照相機：只播「沿目前道路、同方向、前方」的那一支，鎖定後不跳來跳去 ─────────────
+const offsetEast = (cam, m) => { cam.geometry.coordinates[0] += m / (111320 * Math.cos(25 * Math.PI / 180)); return cam; };
+const distances = h => h.texts().map(t => /^(\d+)公尺/.exec(t)).filter(Boolean).map(m => +m[1]);
+
+test('two cameras close together: finish the nearer one first, distances never jump back (no 300→400→200)', () => {
+  const h = createHarness([camera('A', 1, 60), camera('B', 1.35, 70)]);
+  for (let m = 0; m <= 1500; m += 20) h.run(0, m / 1000, 50);
+  const t = h.texts();
+  const passA = t.indexOf('<chime>|您已通過');
+  const before = distances({ texts: () => t.slice(0, passA) });
+  assert.deepEqual(before, [900, 800, 700, 600, 500, 400, 300, 200, 100]); // 只有 A，嚴格遞減
+  assert.match(t[0], /限速60公里/);
+  assert.ok(t.slice(passA + 1).some(x => /限速70公里/.test(x))); // 通過 A 之後才換 B
+});
+
+test('a camera on a parallel road 80 m away is never announced, even though it is close in a straight line', () => {
+  const h = createHarness([offsetEast(camera('side', 1, 40), 80)]);
+  driveThrough(h, 1100, -100, 50);
+  assert.deepEqual(h.texts(), []);
+});
+
+test('opposite-direction camera is ignored; same-direction one is announced', () => {
+  const opp = createHarness([camera('opp', 1, 60, '北向南')]); // 我們往北開
+  driveThrough(opp, 1100, -100, 50);
+  assert.deepEqual(opp.texts(), []);
+  const same = createHarness([camera('same', 1, 60, '南向北')]);
+  driveThrough(same, 1100, -100, 50);
+  assert.equal(same.texts()[0], '1公里後有測速照相，固定式，限速60公里。');
+});
+
+test('locked camera is kept while a side-road camera comes within 50 m straight-line', () => {
+  const h = createHarness([camera('A', 1, 60), offsetEast(camera('side', 0.6, 30), 45)]);
+  driveThrough(h, 1100, -100, 50);
+  assert.ok(h.texts().every(t => !/限速30/.test(t)));
+  assert.deepEqual(distances(h), [900, 800, 700, 600, 500, 400, 300, 200, 100]);
+});
+
+test('direction field parsing', () => {
+  const ctx = vm.createContext({ Map, RegExp });
+  const start = html.indexOf('  const CAM_COMPASS');
+  const end = html.indexOf('  function camDirOk', start);
+  vm.runInContext(html.slice(start, end) + '\nglobalThis.p = parseCamDir;', ctx);
+  const p = d => { const r = ctx.p(d); return r && Array.from(r); };
+  assert.deepEqual(p('北向南'), [180]);
+  assert.deepEqual(p('西南向東北'), [45]);
+  assert.deepEqual(p('往南'), [180]);
+  assert.deepEqual(p('南下車道'), [180]);
+  assert.deepEqual(p('北上方向'), [0]);
+  assert.deepEqual(p('東向'), [90]);
+  assert.deepEqual(p('東往西(區間測速)'), [270]);
+  assert.equal(p('南北雙向'), null);
+  assert.equal(p('雙向'), null);
+  assert.equal(p('東西向'), null);
+  assert.equal(p('南向60北向70'), null); // 兩個相反方向 = 雙向
+  assert.equal(p('往大溪方向'), null);   // 地名看不出方向 → 都算
 });

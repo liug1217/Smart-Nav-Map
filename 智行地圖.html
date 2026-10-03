@@ -4630,6 +4630,7 @@ function _onceOn(m, type, layer, fn) {
   var _camRouteList = null;      // 導航路線上的照相機(每條路線算一次)：{ coords, list:[{ id, f, along }] }
   var _camPath = null;           // 沒導航時前方的路：{ geom, t, mode, list }
   var _camCtxKey = null;         // 目前用的是哪一條線(換路線/重新規劃時要重新確認鎖定的照相機)
+  var _camLastPos = null;        // 上一次的位置(判斷 GPS 跳點)
 
   // 照相機的取締方向(資料欄位 dir，例如「北向南」「往南」「南下」「西南向東北」「雙向」)→ 允許的行駛方位角清單；
   // null = 雙向或看不出方向(「往大溪方向」這種地名)，都算符合
@@ -4730,13 +4731,18 @@ function _onceOn(m, type, layer, fn) {
     const key = ctx ? (ctx.mode === 'route' ? _camRouteList : _camPath) : null;
     const switched = key !== _camCtxKey && !(ctx && ctx.mode === 'road' && _camCtxKey && _camCtxKey.mode === 'road');
     _camCtxKey = key;
-    const ahead = ctx ? ctx.list.map(c => ({ c, rem: c.along - ctx.vAlong }))
-                              .filter(x => x.rem > -20 && x.rem <= CAM_LOOK_M) : [];
+    const all = ctx ? ctx.list.map(c => ({ c, rem: c.along - ctx.vAlong })) : [];
+    const ahead = all.filter(x => x.rem > -20 && x.rem <= CAM_LOOK_M);
+    // GPS 一次跳很遠(出隧道、重新定位)：鎖定的照相機不再可靠，重找
+    const jumped = _camLastPos && calculateDistance(_camLastPos[0], _camLastPos[1], lat, lon) * 1000 > 300;
+    _camLastPos = [lat, lon];
+    if (jumped) _camTarget = null;
 
     // 鎖定中的照相機：還在前方的路上就繼續用它；連續幾次不在(轉進別條路、離開路線)才放掉
     if (_camTarget) {
       const st = speedCameraVoiceState.get(_camTarget.id);
-      const hit = ahead.find(x => x.c.id === _camTarget.id);
+      // 鎖定的那支：在線上就算，包含剛過去的(高速時 GPS 一次跳過照相機，這樣「通過」才播得出來)
+      const hit = all.find(x => x.c.id === _camTarget.id && x.rem <= CAM_LOOK_M);
       if (st && st.passed) _camTarget = null;
       else if (hit) { _camTarget.missed = 0; _camTarget.rem = hit.rem; }
       else if (switched || ++_camTarget.missed >= CAM_LOST_LIMIT) _camTarget = null;
