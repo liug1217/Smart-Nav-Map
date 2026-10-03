@@ -7966,6 +7966,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           'text-pitch-alignment': 'viewport',
           'text-keep-upright': true,
           'text-optional': true, // 名稱放不下就只顯示標誌
+          // 國道上下行兩條車道很近：互相靠近時兩邊都照樣顯示，不自動藏掉其中一邊
+          'icon-allow-overlap': true,
+          'text-allow-overlap': true,
         },
         paint: { 'text-color': '#000000', 'text-halo-color': '#ffffff', 'text-halo-width': 2 }, // 黑字白框
       }, below ? below.id : undefined); // 在道路線上面、店家圖示和車子下面
