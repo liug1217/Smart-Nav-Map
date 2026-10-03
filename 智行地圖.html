@@ -317,8 +317,6 @@ body.ptt-in-room .pttChat{ display:flex; }
 .rect4-inner{
   display:flex;
   align-items:center;
-  min-width:0;   /* 讓路名可以縮、超長時顯示「…」，不會超出白色框蓋到左邊的品牌標籤 */
-  max-width:100%;
 }
 
 .rect4 .label{
@@ -331,18 +329,7 @@ body.ptt-in-room .pttChat{ display:flex; }
   overflow:hidden;
   text-overflow:ellipsis;
   padding:5px 0;
-  min-width:0;
 }
-/* 國道：上面正式名稱、下面「國道N號」，兩行都放得下 */
-.rect4 .label.fw{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  line-height:1.1;
-  padding:0;
-}
-.rect4 .label.fw .fwName{ font-size:13px; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
-.rect4 .label.fw .fwNo{ font-size:11px; font-weight:600; color:#1a7a3a; }
 
 .rect4 .icon{
   width:20px;
@@ -351,7 +338,6 @@ body.ptt-in-room .pttChat{ display:flex; }
   filter:drop-shadow(0px 4px 4px rgba(0,0,0,0.25));
   display:none;
   margin-left:6px;
-  flex-shrink:0;
 }
 
 .rect8{
@@ -5476,19 +5462,7 @@ function setRoadLabel(name, tags){
   const label = document.getElementById("roadLabel");
   const icon = document.querySelector(".rect4 .icon");
   const fw = freewayOf(name, tags);
-  if(label){
-    label.classList.toggle("fw", !!fw);
-    if(fw){
-      label.textContent = "";
-      const a = document.createElement("span"); a.className = "fwName"; a.textContent = fw.name;
-      const b = document.createElement("span"); b.className = "fwNo"; b.textContent = "國道" + fw.no + "號";
-      label.appendChild(a); label.appendChild(b);
-      label.title = fw.name + " 國道" + fw.no + "號";
-    }else{
-      label.innerText = name;
-      label.title = "";
-    }
-  }
+  if(label) label.innerText = fw ? fw.name + " 國道" + fw.no + "號" : name;
   if(icon){
     icon.style.display = fw ? "block" : "none";
     if(fw) icon.style.backgroundImage = "url('" + fw.icon + "')";
