@@ -317,6 +317,8 @@ body.ptt-in-room .pttChat{ display:flex; }
 .rect4-inner{
   display:flex;
   align-items:center;
+  min-width:0;   /* 讓路名可以縮、超長時顯示「…」，不會超出白色框蓋到左邊的品牌標籤 */
+  max-width:100%;
 }
 
 .rect4 .label{
@@ -329,15 +331,27 @@ body.ptt-in-room .pttChat{ display:flex; }
   overflow:hidden;
   text-overflow:ellipsis;
   padding:5px 0;
+  min-width:0;
 }
+/* 國道：上面正式名稱、下面「國道N號」，兩行都放得下 */
+.rect4 .label.fw{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  line-height:1.1;
+  padding:0;
+}
+.rect4 .label.fw .fwName{ font-size:13px; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.rect4 .label.fw .fwNo{ font-size:11px; font-weight:600; color:#1a7a3a; }
 
 .rect4 .icon{
   width:20px;
   height:20px;
-  background:url('https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/TWHW3.svg/120px-TWHW3.svg.png') center/cover no-repeat;
+  background:center/contain no-repeat; /* 圖示依國道編號由程式設定(圖片/TWHW*.png、.svg) */
   filter:drop-shadow(0px 4px 4px rgba(0,0,0,0.25));
   display:none;
   margin-left:6px;
+  flex-shrink:0;
 }
 
 .rect8{
@@ -5441,12 +5455,52 @@ function requestRoadNameUpdate(lng, lat){
 // Overpass 常逾時/504/查不到,導航中改用路線目前路段名稱(OSRM step.name),避免一直停在「正在定位道路…」
 const ROAD_LABEL_PLACEHOLDERS = ["正在定位道路…", "未知道路"];
 
+// ===== 🛣️ 國道：顯示「正式名稱 國道N號」＋國道標誌 =====
+// 名稱、編號、OSM 的 ref(例如 "1"、"國道3號")都能認；「國道3甲」這種支線不算
+const FREEWAYS = [
+  { no: 1, name: "中山高速公路",     icon: "圖片/TWHW1.png", re: /中山高速公路|國道\s*(1|一)(號)?(?![\d甲乙])/ },
+  { no: 3, name: "福爾摩沙高速公路", icon: "圖片/TWHW3.svg", re: /福爾摩沙高速公路|國道\s*(3|三)(號)?(?![\d甲乙])/ },
+  { no: 4, name: "臺中環線（外環）", icon: "圖片/TWHW4.png", re: /[臺台]中環線|國道\s*(4|四)(號)?(?![\d甲乙])/ },
+  { no: 5, name: "蔣渭水高速公路",   icon: "圖片/TWHW5.svg", re: /蔣渭水高速公路|國道\s*(5|五)(號)?(?![\d甲乙])/ },
+];
+function freewayOf(name, tags){
+  const hw = (tags && tags.highway) || "";
+  const refs = String((tags && tags.ref) || "").split(/[;,]/).map(r => r.trim());
+  return FREEWAYS.find(fw =>
+    fw.re.test(name || "") ||
+    (/^motorway/.test(hw) && refs.some(r => new RegExp("^(國道\\s*)?" + fw.no + "(號)?$").test(r)))
+  ) || null;
+}
+// 設定左上角道路名稱；是國道就改成「福爾摩沙高速公路 國道3號」並顯示該國道的標誌
+function setRoadLabel(name, tags){
+  const label = document.getElementById("roadLabel");
+  const icon = document.querySelector(".rect4 .icon");
+  const fw = freewayOf(name, tags);
+  if(label){
+    label.classList.toggle("fw", !!fw);
+    if(fw){
+      label.textContent = "";
+      const a = document.createElement("span"); a.className = "fwName"; a.textContent = fw.name;
+      const b = document.createElement("span"); b.className = "fwNo"; b.textContent = "國道" + fw.no + "號";
+      label.appendChild(a); label.appendChild(b);
+      label.title = fw.name + " 國道" + fw.no + "號";
+    }else{
+      label.innerText = name;
+      label.title = "";
+    }
+  }
+  if(icon){
+    icon.style.display = fw ? "block" : "none";
+    if(fw) icon.style.backgroundImage = "url('" + fw.icon + "')";
+  }
+}
+
 function applyRoadNameFallback(){
   const label = document.getElementById("roadLabel");
   if(!label) return;
   const navName = typeof window._navCurrentRoadName === "function" ? window._navCurrentRoadName() : "";
   if(navName){
-    label.innerText = navName;
+    setRoadLabel(navName, null);
   }else if(label.innerText === ROAD_LABEL_PLACEHOLDERS[0]){
     label.innerText = ROAD_LABEL_PLACEHOLDERS[1];
   }
@@ -5458,7 +5512,7 @@ function applyNavRoadNameIfPlaceholder(){
   const label = document.getElementById("roadLabel");
   if(!label || !ROAD_LABEL_PLACEHOLDERS.includes(label.innerText)) return;
   const navName = typeof window._navCurrentRoadName === "function" ? window._navCurrentRoadName() : "";
-  if(navName) label.innerText = navName;
+  if(navName) setRoadLabel(navName, null);
 }
 
 async function updateRoadName(lng, lat, seq){
@@ -5523,34 +5577,13 @@ async function updateRoadName(lng, lat, seq){
       }
     }
 
-    let isFreeway = false;
-
-    if(bestTags){
-      const hw = bestTags.highway || "";
-      const ref = bestTags.ref || "";
-      const name = bestTags.name || "";
-
-      isFreeway =
-        (hw === "motorway" && ref.includes("3")) ||
-        name.includes("國道3") ||
-        name.includes("國道三") ||
-        name.includes("福爾摩沙");
-    }
-
     roadNameLatestAppliedSeq = seq;
 
-    const label = document.getElementById("roadLabel");
-    const icon = document.querySelector(".rect4 .icon");
-
     if(bestTags){
-      if(label) label.innerText = best;
+      setRoadLabel(best, bestTags); // 國道會顯示成「福爾摩沙高速公路 國道3號」＋標誌
     }else{
       // 10 公尺內查不到有名字的道路:不要直接蓋成「未知道路」,改用備援
       applyRoadNameFallback();
-    }
-
-    if(icon){
-      icon.style.display = isFreeway ? "block" : "none";
     }
 
   }catch(e){
