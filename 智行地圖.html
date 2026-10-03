@@ -7952,9 +7952,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           'text-field': ['match', ['get', 'ref'], '1', FW['1'], '3', FW['3'], '4', FW['4'], '5', FW['5'], ''],
           'text-font': ['Noto Sans Bold'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 14, 13],
-          // 名稱沿著道路方向、放在道路旁邊(不壓在路上)；永遠正著讀，不會上下顛倒；不平貼在地面上
-          'text-anchor': 'center',
-          'text-offset': [0, -1.8],
+          // 名稱沿著道路方向、接在國道標誌下方(順著道路往下排)；永遠正著讀，不會上下顛倒；不平貼在地面上
+          'text-anchor': 'left',
+          'text-offset': [1.4, 0],
           'text-rotation-alignment': 'map',
           'text-pitch-alignment': 'viewport',
           'text-keep-upright': true,
