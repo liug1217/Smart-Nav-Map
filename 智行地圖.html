@@ -2208,6 +2208,7 @@ function _onceOn(m, type, layer, fn) {
   // 變成自己呼叫自己（無限遞迴），導致開始導航時丟出例外、跳出「路線規劃失敗」。
   function clearSpeedCameraVoiceState() {
     speedCameraVoiceState.clear();
+    _camTarget = null; _camRouteList = null; _camPath = null; // 測速照相的鎖定目標也重找
   }
 
   // 首次提醒念的距離：取最接近的 100 公尺整數倍(例如 300 → 300、430 → 400、460 → 500)，最少 100
@@ -2218,7 +2219,7 @@ function _onceOn(m, type, layer, fn) {
     return lead + '有測速照相，' + SPEED_CAM_TYPE + (p.limit ? '，限速' + p.limit + '公里' : '') + '。';
   }
 
-  // 單一支測速照相的播報狀態機(每次 GPS 更新呼叫)。distanceMeters 為直線距離
+  // 單一支測速照相的播報狀態機(每次 GPS 更新呼叫，只會給目前鎖定的那支)。distanceMeters 為沿路線/道路的剩餘距離
   function handleSpeedCameraApproach(cameraId, p, distanceMeters, currentSpeedKmh) {
     const state = getSpeedCameraState(cameraId);
     if (state.passed) return;
@@ -4612,21 +4613,148 @@ function _onceOn(m, type, layer, fn) {
   // 全覽按鈕也要考慮目前是否有規劃中的真實導航路線(優先顯示這個,而不是GPS軌跡)
   window.plannedRouteCoordinates = plannedRouteCoordinates;
 
+  // ── 測速照相：選哪一支、距離多遠 ─────────────────────────────────────────────
+  // 不用「GPS 到照相機的直線距離」：旁邊平行道路、對向車道、不會開進去的匝道上的照相機直線距離可能很近。
+  // 兩種模式：
+  //  有導航(而且車子在路線上)：照相機要在導航路線上、在車子前方、方向符合 → 距離 = 沿路線的距離
+  //  沒導航(或暫時偏離路線)：從目前所在道路沿行駛方向往前接出「前方的路」，照相機要在這條路上 → 距離 = 沿這條路的距離
+  // 選定一支後就鎖定它，只播報這一支，直到通過、確定離開這條路(連續幾次都不在前方的路上)才找下一支；
+  // 以前每支 1.6 公里內的照相機各自播報，兩支交錯就變成「300→400→200→300」
+  const CAM_ON_ROAD_M = 30;      // 照相機離路線/道路中線 30 公尺內才算在這條路上(照相機桿子在路邊)
+  const CAM_DIR_TOL = 70;        // 照相機取締方向與行駛方向相差 70 度內才算同向
+  const CAM_LOOK_M = SPEED_CAM_PRELOAD_KM * 1000; // 往前找 1.6 公里
+  const CAM_LOST_LIMIT = 3;      // 鎖定的照相機連續 3 次不在前方的路上 → 放掉
+  const CAM_PATH_REFRESH_MS = 3000;
+  // (用 var：開始/結束導航時 clearSpeedCameraVoiceState 會重設，它定義在前面)
+  var _camTarget = null;         // { id, f, missed, rem }
+  var _camRouteList = null;      // 導航路線上的照相機(每條路線算一次)：{ coords, list:[{ id, f, along }] }
+  var _camPath = null;           // 沒導航時前方的路：{ geom, t, mode, list }
+  var _camCtxKey = null;         // 目前用的是哪一條線(換路線/重新規劃時要重新確認鎖定的照相機)
+
+  // 照相機的取締方向(資料欄位 dir，例如「北向南」「往南」「南下」「西南向東北」「雙向」)→ 允許的行駛方位角清單；
+  // null = 雙向或看不出方向(「往大溪方向」這種地名)，都算符合
+  const CAM_COMPASS = { '東北': 45, '東南': 135, '西南': 225, '西北': 315, '北': 0, '東': 90, '南': 180, '西': 270 };
+  const _camDirCache = new Map();
+  function parseCamDir(dir) {
+    if (_camDirCache.has(dir)) return _camDirCache.get(dir);
+    const s = String(dir || '');
+    let out = [];
+    if (!/雙向|相向|多向|北南|南北向|東西向|^南北$|^東西$/.test(s)) {
+      const C = '(東北|東南|西南|西北|北|東|南|西)';
+      let m, re = new RegExp(C + '[向往]' + C, 'g');
+      while ((m = re.exec(s))) out.push(CAM_COMPASS[m[2]]);                 // 北向南、西南向東北：往後面那個方向開
+      if (!out.length && (m = new RegExp('往' + C).exec(s))) out.push(CAM_COMPASS[m[1]]); // 往南
+      if (!out.length && /北上/.test(s)) out.push(0);
+      if (!out.length && /南下/.test(s)) out.push(180);
+      if (!out.length) { re = new RegExp(C + '向', 'g'); while ((m = re.exec(s))) out.push(CAM_COMPASS[m[1]]); } // 南向 = 往南
+    }
+    // 兩個相反方向(例如「南向60北向70」)等於雙向
+    if (out.length > 1 && out.some(a => out.some(b => Math.abs(((a - b) % 360 + 540) % 360 - 180) >= 135))) out = [];
+    const r = out.length ? out : null;
+    _camDirCache.set(dir, r);
+    return r;
+  }
+  function camDirOk(p, travelBearing) {
+    const dirs = parseCamDir(p.dir);
+    if (!dirs) return true;
+    return dirs.some(d => Math.abs(((d - travelBearing) % 360 + 540) % 360 - 180) <= CAM_DIR_TOL);
+  }
+
+  // 一條線(導航路線或前方的路)的局部平面座標＋累積距離。不能用 getRouteGeom：它會重設導航吸附狀態
+  function camGeom(coords) {
+    const kx = 111320 * Math.cos(coords[0][1] * Math.PI / 180), ky = 110540;
+    const xy = coords.map(c => [c[0] * kx, c[1] * ky]);
+    const cum = [0];
+    for (let i = 1; i < xy.length; i++) cum.push(cum[i - 1] + Math.hypot(xy[i][0] - xy[i - 1][0], xy[i][1] - xy[i - 1][1]));
+    let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+    coords.forEach(c => { if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0]; if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1]; });
+    return { coords, kx, ky, xy, cum, total: cum[cum.length - 1], bbox: [w - 0.001, s - 0.001, e + 0.001, n + 0.001] };
+  }
+  // 線上的照相機：在線 30 公尺內、方向符合 → [{ id, f, along }](along = 照相機在線上的位置)
+  function camsOnLine(g) {
+    const data = window.speedCameraData;
+    if (!data || !data.features) return [];
+    const out = [];
+    data.features.forEach(f => {
+      const c = f.geometry.coordinates;
+      if (c[0] < g.bbox[0] || c[0] > g.bbox[2] || c[1] < g.bbox[1] || c[1] > g.bbox[3]) return;
+      const pr = projectOnRoute(g, c[1], c[0], 0, g.xy.length);
+      if (!pr || pr.dist > CAM_ON_ROAD_M) return;
+      const a = g.coords[pr.idx], b = g.coords[pr.idx + 1];
+      const travel = (Math.atan2((b[0] - a[0]) * g.kx, (b[1] - a[1]) * g.ky) * 180 / Math.PI + 360) % 360;
+      if (!camDirOk(f.properties || {}, travel)) return;  // 對向車道的照相機
+      out.push({ id: getSpeedCameraId(f), f, along: pr.along });
+    });
+    return out;
+  }
+
+  // 目前情境：車子在線上的位置(vAlong)＋線上的照相機。有導航且吸附在路線上 → 導航路線；否則 → 前方的路
+  function camContext(lat, lon, speedKmh) {
+    if (isNavigating && _snapState.snapped && _routeGeom && _routeGeom.coords === window.plannedRouteCoordinates) {
+      if (!_camRouteList || _camRouteList.coords !== _routeGeom.coords) {
+        _camRouteList = { coords: _routeGeom.coords, list: camsOnLine(camGeom(_routeGeom.coords)) };
+      }
+      return { mode: 'route', vAlong: _snapState.along, list: _camRouteList.list };
+    }
+    const vt = window._vehicleTarget;
+    if (!vt || typeof window._roadPathAhead !== 'function') return null;
+    const now = Date.now();
+    // 前方的路每 3 秒重接一次；車子偏離這條路 20 公尺以上(轉彎了)就馬上重接
+    let need = !_camPath || _camPath.mode !== 'road' || now - _camPath.t > CAM_PATH_REFRESH_MS;
+    let pr = null;
+    if (!need) {
+      pr = projectOnRoute(_camPath.geom, vt.lat, vt.lng, 0, _camPath.geom.xy.length);
+      need = !pr || pr.dist > 20 || _camPath.geom.total - pr.along < 600;
+    }
+    if (need) {
+      // 停著或很慢時車頭方向不可靠，不重接(沿用上一條)；完全沒有就等開起來
+      if (speedKmh < 8 && _camPath) { pr = pr || projectOnRoute(_camPath.geom, vt.lat, vt.lng, 0, _camPath.geom.xy.length); }
+      else {
+        const path = speedKmh >= 8 ? window._roadPathAhead(vt.lng, vt.lat, vt.bearing, CAM_LOOK_M + 100) : null;
+        if (!path || path.length < 2) { _camPath = null; return null; }
+        const g = camGeom(path);
+        _camPath = { geom: g, t: now, mode: 'road', list: camsOnLine(g) };
+        pr = projectOnRoute(g, vt.lat, vt.lng, 0, g.xy.length);
+      }
+    }
+    if (!_camPath || !pr) return null;
+    return { mode: 'road', vAlong: pr.along, list: _camPath.list };
+  }
+
   function checkSpeedCameraVoice(lat, lon, currentSpeedKmh){
     const data = window.speedCameraData;
     if (!data || !data.features) return;
+    const ctx = camContext(lat, lon, currentSpeedKmh);
+    // 只看前方：照相機位置 - 車子位置 > -20 公尺(剛過去一點點的也還算，讓「通過」能播出)
+    // 換了一條線(重新規劃路線、導航↔沒導航)：鎖定的照相機不在新的線上就立刻放掉，不等 3 次
+    const key = ctx ? (ctx.mode === 'route' ? _camRouteList : _camPath) : null;
+    const switched = key !== _camCtxKey && !(ctx && ctx.mode === 'road' && _camCtxKey && _camCtxKey.mode === 'road');
+    _camCtxKey = key;
+    const ahead = ctx ? ctx.list.map(c => ({ c, rem: c.along - ctx.vAlong }))
+                              .filter(x => x.rem > -20 && x.rem <= CAM_LOOK_M) : [];
 
-    let nearestLimit = null, nearestDist = Infinity;
-    data.features.forEach((f) => {
-      const [camLon, camLat] = f.geometry.coordinates;
-      const p = f.properties || {};
-      const d = calculateDistance(lat, lon, camLat, camLon); // 公里
-      if (d < nearestDist && d <= SPEED_CAM_WARN_KM) { nearestDist = d; nearestLimit = p.limit || null; }
-      if (!isNavigating || d > SPEED_CAM_PRELOAD_KM) return;
-      handleSpeedCameraApproach(getSpeedCameraId(f), p, d * 1000, currentSpeedKmh);
-    });
-    // 更新 currentSpeedLimit（供 updateDisplay 超速判斷用）
-    window.currentSpeedLimit = nearestLimit ? Number(nearestLimit) : null;
+    // 鎖定中的照相機：還在前方的路上就繼續用它；連續幾次不在(轉進別條路、離開路線)才放掉
+    if (_camTarget) {
+      const st = speedCameraVoiceState.get(_camTarget.id);
+      const hit = ahead.find(x => x.c.id === _camTarget.id);
+      if (st && st.passed) _camTarget = null;
+      else if (hit) { _camTarget.missed = 0; _camTarget.rem = hit.rem; }
+      else if (switched || ++_camTarget.missed >= CAM_LOST_LIMIT) _camTarget = null;
+    }
+    // 沒有鎖定的：找前方最近、還沒通過的那支
+    if (!_camTarget) {
+      const next = ahead.filter(x => x.rem > 0 && !(speedCameraVoiceState.get(x.c.id) || {}).passed)
+                        .sort((a, b) => a.rem - b.rem)[0];
+      if (next) _camTarget = { id: next.c.id, f: next.c.f, missed: 0, rem: next.rem };
+    }
+
+    // 只有鎖定的那支會播報；距離是沿路的剩餘距離(已經過去就當 0 → 觸發「通過」)
+    if (_camTarget && _camTarget.missed === 0 && (isNavigating || window._camVoiceFreeDrive !== false)) {
+      handleSpeedCameraApproach(_camTarget.id, _camTarget.f.properties || {}, Math.max(0, _camTarget.rem), currentSpeedKmh);
+    }
+    // 超速判斷用的速限：前方 1 公里內鎖定的那支照相機
+    window.currentSpeedLimit = _camTarget && _camTarget.rem <= SPEED_CAM_WARN_KM * 1000 && (_camTarget.f.properties || {}).limit
+      ? Number(_camTarget.f.properties.limit) : null;
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
@@ -8551,6 +8679,77 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (diff > 90) b = (b + 180) % 360;
     }
     return { lng: r.lng, lat: r.lat, bearing: b, cls: r.cls, d: r.d };
+  };
+
+  // 沒導航時「前方的路」：從車子所在的道路，沿行駛方向一路往前接，接到 maxM 公尺(測速照相用)。
+  // 走到一條線的盡頭時，接上「端點在這裡、轉角最小」的下一段(同一條路在圖磚邊界被切開、或接到下一段路)；
+  // 要轉超過 60 度(轉進路口的橫向道路)就停，只算「繼續直走會經過」的路。回傳 [[lng, lat], …](第一點是車子在路上的位置)
+  var PATH_JOIN_M = 3, PATH_MAX_TURN = 60;
+  window._roadPathAhead = function (lng, lat, bearing, maxM) {
+    var m = window.map;
+    if (!m || !m.getSource || !m.getSource(ROADS_SOURCE) || typeof bearing !== 'number') return null;
+    var feats;
+    try {
+      feats = m.querySourceFeatures(ROADS_SOURCE, { sourceLayer: 'transportation',
+        filter: ['match', ['get', 'class'], PROBE_CLASSES, true, false] });
+    } catch (e) { return null; }
+    var kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;
+    var lines = [];
+    feats.forEach(function (f) {
+      var g = f.geometry;
+      (g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).forEach(function (c) {
+        if (c.length >= 2) lines.push(c.map(function (p) { return [p[0] * kx, p[1] * ky]; }));
+      });
+    });
+    var angDiff = function (a, b) { return Math.abs(((a - b) % 360 + 540) % 360 - 180); };
+    var brg = function (a, b) { return (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180 / Math.PI + 360) % 360; };
+    var px = lng * kx, py = lat * ky;
+    // 起點：30 公尺內、方向跟車頭一致(不管道路畫的方向)的最近路段
+    var best = null;
+    lines.forEach(function (c, li) {
+      for (var j = 1; j < c.length; j++) {
+        var a = c[j - 1], b = c[j], dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy;
+        if (!l) continue;
+        var t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / l));
+        var d = Math.hypot(px - a[0] - t * dx, py - a[1] - t * dy);
+        if (d > 30) continue;
+        var sb = brg(a, b), fwd = angDiff(sb, bearing) <= 90;
+        if (Math.min(angDiff(sb, bearing), angDiff((sb + 180) % 360, bearing)) > 45) continue;
+        if (!best || d < best.d) best = { li: li, j: j, t: t, d: d, fwd: fwd, pt: [a[0] + t * dx, a[1] + t * dy] };
+      }
+    });
+    if (!best) return null;
+    var out = [best.pt], total = 0, used = {}, cur = lines[best.li], idx = best.fwd ? best.j : best.j - 1, dir = best.fwd ? 1 : -1;
+    used[best.li] = true;
+    var last = best.pt, heading = best.fwd ? brg(cur[best.j - 1], cur[best.j]) : brg(cur[best.j], cur[best.j - 1]);
+    for (var guard = 0; guard < 400 && total < maxM; guard++) {
+      // 沿目前這條線走到底
+      while (idx >= 0 && idx < cur.length && total < maxM) {
+        var p = cur[idx];
+        var seg = Math.hypot(p[0] - last[0], p[1] - last[1]);
+        if (seg > 0.01) { heading = brg(last, p); total += seg; out.push(p); last = p; }
+        idx += dir;
+      }
+      if (total >= maxM) break;
+      // 接下一段：端點(或線上任一頂點)在這裡，往外走的方向跟目前方向最接近
+      var next = null;
+      for (var li = 0; li < lines.length; li++) {
+        if (used[li]) continue;
+        var c = lines[li];
+        for (var k = 0; k < c.length; k++) {
+          if (Math.abs(c[k][0] - last[0]) > PATH_JOIN_M || Math.abs(c[k][1] - last[1]) > PATH_JOIN_M) continue;
+          [1, -1].forEach(function (dd) {
+            var q = c[k + dd];
+            if (!q) return;
+            var turn = angDiff(brg(c[k], q), heading);
+            if (turn <= PATH_MAX_TURN && (!next || turn < next.turn)) next = { li: li, k: k, dd: dd, turn: turn };
+          });
+        }
+      }
+      if (!next) break;
+      used[next.li] = true; cur = lines[next.li]; idx = next.k + next.dd; dir = next.dd;
+    }
+    return out.map(function (p) { return [p[0] / kx, p[1] / ky]; });
   };
 
   // 150 公尺內最近的測速照相速限(太遠的可能是隔壁另一條路的)
