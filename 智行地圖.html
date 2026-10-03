@@ -7952,11 +7952,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           'text-field': ['match', ['get', 'ref'], '1', FW['1'], '3', FW['3'], '4', FW['4'], '5', FW['5'], ''],
           'text-font': ['Noto Sans Bold'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 14, 13],
-          // 名稱平貼在道路上、沿著道路方向排(地圖轉動或傾斜時跟著道路走)，放在標誌後面一點
+          // 名稱放在標誌右邊，保持水平(不跟著道路或地圖轉)
           'text-anchor': 'left',
           'text-offset': [1.3, 0],
-          'text-rotation-alignment': 'map',
-          'text-pitch-alignment': 'map',
+          'text-rotation-alignment': 'viewport',
+          'text-pitch-alignment': 'viewport',
           'text-keep-upright': true,
           'text-optional': true, // 名稱放不下就只顯示標誌
         },
