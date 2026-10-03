@@ -7949,26 +7949,19 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           'icon-image': ['concat', 'twhw-', ['get', 'ref']],
           'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.75, 14, 1],
           'icon-rotation-alignment': 'viewport',
-          'text-field': ['match', ['get', 'ref'], '1', FW['1'], '3', FW['3'], '4', FW['4'], '5', FW['5'], ''],
+          // 名稱後面空一格接「國道N號」，例如「福爾摩沙高速公路 國道3號」
+          'text-field': ['match', ['get', 'ref'],
+            '1', FW['1'] + ' 國道1號', '3', FW['3'] + ' 國道3號',
+            '4', FW['4'] + ' 國道4號', '5', FW['5'] + ' 國道5號', ''],
           'text-font': ['Noto Sans Bold'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 14, 13],
-          // 名稱沿著道路方向、接在國道標誌下方(順著道路排)；永遠正著讀，不會上下顛倒；不平貼在地面上。
-          // 用「名稱中心」往外推：半個名稱長度＋標誌半徑。字為了正著讀翻過來時也不會壓到標誌
-          // (以前用名稱開頭對齊，另一個方向的車道字翻過來後會蓋過標誌)
-          'text-anchor': 'center',
-          'text-offset': ['match', ['get', 'ref'],
-            '1', ['literal', [FW['1'].length / 2 + 1.6, 0]],
-            '3', ['literal', [FW['3'].length / 2 + 1.6, 0]],
-            '4', ['literal', [FW['4'].length / 2 + 1.6, 0]],
-            '5', ['literal', [FW['5'].length / 2 + 1.6, 0]],
-            ['literal', [5, 0]]],
+          // 名稱沿著道路方向、接在國道標誌下方(順著道路往下排)；永遠正著讀，不會上下顛倒；不平貼在地面上
+          'text-anchor': 'left',
+          'text-offset': [1.4, 0],
           'text-rotation-alignment': 'map',
           'text-pitch-alignment': 'viewport',
           'text-keep-upright': true,
           'text-optional': true, // 名稱放不下就只顯示標誌
-          // 國道上下行兩條車道很近：互相靠近時兩邊都照樣顯示，不自動藏掉其中一邊
-          'icon-allow-overlap': true,
-          'text-allow-overlap': true,
         },
         paint: { 'text-color': '#000000', 'text-halo-color': '#ffffff', 'text-halo-width': 2 }, // 黑字白框
       }, below ? below.id : undefined); // 在道路線上面、店家圖示和車子下面
