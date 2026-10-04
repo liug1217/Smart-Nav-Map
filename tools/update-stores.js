@@ -157,6 +157,11 @@ async function main() {
   const isDodo = e => /嘟嘟房|dodohome/i.test(txt(e));
   const isMcd = e => e.t['brand:wikidata'] === 'Q38076' || /麥當勞|McDonald/i.test(txt(e));
   const isBafang = e => /八方雲集/.test(txt(e));
+  // 家樂福 2026 年改名：量販店 → 萬家福、超市/便利購 → 樂家康(OpenStreetMap 上多半還寫家樂福)
+  const isCfSmall = e => /家樂福超市|便利購|樂家康|Carrefour\s*(Market|Express)/i.test(txt(e));
+  const isWjf = e => /萬家福|家樂福|Carrefour/i.test(txt(e)) && !isCfSmall(e);
+  const isLjk = e => isCfSmall(e);
+  const isShowba = e => /小北百貨|小北/.test(txt(e));
   const isHilife = e => e.t.brand === '萊爾富' || e.t['brand:wikidata'] === 'Q11326216' ||
                         (!e.t.brand && /萊爾富|Hi-?Life/i.test(e.t.name || ''));
 
@@ -183,6 +188,12 @@ async function main() {
       prefix: () => '麥當勞', suffix: '店', brandRe: /台灣麥當勞|麥當勞|McDonald'?s?|得來速|餐廳/gi },
     { file: 'bafang_data.js', v: 'bafangData', title: '八方雲集', osm: [fd, isBafang], manual: manual.bafang || [],
       prefix: () => '八方雲集', suffix: '店', brandRe: /八方雲集鍋貼水餃專賣店|八方雲集|鍋貼水餃專賣店|鍋貼水餃/gi },
+    { file: 'wanjiafu_data.js', v: 'wanjiafuData', title: '萬家福', osm: [sm, isWjf], manual: manual.wanjiafu || [],
+      prefix: () => '萬家福', suffix: '店', brandRe: /萬家福|家樂福量販店|家樂福|Carrefour/gi },
+    { file: 'lejiakang_data.js', v: 'lejiakangData', title: '樂家康', osm: [sm, isLjk], manual: manual.lejiakang || [],
+      prefix: () => '樂家康', suffix: '店', brandRe: /家樂福超市|家樂福便利購|便利購|家樂福|樂家康|Carrefour\s*(Market|Express)?/gi },
+    { file: 'showba_data.js', v: 'showbaData', title: '小北百貨', osm: [sm, isShowba], manual: manual.showba || [],
+      prefix: () => '小北百貨', suffix: '店', brandRe: /小北百貨|小北/gi },
   ];
   for (const j of jobs) {
     if (!j.osm[0]) { console.log(`${j.title}: 這次沒抓到資料，檔案維持原樣`); continue; }
