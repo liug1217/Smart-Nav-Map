@@ -3624,7 +3624,7 @@ function _onceOn(m, type, layer, fn) {
     if (maneuver.type === 'arrive') return '即將到達目的地';
     if (maneuver.type === 'roundabout' || maneuver.type === 'rotary') return '進入圓環';
     if (maneuver.type === 'merge') return '匯入車流';
-    if (maneuver.type === 'on ramp') return (maneuver.modifier && maneuver.modifier.includes('left') ? '靠左' : '靠右') + '上匝道';
+    if (maneuver.type === 'on ramp') return (maneuver.modifier && maneuver.modifier.includes('left') ? '靠左' : '靠右') + '上交流道';
     if (maneuver.type === 'off ramp') return (maneuver.modifier && maneuver.modifier.includes('left') ? '靠左' : '靠右') + '下匝道';
     if (maneuver.type === 'fork') return '請靠' + (maneuver.modifier && maneuver.modifier.includes('left') ? '左' : '右') + '行駛';
     if (maneuver.type === 'end of road') return '路底' + (maneuver.modifier && modMap[maneuver.modifier] ? modMap[maneuver.modifier] : '轉彎');
@@ -3666,7 +3666,10 @@ function _onceOn(m, type, layer, fn) {
     }
     if (m.type === 'on ramp') {
       const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
-      return isPrepare ? ('前方' + d + '準備' + side + '上匝道。') : (d + '後請' + side + '上匝道。');
+      // 跟下交流道一樣的說法，有路名就接在後面(例如「…上交流道，福爾摩沙高速公路。」)
+      return isPrepare
+        ? ('前方' + d + '準備' + side + '上交流道' + (sn ? '，' + sn : '') + '。')
+        : (d + '後請' + side + '上交流道' + (sn ? '，' + sn : '') + '。');
     }
     if (m.type === 'fork') {
       const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
@@ -3704,7 +3707,8 @@ function _onceOn(m, type, layer, fn) {
       return sn ? ('請靠右下交流道，' + sn + '。') : '請靠右下交流道。';
     }
     if (m.type === 'on ramp') {
-      return (m.modifier && m.modifier.includes('left')) ? '請靠左上匝道。' : '請靠右上匝道。';
+      const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
+      return '請' + side + '上交流道' + (sn ? '，' + sn : '') + '。';
     }
     if (m.type === 'fork') {
       return (m.modifier && m.modifier.includes('left')) ? '請靠左行駛。' : '請靠右行駛。';
