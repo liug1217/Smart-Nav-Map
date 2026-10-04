@@ -238,3 +238,14 @@ test('direction field parsing', () => {
   assert.equal(p('南向60北向70'), null); // 兩個相反方向 = 雙向
   assert.equal(p('往大溪方向'), null);   // 地名看不出方向 → 都算
 });
+
+test('direction data that contradicts the road (e.g. 往南 on an east-west road) is ignored, so the camera still speaks', () => {
+  // 我們往北開；照相機資料寫「往東」，跟這條南北向的路不同向 → 方向資料不可信，照樣播
+  const h = createHarness([camera('bad', 1, 50, '往東')]);
+  driveThrough(h, 1100, -100, 40);
+  assert.equal(h.texts()[0], '1公里後有測速照相，固定式，限速50公里。');
+  // 但方向跟道路同向、只是相反(真正的對向車道)時還是不播
+  const opp = createHarness([camera('opp', 1, 50, '往南')]);
+  driveThrough(opp, 1100, -100, 40);
+  assert.deepEqual(opp.texts(), []);
+});

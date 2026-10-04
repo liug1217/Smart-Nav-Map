@@ -3903,11 +3903,15 @@ function _onceOn(m, type, layer, fn) {
     preloadUpcomingNavVoices();
     const step = navSteps[currentStepIndex];
     const loc = step.maneuver.location; // [lon, lat]
-    const meters = calculateDistance(lat, lon, loc[1], loc[0]) * 1000;
     const isDepart = (step.maneuver.type === 'depart');
     const pos = navPositionOnRoute(lat, lon);
     const stepAlong = pos ? pos.stepAlong[currentStepIndex] : null;
     const passed = stepAlong != null && pos.along > stepAlong + NAV_STEP_PASSED_M;
+    // 到下一個轉彎的距離：沿著導航路線算(轉彎點在路線上的位置 - 車子在路線上的位置)，跟測速照相一樣。
+    // 以前用直線距離，道路彎的時候直線比實際要開的短，「前方 300 公尺」會提早喊；不在路線上(偏航中)才退回直線距離
+    const meters = stepAlong != null
+      ? Math.max(0, stepAlong - pos.along)
+      : calculateDistance(lat, lon, loc[1], loc[0]) * 1000;
 
     updateRect8Display(meters);
     updateNavTripInfo(meters, pos);
@@ -4659,7 +4663,12 @@ function _onceOn(m, type, layer, fn) {
   function camDirOk(p, travelBearing) {
     const dirs = parseCamDir(p.dir);
     if (!dirs) return true;
-    return dirs.some(d => Math.abs(((d - travelBearing) % 360 + 540) % 360 - 180) <= CAM_DIR_TOL);
+    const ad = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
+    // 資料寫的方向跟這條路根本不同向(例如東西向的路寫「往南下」，抽查約 1/10 的照相機這樣)：
+    // 方向資料不可信 → 兩個方向都播。以前直接當成對向不播，這些照相機就永遠沒有聲音
+    const axisOff = Math.min(...dirs.map(d => Math.min(ad(d, travelBearing), ad(d, travelBearing + 180))));
+    if (axisOff > 45) return true;
+    return dirs.some(d => ad(d, travelBearing) <= CAM_DIR_TOL);
   }
 
   // 一條線(導航路線或前方的路)的局部平面座標＋累積距離。不能用 getRouteGeom：它會重設導航吸附狀態
