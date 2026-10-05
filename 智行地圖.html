@@ -2181,7 +2181,7 @@ function _onceOn(m, type, layer, fn) {
   const SPEED_CAM_STAGES = [900,800,700,600,500,400,300,200,100];
   const SPEED_CAM_TYPE = '固定式';  // 目前資料都當固定式，之後擴充類型再從 properties 帶入
   const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
-  // 當前速度：首次提醒一定念；之後第一次超速時，在距離後面再念一次並接「您已超速」
+  // 當前速度：首次提醒和每一個距離倒數都念(不管有沒有超速)；超速時後面接「您已超速」(同一支只念一次)
   function speedCamSpeedText(speedKmh) { return '當前速度' + Math.round(speedKmh) + '公里'; }
   // 僅存在於本次導航。每支測速照相依穩定 cameraId 個別保存已播報階段。
   const speedCameraVoiceState = new Map();
@@ -2278,7 +2278,8 @@ function _onceOn(m, type, layer, fn) {
       // 距離播報只念距離。首次提醒時沒超速、之後才開始超速的，在「第一次」發現超速的那個距離後面補念一次，之後不再念
       const addOverSpeed = overSpeed && !state.overSpeedAnnounced;
       if (addOverSpeed) state.overSpeedAnnounced = true;
-      speakQueue(addOverSpeed ? [stage + '公尺', speedCamSpeedText(currentSpeedKmh), '您已超速'] : [stage + '公尺'],
+      // 「900公尺」→「當前速度95公里」→(第一次超速)「您已超速」
+      speakQueue([stage + '公尺', speedCamSpeedText(currentSpeedKmh), addOverSpeed ? '您已超速' : null],
                  { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
       if (stage <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
     }

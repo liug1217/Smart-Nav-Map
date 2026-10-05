@@ -63,7 +63,7 @@ test('full approach: intro, every 100m multiple once, then chime + 您已通過 
   driveThrough(h, 1100, -100, 50);
   assert.deepEqual(h.texts(), [
     '1公里後有測速照相，固定式，限速60公里。|當前速度50公里',
-    '900公尺', '800公尺', '700公尺', '600公尺', '500公尺', '400公尺', '300公尺', '200公尺', '100公尺',
+    '900公尺|當前速度50公里', '800公尺|當前速度50公里', '700公尺|當前速度50公里', '600公尺|當前速度50公里', '500公尺|當前速度50公里', '400公尺|當前速度50公里', '300公尺|當前速度50公里', '200公尺|當前速度50公里', '100公尺|當前速度50公里',
     '<chime>|您已通過',
   ]);
   // 通過後在附近漂移不會再播
@@ -74,22 +74,22 @@ test('full approach: intro, every 100m multiple once, then chime + 您已通過 
 test('never announces non-multiples of 100 such as 960/850/750', () => {
   const h = createHarness([camera('A', 1)]);
   for (let m = 1000; m >= 0; m -= 7) h.run(0, 1 - m / 1000, 80);
-  const distances = h.texts().filter(t => /^\d+公尺$/.test(t)).map(t => parseInt(t, 10));
+  const distances = h.texts().filter(t => /^\d+公尺\|當前速度\d+公里$/.test(t)).map(t => parseInt(t, 10));
   assert.deepEqual(distances, [900, 800, 700, 600, 500, 400, 300, 200, 100]);
 });
 
-test('over the limit: 您已超速 is added to the intro only, not repeated on every distance', () => {
+test('over the limit: 您已超速 is added to the intro only; distances still say 當前速度', () => {
   const h = createHarness([camera('A', 1, 60)]);
   h.run(0, 0.02, 75); // 980m
   h.run(0, 0.11, 75); // 890m
   h.run(0, 0.21, 75); // 790m
-  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|當前速度75公里|您已超速', '900公尺', '800公尺']);
+  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|當前速度75公里|您已超速', '900公尺|當前速度75公里', '800公尺|當前速度75公里']);
 });
 
 test('GPS drift cannot replay a completed 900m stage', () => {
   const h = createHarness([camera('A', 1)]);
   [0, 0.08, 0.12, 0.07, 0.15].forEach(lon => h.run(0, lon, 80)); // 1000→920→880→930→850m
-  assert.deepEqual(h.texts().slice(1), ['900公尺']);
+  assert.deepEqual(h.texts().slice(1), ['900公尺|當前速度80公里']);
 });
 
 test('a large GPS jump announces only the current 100m stage', () => {
@@ -98,7 +98,7 @@ test('a large GPS jump announces only the current 100m stage', () => {
   h.run(0, 0.3, 80); // 1000→700m
   h.run(0, 0.31, 80);
   h.run(0, 0.41, 80); // 590m
-  assert.deepEqual(h.texts().slice(1), ['700公尺', '600公尺']);
+  assert.deepEqual(h.texts().slice(1), ['700公尺|當前速度80公里', '600公尺|當前速度80公里']);
 });
 
 test('navigation starting near a camera announces the current stage, not 1公里', () => {
@@ -107,7 +107,7 @@ test('navigation starting near a camera announces the current stage, not 1公里
   h.run(0, 0.58, 40);
   h.run(0, 0.61, 40); // 390m：400 已經在首次提醒念過，不重念
   h.run(0, 0.71, 40); // 290m
-  assert.deepEqual(h.texts(), ['400公尺後有測速照相，固定式，限速50公里。|當前速度40公里', '300公尺']);
+  assert.deepEqual(h.texts(), ['400公尺後有測速照相，固定式，限速50公里。|當前速度40公里', '300公尺|當前速度40公里']);
 });
 
 test('pass is detected when GPS skips over the 30m circle at speed', () => {
@@ -120,7 +120,7 @@ test('distance and pass announcements share a key so a stale distance is replace
   const h = createHarness([camera('A', 1)]);
   driveThrough(h, 1000, -40, 20);
   const pass = h.events.find(e => e.text === '<chime>|您已通過');
-  const hundred = h.events.find(e => e.text === '100公尺');
+  const hundred = h.events.find(e => e.text === '100公尺|當前速度20公里');
   assert.equal(pass.opts.key, hundred.opts.key);
   assert.ok(hundred.opts.maxAgeMs > 0);
   assert.notEqual(h.events[0].opts.key, hundred.opts.key); // 首次提醒不會被距離播報取代
@@ -150,20 +150,20 @@ test('reported sequence: speeding from 300m gives intro+您已超速, then only 
   driveThrough(h, 300, -60, 120, 10); // 一路超速(120 > 100)開過照相機
   assert.deepEqual(h.texts(), [
     '300公尺後有測速照相，固定式，限速100公里。|當前速度120公里|您已超速',
-    '200公尺',
-    '100公尺',
+    '200公尺|當前速度120公里',
+    '100公尺|當前速度120公里',
     '<chime>|您已通過',
   ]);
   assert.equal(h.texts().filter(t => t.includes('您已超速')).length, 1);
 });
 
-test('starting to speed after the intro adds 您已超速 once, to the next distance only', () => {
+test('every distance says 當前速度; 您已超速 is added once, to the first speeding distance', () => {
   const h = createHarness([camera('A', 1, 60)]);
   h.run(0, 0.02, 50);  // 980m 沒超速
   h.run(0, 0.31, 80);  // 690m 開始超速
   h.run(0, 0.41, 85);  // 590m 還是超速
   h.run(0, 0.51, 90);  // 490m
-  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|當前速度50公里', '700公尺|當前速度80公里|您已超速', '600公尺', '500公尺']);
+  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|當前速度50公里', '700公尺|當前速度80公里|您已超速', '600公尺|當前速度85公里', '500公尺|當前速度90公里']);
 });
 
 test('never says the bare word 通過, and GPS drift after passing does not replay 您已通過', () => {
@@ -177,7 +177,9 @@ test('never says the bare word 通過, and GPS drift after passing does not repl
 test('only whole hundreds are ever spoken as distances, each at most once', () => {
   const h = createHarness([camera('A', 1)]);
   for (let m = 1000; m >= 0; m -= 3) h.run(0, 1 - m / 1000, 90);
-  const d = h.texts().filter(t => /^\d+公尺$/.test(t));
+  const spoken = h.texts().filter(t => /^\d+公尺/.test(t));
+  assert.ok(spoken.every(t => t.endsWith('|當前速度90公里')));
+  const d = spoken.map(t => t.split('|')[0]);
   assert.deepEqual(d, ['900公尺', '800公尺', '700公尺', '600公尺', '500公尺', '400公尺', '300公尺', '200公尺', '100公尺']);
   assert.equal(new Set(d).size, d.length);
 });
