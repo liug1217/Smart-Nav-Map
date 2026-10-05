@@ -2181,7 +2181,7 @@ function _onceOn(m, type, layer, fn) {
   const SPEED_CAM_STAGES = [900,800,700,600,500,400,300,200,100];
   const SPEED_CAM_TYPE = '固定式';  // 目前資料都當固定式，之後擴充類型再從 properties 帶入
   const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
-  // 當前速度：首次提醒和每一個距離倒數都念(不管有沒有超速)；超速時後面接「您已超速」(同一支只念一次)
+  // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」；距離倒數只念距離
   function speedCamSpeedText(speedKmh) { return '當前速度' + Math.round(speedKmh) + '公里'; }
   // 僅存在於本次導航。每支測速照相依穩定 cameraId 個別保存已播報階段。
   const speedCameraVoiceState = new Map();
@@ -2200,8 +2200,7 @@ function _onceOn(m, type, layer, fn) {
   function getSpeedCameraState(cameraId) {
     let state = speedCameraVoiceState.get(cameraId);
     if (!state) {
-      // overSpeedAnnounced：同一支測速照相「您已超速」只念一次(不跟著每個距離重念)
-      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false, overSpeedAnnounced: false };
+      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false };
       speedCameraVoiceState.set(cameraId, state);
     }
     return state;
@@ -2263,7 +2262,6 @@ function _onceOn(m, type, layer, fn) {
       SPEED_CAM_STAGES.forEach(stage => { if (distanceMeters <= stage) state.stages.add(stage); });
       // 首次提醒已經念了「300公尺後」，300 這個距離就算念過，不會馬上又念一次「300公尺」
       if (distanceMeters <= 900) { const said = speedCamIntroMeters(distanceMeters); SPEED_CAM_STAGES.forEach(s => { if (s >= said) state.stages.add(s); }); }
-      if (overSpeed) state.overSpeedAnnounced = true;
       // 「1公里後有測速照相，固定式，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
       speakQueue([speedCamIntroText(p, distanceMeters), speedCamSpeedText(currentSpeedKmh), overSpeed ? '您已超速' : null],
                  { key: 'speedcam-intro:' + cameraId });
@@ -2275,12 +2273,8 @@ function _onceOn(m, type, layer, fn) {
     const stage = crossed[crossed.length - 1];
     if (stage != null) {
       SPEED_CAM_STAGES.forEach(s => { if (s >= stage) state.stages.add(s); });
-      // 距離播報只念距離。首次提醒時沒超速、之後才開始超速的，在「第一次」發現超速的那個距離後面補念一次，之後不再念
-      const addOverSpeed = overSpeed && !state.overSpeedAnnounced;
-      if (addOverSpeed) state.overSpeedAnnounced = true;
-      // 「900公尺」→「當前速度95公里」→(第一次超速)「您已超速」
-      speakQueue([stage + '公尺', speedCamSpeedText(currentSpeedKmh), addOverSpeed ? '您已超速' : null],
-                 { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
+      // 距離倒數只念距離(不念當前速度、不念您已超速)：句子短，高速時 100 公尺一段也念得完
+      speakQueue([stage + '公尺'], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
       if (stage <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
     }
   }
