@@ -2171,7 +2171,7 @@ function _onceOn(m, type, layer, fn) {
   }
 
   // ===== 🔊 測速照相語音播報 =====
-  // 流程：進入 1 公里 → 「1公里後有測速照相，固定式，限速XX公里。」(超速再加「您已超速，目前速度XX公里」)
+  // 流程：進入 1 公里 → 「1公里後有測速照相，固定式，限速XX公里。」(超速再加「您已超速，當前速度XX公里」)
   //       → 每跨進一個 100 公尺整數倍區間念一次「900公尺」…「100公尺」(只念整百，不念 960/850 這種實際距離)
   //       → 抵達測速照相位置：專用提示音 → 「您已通過」
   //       「您已超速」同一支測速照相只念一次(首次提醒時已超速就跟在首次提醒後；之後才超速就跟在下一個距離後)
@@ -2182,9 +2182,9 @@ function _onceOn(m, type, layer, fn) {
   const SPEED_CAM_TYPE = '固定式';  // 目前資料都當固定式，之後擴充類型再從 properties 帶入
   const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
   const SPEED_CAM_OVER_KMH = 3;      // 速度 ≥ 速限 + 3 公里才算超速(例如限速 100，103 以上才提醒)
-  // 超速時念的兩句：「您已超速」(預先合成好的) +「目前速度112公里」
+  // 超速時念的兩句：「您已超速」(預先合成好的) +「當前速度112公里」
   function speedCamOverSpeedItems(speedKmh) {
-    return ['您已超速', '目前速度' + Math.round(speedKmh) + '公里'];
+    return ['您已超速', '當前速度' + Math.round(speedKmh) + '公里'];
   }
   // 僅存在於本次導航。每支測速照相依穩定 cameraId 個別保存已播報階段。
   const speedCameraVoiceState = new Map();
