@@ -83,7 +83,7 @@ test('over the limit: 您已超速 is added to the intro only, not repeated on e
   h.run(0, 0.02, 75); // 980m
   h.run(0, 0.11, 75); // 890m
   h.run(0, 0.21, 75); // 790m
-  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|您已超速', '900公尺', '800公尺']);
+  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|您已超速|目前速度75公里', '900公尺', '800公尺']);
 });
 
 test('GPS drift cannot replay a completed 900m stage', () => {
@@ -149,7 +149,7 @@ test('reported sequence: speeding from 300m gives intro+您已超速, then only 
   const h = createHarness([camera('A', 1, 100)]);
   driveThrough(h, 300, -60, 120, 10); // 一路超速(120 > 100)開過照相機
   assert.deepEqual(h.texts(), [
-    '300公尺後有測速照相，固定式，限速100公里。|您已超速',
+    '300公尺後有測速照相，固定式，限速100公里。|您已超速|目前速度120公里',
     '200公尺',
     '100公尺',
     '<chime>|您已通過',
@@ -163,7 +163,7 @@ test('starting to speed after the intro adds 您已超速 once, to the next dist
   h.run(0, 0.31, 80);  // 690m 開始超速
   h.run(0, 0.41, 85);  // 590m 還是超速
   h.run(0, 0.51, 90);  // 490m
-  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。', '700公尺|您已超速', '600公尺', '500公尺']);
+  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。', '700公尺|您已超速|目前速度80公里', '600公尺', '500公尺']);
 });
 
 test('never says the bare word 通過, and GPS drift after passing does not replay 您已通過', () => {
@@ -248,4 +248,14 @@ test('direction data that contradicts the road (e.g. 往南 on an east-west road
   const opp = createHarness([camera('opp', 1, 50, '往南')]);
   driveThrough(opp, 1100, -100, 40);
   assert.deepEqual(opp.texts(), []);
+});
+
+test('over-speed threshold is limit + 3 km/h, and the current speed is spoken', () => {
+  // 限速 100：102 不算超速、103 才算
+  const under = createHarness([camera('A', 1, 100)]);
+  under.run(0, 0.02, 102);
+  assert.deepEqual(under.texts(), ['1公里後有測速照相，固定式，限速100公里。']);
+  const over = createHarness([camera('B', 1, 100)]);
+  over.run(0, 0.02, 112.4);
+  assert.deepEqual(over.texts(), ['1公里後有測速照相，固定式，限速100公里。|您已超速|目前速度112公里']);
 });
