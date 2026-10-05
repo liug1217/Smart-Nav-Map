@@ -62,7 +62,7 @@ test('full approach: intro, every 100m multiple once, then chime + 您已通過 
   const h = createHarness([camera('A', 1, 60)]);
   driveThrough(h, 1100, -100, 50);
   assert.deepEqual(h.texts(), [
-    '1公里後有測速照相，固定式，限速60公里。',
+    '1公里後有測速照相，固定式，限速60公里。|當前速度50公里',
     '900公尺', '800公尺', '700公尺', '600公尺', '500公尺', '400公尺', '300公尺', '200公尺', '100公尺',
     '<chime>|您已通過',
   ]);
@@ -83,7 +83,7 @@ test('over the limit: 您已超速 is added to the intro only, not repeated on e
   h.run(0, 0.02, 75); // 980m
   h.run(0, 0.11, 75); // 890m
   h.run(0, 0.21, 75); // 790m
-  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|您已超速|當前速度75公里', '900公尺', '800公尺']);
+  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|當前速度75公里|您已超速', '900公尺', '800公尺']);
 });
 
 test('GPS drift cannot replay a completed 900m stage', () => {
@@ -107,7 +107,7 @@ test('navigation starting near a camera announces the current stage, not 1公里
   h.run(0, 0.58, 40);
   h.run(0, 0.61, 40); // 390m：400 已經在首次提醒念過，不重念
   h.run(0, 0.71, 40); // 290m
-  assert.deepEqual(h.texts(), ['400公尺後有測速照相，固定式，限速50公里。', '300公尺']);
+  assert.deepEqual(h.texts(), ['400公尺後有測速照相，固定式，限速50公里。|當前速度40公里', '300公尺']);
 });
 
 test('pass is detected when GPS skips over the 30m circle at speed', () => {
@@ -149,7 +149,7 @@ test('reported sequence: speeding from 300m gives intro+您已超速, then only 
   const h = createHarness([camera('A', 1, 100)]);
   driveThrough(h, 300, -60, 120, 10); // 一路超速(120 > 100)開過照相機
   assert.deepEqual(h.texts(), [
-    '300公尺後有測速照相，固定式，限速100公里。|您已超速|當前速度120公里',
+    '300公尺後有測速照相，固定式，限速100公里。|當前速度120公里|您已超速',
     '200公尺',
     '100公尺',
     '<chime>|您已通過',
@@ -163,7 +163,7 @@ test('starting to speed after the intro adds 您已超速 once, to the next dist
   h.run(0, 0.31, 80);  // 690m 開始超速
   h.run(0, 0.41, 85);  // 590m 還是超速
   h.run(0, 0.51, 90);  // 490m
-  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。', '700公尺|您已超速|當前速度80公里', '600公尺', '500公尺']);
+  assert.deepEqual(h.texts(), ['1公里後有測速照相，固定式，限速60公里。|當前速度50公里', '700公尺|當前速度80公里|您已超速', '600公尺', '500公尺']);
 });
 
 test('never says the bare word 通過, and GPS drift after passing does not replay 您已通過', () => {
@@ -209,7 +209,7 @@ test('opposite-direction camera is ignored; same-direction one is announced', ()
   assert.deepEqual(opp.texts(), []);
   const same = createHarness([camera('same', 1, 60, '南向北')]);
   driveThrough(same, 1100, -100, 50);
-  assert.equal(same.texts()[0], '1公里後有測速照相，固定式，限速60公里。');
+  assert.equal(same.texts()[0], '1公里後有測速照相，固定式，限速60公里。|當前速度50公里');
 });
 
 test('locked camera is kept while a side-road camera comes within 50 m straight-line', () => {
@@ -243,19 +243,21 @@ test('direction data that contradicts the road (e.g. 往南 on an east-west road
   // 我們往北開；照相機資料寫「往東」，跟這條南北向的路不同向 → 方向資料不可信，照樣播
   const h = createHarness([camera('bad', 1, 50, '往東')]);
   driveThrough(h, 1100, -100, 40);
-  assert.equal(h.texts()[0], '1公里後有測速照相，固定式，限速50公里。');
+  assert.equal(h.texts()[0], '1公里後有測速照相，固定式，限速50公里。|當前速度40公里');
   // 但方向跟道路同向、只是相反(真正的對向車道)時還是不播
   const opp = createHarness([camera('opp', 1, 50, '往南')]);
   driveThrough(opp, 1100, -100, 40);
   assert.deepEqual(opp.texts(), []);
 });
 
-test('over-speed threshold is limit + 3 km/h, and the current speed is spoken', () => {
-  // 限速 100：102 不算超速、103 才算
+test('current speed is always spoken after the intro; over the limit adds 您已超速 after it', () => {
   const under = createHarness([camera('A', 1, 100)]);
-  under.run(0, 0.02, 102);
-  assert.deepEqual(under.texts(), ['1公里後有測速照相，固定式，限速100公里。']);
-  const over = createHarness([camera('B', 1, 100)]);
+  under.run(0, 0.02, 95);
+  assert.deepEqual(under.texts(), ['1公里後有測速照相，固定式，限速100公里。|當前速度95公里']);
+  const exact = createHarness([camera('B', 1, 100)]);
+  exact.run(0, 0.02, 100); // 剛好等於速限：不算超速
+  assert.deepEqual(exact.texts(), ['1公里後有測速照相，固定式，限速100公里。|當前速度100公里']);
+  const over = createHarness([camera('C', 1, 100)]);
   over.run(0, 0.02, 112.4);
-  assert.deepEqual(over.texts(), ['1公里後有測速照相，固定式，限速100公里。|您已超速|當前速度112公里']);
+  assert.deepEqual(over.texts(), ['1公里後有測速照相，固定式，限速100公里。|當前速度112公里|您已超速']);
 });
