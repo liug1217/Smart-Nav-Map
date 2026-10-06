@@ -930,6 +930,35 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-size:12px;
   font-weight:400;
 }
+/* 限速牌：速度計右邊、垂直置中對齊(速度計 76px，牌子 64px → 往下 6px) */
+.speedLimitSign{
+  position:absolute;
+  left:92px;
+  top:62px;
+  width:64px;
+  height:64px;
+  background:#FFFFFF;
+  border:6px solid #E53935;
+  border-radius:50%;
+  box-sizing:border-box;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:#000000;
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  line-height:1;
+  z-index:5;
+  pointer-events:none;
+  transition:top 0.38s cubic-bezier(0.32,0.72,0,1);
+}
+.speedLimitSign[hidden]{ display:none; }
+.speedLimitSign .sls-label{ font-size:10px; font-weight:600; margin-bottom:1px; }
+.speedLimitSign .sls-value{ font-size:22px; font-weight:800; }
+body.navigating .speedLimitSign{ top:83px; }
+/* 限速牌出現時「N人在線」會被擋到，暫時藏起來，牌子消失就回來 */
+body.speedLimitShown .onlineCapsule{ visibility:hidden; }
 
 
 
@@ -1344,6 +1373,7 @@ html, body {
   /* 橫式高度只有 ~390px:訊息區限高,往上不壓到左上角的速度計(可捲動看舊訊息) */
   .pttChatList{ max-height:calc(100vh - 350px); }
   .rect6,
+  .speedLimitSign,
   .onlineCapsule{
     margin-left:var(--land-safe-l);
   }
@@ -1504,6 +1534,11 @@ html, body {
 <div class="rect6" id="rect6">
   <div class="speed-value" id="rect6SpeedValue">0</div>
   <div class="speed-unit">km/h</div>
+</div>
+<!-- 速度計右邊的限速牌：前方 1 公里內有測速照相(有速限資料)才顯示 -->
+<div class="speedLimitSign" id="speedLimitSign" hidden>
+  <div class="sls-label">限速</div>
+  <div class="sls-value" id="speedLimitValue"></div>
 </div>
 
 <!-- 超速手機邊框紅色發亮 -->
@@ -4935,6 +4970,8 @@ function _onceOn(m, type, layer, fn) {
   }
 
   const _speedingGlowEl = document.getElementById('speedingGlow');
+  const _speedLimitSignEl = document.getElementById('speedLimitSign');
+  const _speedLimitValueEl = document.getElementById('speedLimitValue');
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
@@ -4943,6 +4980,13 @@ function _onceOn(m, type, layer, fn) {
       const isSpeeding = !!(lim && speed > lim);
       rect6El.classList.toggle('speeding', isSpeeding);
       if (_speedingGlowEl) _speedingGlowEl.classList.toggle('active', isSpeeding);
+      // 右邊限速牌：用同一個速限資料，沒有速限就不顯示(不顯示假數字)
+      const showLimit = !!(lim && rect6El.style.display !== 'none');
+      if (_speedLimitSignEl) {
+        if (showLimit) _speedLimitValueEl.innerText = Math.round(lim);
+        _speedLimitSignEl.hidden = !showLimit;
+        document.body.classList.toggle('speedLimitShown', showLimit);
+      }
     }
     // 導航中(已經規劃好真實路線)時,.info要顯示「全程距離/時間」,
     // 不能被這裡的GPS行程記錄(從0開始算)覆蓋掉
