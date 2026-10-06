@@ -979,7 +979,7 @@ body.navigating .earthquakeAlert{ top:218px; }
 /* ===== 翻牌時鐘效果(setFlipText)：距離、時間數字變動時那一位翻牌 =====
    前半段：舊字上半片往下翻到側面，下半片還是舊字；後半段：新字上半片出現，新字下半片從側面翻上來。
    上下兩片同一時間只會有一個字，背景透明也不會疊字 */
-.info, .arrivalText, .rect8Distance .num, .speedLimitSign .sls-dist{ font-variant-numeric:tabular-nums; }
+.info, .arrivalText, .rect8Distance .num, .speedLimitSign .sls-dist, #mapClockText{ font-variant-numeric:tabular-nums; }
 .flipCh{ position:relative; display:inline-block; white-space:pre; } /* pre：單獨一格的空白才不會被吃掉 */
 .flipCh.flipping > .fcBase{ visibility:hidden; }
 .fcPiece{ position:absolute; left:0; top:0; right:0; bottom:0; text-align:center; backface-visibility:hidden; }
@@ -6039,7 +6039,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       const h = String(now.getHours()).padStart(2,'0');
       const m = String(now.getMinutes()).padStart(2,'0');
       const s = String(now.getSeconds()).padStart(2,'0');
-      if(clockEl) clockEl.textContent = h + ':' + m + ':' + s;
+      setFlipText(clockEl, h + ':' + m + ':' + s); // 翻牌效果
     }
     tick();
     setInterval(tick, 1000);
