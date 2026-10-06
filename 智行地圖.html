@@ -930,15 +930,15 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-size:12px;
   font-weight:400;
 }
-/* 限速牌：速度計右邊、垂直置中對齊(速度計 76px，牌子 64px → 往下 6px) */
+/* 限速牌：速度計右邊、跟速度計一樣大(76px)、同一個高度；地圖上的測速照相圖示也是同一個樣子 */
 .speedLimitSign{
   position:absolute;
   left:92px;
-  top:62px;
-  width:64px;
-  height:64px;
+  top:56px;
+  width:76px;
+  height:76px;
   background:#FFFFFF;
-  border:6px solid #E53935;
+  border:7px solid #FF0000;
   border-radius:50%;
   box-sizing:border-box;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
@@ -954,9 +954,28 @@ body.navigating .earthquakeAlert{ top:218px; }
   transition:top 0.38s cubic-bezier(0.32,0.72,0,1);
 }
 .speedLimitSign[hidden]{ display:none; }
-.speedLimitSign .sls-label{ font-size:10px; font-weight:600; margin-bottom:1px; }
-.speedLimitSign .sls-value{ font-size:22px; font-weight:800; }
-body.navigating .speedLimitSign{ top:83px; }
+.speedLimitSign .sls-value{ font-size:30px; font-weight:800; }
+/* 限速牌正下方：離測速照相還有多遠(公尺/公里)；固定寬度置中，數字變化不會讓牌子移動 */
+.speedLimitSign .sls-dist{
+  position:absolute;
+  top:calc(100% + 11px);
+  left:50%;
+  transform:translateX(-50%);
+  min-width:68px;
+  padding:3px 8px;
+  box-sizing:border-box;
+  border-radius:12px;
+  background:#0E1A2D;
+  color:#FFFFFF;
+  font-size:13px;
+  font-weight:700;
+  text-align:center;
+  white-space:nowrap;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  font-variant-numeric:tabular-nums;
+}
+.speedLimitSign .sls-dist:empty{ display:none; }
+body.navigating .speedLimitSign{ top:77px; }
 /* 限速牌出現時「N人在線」會被擋到，暫時藏起來，牌子消失就回來 */
 body.speedLimitShown .onlineCapsule{ visibility:hidden; }
 
@@ -1537,8 +1556,8 @@ html, body {
 </div>
 <!-- 速度計右邊的限速牌：前方 1 公里內有測速照相(有速限資料)才顯示 -->
 <div class="speedLimitSign" id="speedLimitSign" hidden>
-  <div class="sls-label">限速</div>
   <div class="sls-value" id="speedLimitValue"></div>
+  <div class="sls-dist" id="speedLimitDist"></div>
 </div>
 
 <!-- 超速手機邊框紅色發亮 -->
@@ -4837,6 +4856,8 @@ function _onceOn(m, type, layer, fn) {
     // 超速判斷用的速限：前方 1 公里內鎖定的那支照相機
     window.currentSpeedLimit = _camTarget && _camTarget.rem <= SPEED_CAM_WARN_KM * 1000 && (_camTarget.f.properties || {}).limit
       ? Number(_camTarget.f.properties.limit) : null;
+    // 限速牌下面顯示的剩餘距離(同一支照相機、沿路線/道路量的距離)
+    window.currentSpeedCamDistance = window.currentSpeedLimit != null ? Math.max(0, _camTarget.rem) : null;
   }
 
   // ===== 🧪 測試用:在瀏覽器主控台手動模擬,不用真的開車過去 =====
@@ -4972,6 +4993,7 @@ function _onceOn(m, type, layer, fn) {
   const _speedingGlowEl = document.getElementById('speedingGlow');
   const _speedLimitSignEl = document.getElementById('speedLimitSign');
   const _speedLimitValueEl = document.getElementById('speedLimitValue');
+  const _speedLimitDistEl = document.getElementById('speedLimitDist');
   function updateDisplay(speed, elapsedMs) {
     if (window.simRunning) return;   // sim 已接管速度計
     if (speedPillNum) speedPillNum.innerText = Math.round(speed);
@@ -4983,7 +5005,11 @@ function _onceOn(m, type, layer, fn) {
       // 右邊限速牌：用同一個速限資料，沒有速限就不顯示(不顯示假數字)
       const showLimit = !!(lim && rect6El.style.display !== 'none');
       if (_speedLimitSignEl) {
-        if (showLimit) _speedLimitValueEl.innerText = Math.round(lim);
+        if (showLimit) {
+          _speedLimitValueEl.innerText = Math.round(lim);
+          const d = window.currentSpeedCamDistance;
+          _speedLimitDistEl.innerText = d == null ? '' : d >= 1000 ? (d / 1000).toFixed(1) + '公里' : Math.round(d / 10) * 10 + '公尺';
+        }
         _speedLimitSignEl.hidden = !showLimit;
         document.body.classList.toggle('speedLimitShown', showLimit);
       }
@@ -6506,7 +6532,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（Figma：50×50px、5px 紅框、normal 字重、陰影、底部三角指針）
+    // 為每個速限值畫紅框白底圓形圖示（50×50px、跟速度計旁的限速牌同樣式：#FF0000 紅框、粗體黑字；底部三角指針）
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
@@ -6523,13 +6549,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       // 紅框 5px
       cx.beginPath(); cx.arc(ox,oy,r-2.5,0,Math.PI*2);
       cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
-      // 速限文字 + 文字陰影
-      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
-      var fs=lim>=100?20:22;
-      cx.font='400 '+fs+'px -apple-system,"SF Pro",Arial,sans-serif';
+      // 速限文字(粗體)
+      var fs=lim>=100?18:20;
+      cx.font='800 '+fs+'px "SF Pro Display","SF Pro Text",Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy);
-      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy+1);
       // 底部三角指針
       cx.fillStyle='#FFFFFF';
       cx.beginPath();
