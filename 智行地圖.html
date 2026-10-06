@@ -5388,6 +5388,8 @@ map.on('load', function() {
   let _dispLng = null, _dispLat = null, _dispBearing = 0;
   // 吸附路線模式:目前顯示的沿路線距離,以及從非吸附位置銜接進路線時逐漸歸零的偏移量
   let _dispAlong = null, _routeGeomRef = null, _joinLng = 0, _joinLat = 0;
+  // 上一次真的畫出去的車子位置/方向、鏡頭留白(用來判斷這一幀要不要重畫)
+  let _lastLng = null, _lastLat = null, _lastBearing = 0, _lastPad = null;
 
   function _lerpAngle(a, b, t) {
     // 取最短角差（bearing 繞回處理）
@@ -5453,8 +5455,16 @@ map.on('load', function() {
       _dispBearing = _lerpAngle(_dispBearing, tgt.bearing, alpha);
     }
 
-    if (typeof window._updateCarMarkerRaw === 'function') {
-      window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
+    // 省電：車子位置/車頭方向跟上一幀幾乎一樣(停紅燈、停車、插值已經追上)就不重設車子圖示、也不叫地圖重畫。
+    // 原本每秒 60 次 setData + easeTo，停著也一直重畫地圖，很耗電、手機會發燙
+    const poseChanged = _lastLng === null ||
+      Math.abs(_dispLng - _lastLng) > 1e-9 || Math.abs(_dispLat - _lastLat) > 1e-9 ||
+      Math.abs(_lerpAngle(_lastBearing, _dispBearing, 1) - _lastBearing) > 0.01;
+    if (poseChanged) {
+      _lastLng = _dispLng; _lastLat = _dispLat; _lastBearing = _dispBearing;
+      if (typeof window._updateCarMarkerRaw === 'function') {
+        window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
+      }
     }
 
     // 地圖鏡頭跟隨
@@ -5497,6 +5507,15 @@ map.on('load', function() {
           }
         }
       }
+      // 車子沒動、沒有縮放/傾角要調、留白沒變，而且地圖本來就停在這個位置 → 這一幀不用重畫
+      // (地圖被別的程式移開時 center 會對不上，下一幀照樣拉回來，跟原本一樣)
+      const pad = cam.padding, lp = _lastPad;
+      const samePad = lp && pad && pad.top === lp.top && pad.bottom === lp.bottom && pad.left === lp.left && pad.right === lp.right;
+      const c = map.getCenter();
+      const atTarget = Math.abs(c.lng - _dispLng) < 1e-7 && Math.abs(c.lat - _dispLat) < 1e-7 &&
+        Math.abs(_lerpAngle(map.getBearing(), _dispBearing, 1) - map.getBearing()) < 0.01;
+      if (!poseChanged && cam.zoom === undefined && cam.pitch === undefined && samePad && atTarget) return;
+      _lastPad = pad;
       map.easeTo(cam);
     }
   }
