@@ -387,6 +387,46 @@ body.ptt-in-room .pttChat{ display:flex; }
   overflow:hidden;
   text-overflow:ellipsis;
 }
+/* 目前行駛國道的標誌(沿用 圖片/TWHW*.svg；不是國道或載入失敗就隱藏，橫幅回到原本樣子) */
+.rect8Fw{
+  height:36px;
+  width:auto;
+  max-width:44px;
+  object-fit:contain;
+  flex-shrink:0;
+  filter:drop-shadow(0px 4px 4px rgba(0,0,0,0.25));
+}
+.rect8Fw[hidden]{ display:none; }
+
+/* ===== 📷 監視器「🔴 即時」標示(固定在影像左上角，只有紅點呼吸) ===== */
+.cctvImgWrap{
+  position:relative;
+}
+.cctvLive{
+  position:absolute;
+  top:6px;
+  left:6px;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 7px;
+  border-radius:10px;
+  background:rgba(0,0,0,0.55);
+  color:#FFFFFF;
+  font-size:11px;
+  font-weight:700;
+  line-height:15px;
+  pointer-events:none;
+  z-index:1;
+}
+.cctvLive .dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#FF3B30;
+  animation:cctvLiveBreath 2s ease-in-out infinite;
+}
+@keyframes cctvLiveBreath{0%,100%{opacity:1;}50%{opacity:0.35;}}
 
 /* ===== 🔍 搜尋地點 ===== */
 .searchBarWrap{
@@ -731,31 +771,14 @@ body.navigating .coinToast{ top:155px; }
 @keyframes toastIn{from{opacity:0;transform:translateX(8px);}to{opacity:1;transform:none;}}
 @keyframes toastOut{to{opacity:0;transform:translateX(8px);}}
 
-/* ===== 超速：速度計紅框 + 數字閃爍 ===== */
-.rect6.speeding{
-  border-color:#FF0000 !important;
-}
+/* ===== 超速：只把速度數字變紅(圓圈背景、邊框都不變，不閃爍、不加紅框) ===== */
 .rect6.speeding .speed-value{
   color:#FF3B30!important;
-  animation:speedFlash 0.6s ease-in-out infinite;
 }
-@keyframes speedFlash{0%,100%{opacity:1;}50%{opacity:0.5;}}
 
-/* ===== 超速：手機邊框紅色發亮 ===== */
+/* 超速手機邊框紅色發亮：已停用(元素保留給既有程式切換 class，不再顯示) */
 #speedingGlow{
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  z-index:9998;
   display:none;
-}
-#speedingGlow.active{
-  display:block;
-  animation:speedGlowPulse 0.75s ease-in-out infinite;
-}
-@keyframes speedGlowPulse{
-  0%,100%{ box-shadow:inset 0 0 45px 14px rgba(255,0,0,0.42); }
-  50%{ box-shadow:inset 0 0 70px 26px rgba(255,0,0,0.82); }
 }
 
 /* ===== 金幣進度條 ===== */
@@ -1475,6 +1498,7 @@ html, body {
     <div class="rect8Distance" id="rect8Distance"></div>
     <div class="rect8Instruction" id="rect8Instruction"></div>
   </div>
+  <img class="rect8Fw" id="rect8Fw" alt="" hidden onerror="this.hidden=true;this.dataset.failed=this.getAttribute('src')">
 </div>
 
 <div class="rect6" id="rect6">
@@ -1547,7 +1571,10 @@ html, body {
 
 <div class="cctvOverlay" id="cctvOverlay">
   <div class="cctvPanelTitle" id="cctvPanelTitle">📷 即時影像</div>
-  <img class="cctvImage" id="cctvImage" alt="CCTV 即時影像">
+  <div class="cctvImgWrap">
+    <img class="cctvImage" id="cctvImage" alt="CCTV 即時影像">
+    <span class="cctvLive"><span class="dot"></span>即時</span>
+  </div>
   <div class="cctvStatus" id="cctvStatus">點選地圖上的監視器圖示開始觀看</div>
 </div>
 
@@ -5481,6 +5508,17 @@ function setRoadLabel(name, tags){
     icon.style.display = fw ? "block" : "none";
     if(fw) icon.style.backgroundImage = "url('" + fw.icon + "')";
   }
+  // 導航橫幅也顯示同一個國道標誌；載入失敗過的圖不再顯示(onerror 會記在 data-failed)
+  const fwImg = document.getElementById("rect8Fw");
+  if(fwImg){
+    if(fw && fwImg.dataset.failed !== fw.icon){
+      if(fwImg.getAttribute("src") !== fw.icon) fwImg.src = fw.icon;
+      fwImg.alt = "國道" + fw.no + "號";
+      fwImg.hidden = false;
+    }else{
+      fwImg.hidden = true;
+    }
+  }
 }
 
 function applyRoadNameFallback(){
@@ -6367,7 +6405,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         .setLngLat(coords)
         .setHTML(
           '<div style="font-size:12px;font-weight:700;color:#1A6ADB;margin-bottom:5px">'+label+'</div>'+
-          '<img id="'+uid+'" src="'+baseUrl+sep+'t='+Date.now()+'" style="width:300px;height:200px;object-fit:cover;display:block;background:#000">'+
+          '<div class="cctvImgWrap">'+
+            '<img id="'+uid+'" src="'+baseUrl+sep+'t='+Date.now()+'" style="width:300px;height:200px;object-fit:cover;display:block;background:#000">'+
+            '<span class="cctvLive"><span class="dot"></span>即時</span>'+
+          '</div>'+
           '<div style="color:#888;font-size:11px;margin-top:4px">點擊關閉即停止串流</div>'
         )
         .addTo(m);
