@@ -35,6 +35,8 @@ function createHarness() {
     getActiveThresholds: () => [500, 100], _setPanelState() {}, togglePoiLayers() {},
     NAV_TURN_VIEW_M: 200, NAV_TURN_HOLD_MS: 3000, localStorage: { getItem: () => 0 },
     setTimeout() {},
+    // 畫面上是翻牌效果；測試只看寫進去的文字
+    setFlipText(el, text) { if (el) el.innerText = String(text); },
   };
   vm.createContext(context);
   vm.runInContext(`

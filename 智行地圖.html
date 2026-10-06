@@ -975,6 +975,24 @@ body.navigating .earthquakeAlert{ top:218px; }
   font-variant-numeric:tabular-nums;
 }
 .speedLimitSign .sls-dist:empty{ display:none; }
+
+/* ===== 翻牌時鐘效果(setFlipText)：距離、時間數字變動時那一位翻牌 =====
+   前半段：舊字上半片往下翻到側面，下半片還是舊字；後半段：新字上半片出現，新字下半片從側面翻上來。
+   上下兩片同一時間只會有一個字，背景透明也不會疊字 */
+.info, .arrivalText, .rect8Distance .num, .speedLimitSign .sls-dist{ font-variant-numeric:tabular-nums; }
+.flipCh{ position:relative; display:inline-block; white-space:pre; } /* pre：單獨一格的空白才不會被吃掉 */
+.flipCh.flipping > .fcBase{ visibility:hidden; }
+.fcPiece{ position:absolute; left:0; top:0; right:0; bottom:0; text-align:center; backface-visibility:hidden; }
+.fcTopOld, .fcTopNew{ clip-path:inset(0 0 50% 0); }
+.fcBotOld, .fcBotNew{ clip-path:inset(50% 0 0 0); }
+.fcTopOld{ animation:fcTopOut 0.44s ease-in forwards; }
+.fcBotOld{ animation:fcHalfOut 0.44s linear forwards; }
+.fcTopNew{ animation:fcHalfIn 0.44s linear forwards; }
+.fcBotNew{ animation:fcBotIn 0.44s ease-out forwards; }
+@keyframes fcTopOut{ 0%{ transform:perspective(160px) rotateX(0deg); opacity:1; } 49.9%{ transform:perspective(160px) rotateX(-90deg); opacity:1; } 50%,100%{ opacity:0; } }
+@keyframes fcBotIn{ 0%,49.9%{ opacity:0; transform:perspective(160px) rotateX(90deg); } 50%{ opacity:1; transform:perspective(160px) rotateX(90deg); } 100%{ opacity:1; transform:perspective(160px) rotateX(0deg); } }
+@keyframes fcHalfOut{ 0%,49.9%{ opacity:1; } 50%,100%{ opacity:0; } }
+@keyframes fcHalfIn{ 0%,49.9%{ opacity:0; } 50%,100%{ opacity:1; } }
 body.navigating .speedLimitSign{ top:77px; }
 /* 限速牌出現時「N人在線」會被擋到，暫時藏起來，牌子消失就回來 */
 body.speedLimitShown .onlineCapsule{ visibility:hidden; }
@@ -1851,6 +1869,52 @@ function _onceOn(m, type, layer, fn) {
   if (m.__onceOn[k]) return;
   m.__onceOn[k] = true;
   m.on(type, layer, fn);
+}
+
+// ── 翻牌時鐘效果：只有變動的那一位數字會翻(上半片往下翻走 → 下半片翻上來)，其他字不動 ──
+// 用法：setFlipText(元素, '12分鐘 3.4公里')。字數或非數字的位置變了(例如 999→1000、公尺→公里)就直接換，不翻
+function setFlipText(el, text) {
+  if (!el) return;
+  text = String(text);
+  const prev = el._flipText;
+  if (prev === text) return;
+  const shape = s => s.replace(/\d/g, '0');
+  // 內容被別的程式直接改過(innerText=…)，舊的格子已經不在畫面上 → 重建
+  const stale = !el._flipCells || (el._flipCells.length && el._flipCells[0].parentNode !== el);
+  if (prev == null || stale || shape(prev) !== shape(text)) {
+    el.textContent = '';
+    el._flipCells = Array.from(text).map(ch => {
+      const cell = document.createElement('span');
+      cell.className = 'flipCh';
+      const base = document.createElement('span');
+      base.className = 'fcBase';
+      base.textContent = ch;
+      cell.appendChild(base);
+      el.appendChild(cell);
+      return cell;
+    });
+  } else {
+    const a = Array.from(prev), b = Array.from(text);
+    b.forEach((ch, i) => { if (ch !== a[i]) _flipCell(el._flipCells[i], a[i], ch); });
+  }
+  el._flipText = text;
+}
+function _flipCell(cell, from, to) {
+  clearTimeout(cell._flipT);
+  cell.querySelectorAll('.fcPiece').forEach(p => p.remove());
+  cell.firstChild.textContent = to; // 字寬由這個(隱藏中的)字撐住，翻的時候版面不會動
+  ['fcTopOld:' + from, 'fcBotOld:' + from, 'fcTopNew:' + to, 'fcBotNew:' + to].forEach(s => {
+    const [cls, ch] = s.split(':');
+    const p = document.createElement('span');
+    p.className = 'fcPiece ' + cls;
+    p.textContent = ch;
+    cell.appendChild(p);
+  });
+  cell.classList.add('flipping');
+  cell._flipT = setTimeout(() => {
+    cell.querySelectorAll('.fcPiece').forEach(p => p.remove());
+    cell.classList.remove('flipping');
+  }, 460);
 }
 </script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-geocoder/dist/maplibre-gl-geocoder.min.js"></script>
@@ -3875,10 +3939,10 @@ function _onceOn(m, type, layer, fn) {
         rect8Distance.innerText = '';
       } else if (distanceMeters >= 1000) {
         distText = (distanceMeters / 1000).toFixed(1) + ' 公里後';
-        rect8Distance.innerHTML = '<span class="num">' + (distanceMeters / 1000).toFixed(1) + '</span>公里後';
+        setBannerDistance((distanceMeters / 1000).toFixed(1), '公里後');
       } else {
         distText = Math.round(distanceMeters) + ' 公尺後';
-        rect8Distance.innerHTML = '<span class="num">' + Math.round(distanceMeters) + '</span>公尺後';
+        setBannerDistance(String(Math.round(distanceMeters)), '公尺後');
       }
     }
     if (typeof applyNavRoadNameIfPlaceholder === 'function') applyNavRoadNameIfPlaceholder();
@@ -3902,6 +3966,19 @@ function _onceOn(m, type, layer, fn) {
     return (window.__navArt = c.toDataURL());
   }
 
+  // 導航橫幅距離「<數字>公里後/公尺後」：數字用翻牌效果；單位換了(或之前被清空)就重建
+  function setBannerDistance(numText, unit){
+    const el = document.getElementById('rect8Distance');
+    if (!el) return;
+    let num = el.querySelector('.num');
+    if (!num || el.dataset.unit !== unit) {
+      el.innerHTML = '<span class="num"></span>' + unit;
+      el.dataset.unit = unit;
+      num = el.querySelector('.num');
+    }
+    setFlipText(num, numText);
+  }
+
   // 底部行程資訊(剩餘時間/公里 + 預計到達):起點與每次 GPS 更新都走這一個函式
   let _navTotals = null; // { dist: 全程公尺, dur: 全程秒 },每次(重新)規劃時更新
   function renderNavTripInfo(remainMeters, remainSec){
@@ -3910,12 +3987,12 @@ function _onceOn(m, type, layer, fn) {
       const min = Math.round(remainSec / 60);
       const h = Math.floor(min / 60);
       const m = min % 60;
-      infoEl.innerText = (h > 0 ? h + '小時' : '') + m + '分鐘 ' + (remainMeters / 1000).toFixed(1) + '公里';
+      setFlipText(infoEl, (h > 0 ? h + '小時' : '') + m + '分鐘 ' + (remainMeters / 1000).toFixed(1) + '公里');
     }
     const arrivalEl = document.getElementById('arrivalText');
     if (arrivalEl) {
       const eta = new Date(Date.now() + remainSec * 1000);
-      arrivalEl.innerText = String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + '到達';
+      setFlipText(arrivalEl, String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + '到達');
     }
   }
   // 剩餘距離 = 路線全長 - 車子投影在路線上的沿線距離(不依賴 currentStepIndex,轉彎點沒被觸發也不會卡住);
@@ -5008,7 +5085,7 @@ function _onceOn(m, type, layer, fn) {
         if (showLimit) {
           _speedLimitValueEl.innerText = Math.round(lim);
           const d = window.currentSpeedCamDistance;
-          _speedLimitDistEl.innerText = d == null ? '' : d >= 1000 ? (d / 1000).toFixed(1) + '公里' : Math.round(d / 10) * 10 + '公尺';
+          setFlipText(_speedLimitDistEl, d == null ? '' : d >= 1000 ? (d / 1000).toFixed(1) + '公里' : Math.round(d) + '公尺');
         }
         _speedLimitSignEl.hidden = !showLimit;
         document.body.classList.toggle('speedLimitShown', showLimit);
@@ -5017,7 +5094,7 @@ function _onceOn(m, type, layer, fn) {
     // 導航中(已經規劃好真實路線)時,.info要顯示「全程距離/時間」,
     // 不能被這裡的GPS行程記錄(從0開始算)覆蓋掉
     if (!isNavigating) {
-      infoElement.innerText = `${formatTime(elapsedMs)} ${totalDistance.toFixed(2)}公里`;
+      setFlipText(infoElement, `${formatTime(elapsedMs)} ${totalDistance.toFixed(2)}公里`);
     }
   }
 
