@@ -7622,7 +7622,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       // 全台 2 萬多個：放大到 14 級以上才顯示；圖示重疊時自動避開
       // 很多公廁就在店裡(麥當勞、加油站…)，圖示重疊時要讓店家 logo 顯示：放在所有店家圖層下面
       // (公廁資料是背景載入，通常最後才加，不指定位置會疊在最上面把店家擋掉)
-      var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|ntpcpark|pxmart|cpc)-points$/;
+      var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|ntpcpark|youbike|pxmart|cpc)-points$/;
       var below = (m.getStyle().layers || []).find(function(l){ return STORE_LAYERS.test(l.id); });
       m.addLayer({
         id: 'toilet-points',
@@ -7968,6 +7968,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script async src="lejiakang_data.js?v=osm1"></script>
 <script async src="showba_data.js?v=osm1"></script>
 <script async src="ntpc_parking_data.js?v=ntpc1"></script>
+<script async src="youbike_data.js?v=yb1"></script>
 <script>
 /* ===== 🏪 7-ELEVEN／OK超商／萊爾富／美廉社／Times／嘟嘟房／麥當勞／八方雲集圖層(資料由 tools/update-stores.js 產生) ===== */
 (function(){
@@ -7997,6 +7998,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       kw: /麥當勞|mcdonald|麥當當|麥麥/i },
     { key: 'bafang', data: 'bafangData', name: '八方雲集', logo: '圖片/bafang.jpg', color: '#1a1a1a', crop: [40, 40, 420, 420],
       kw: /八方雲集|八方/i },
+    // YouBike：地址用官方資料(不另外查)；點開時向官方查即時可借/可還數量
+    { key: 'youbike', data: 'youbikeData', name: 'YouBike', logo: '圖片/youbike.jpg', color: '#e88a00', crop: [30, 40, 387, 387],
+      useAddr: true, live: 'youbike', kw: /youbike|you ?bike|ubike|微笑單車|公共自行車|單車|腳踏車/i },
   ];
   window._storeBrands = BRANDS; // 搜尋也用這份清單
 
@@ -8044,13 +8048,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     title.textContent = name;
     var addr = document.createElement('div');
     addr.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
-    addr.textContent = '查詢地址中...';
+    addr.textContent = b.useAddr && f.properties.addr ? f.properties.addr : '查詢地址中...';
     var btn = document.createElement('button');
     btn.style.cssText = 'color:#fff;border:none;border-radius:8px;padding:8px 0;font-size:14px;cursor:pointer;width:100%;font-weight:600;background:' + b.color;
     btn.textContent = '🗺 導航到這裡';
-    box.appendChild(img); box.appendChild(title); box.appendChild(addr); box.appendChild(btn);
+    box.appendChild(img); box.appendChild(title); box.appendChild(addr);
+    if (b.live === 'youbike' && f.properties.no) box.appendChild(youbikeLive(f.properties.no));
+    box.appendChild(btn);
     var popup = new maplibregl.Popup({ offset: 20, closeButton: true }).setLngLat([lon, lat]).setDOMContent(box).addTo(m);
     btn.addEventListener('click', function () { popup.remove(); window._navigateToCoord(lat, lon, name, b.logo); });
+    if (b.useAddr && f.properties.addr) return; // 已經有官方地址，不用再查
     fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&accept-language=zh-TW')
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -8062,6 +8069,26 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           (d.display_name || '').split(',').slice(0, 2).join('，');
       })
       .catch(function () { addr.textContent = ''; });
+  }
+
+  // YouBike 即時：向官方查這一站目前可借幾台(含電輔車)、可還幾個空位
+  function youbikeLive(no) {
+    var row = document.createElement('div');
+    row.style.cssText = 'font-size:13px;font-weight:600;color:#333;margin:-4px 0 10px;line-height:1.5';
+    row.textContent = '查詢即時車數中...';
+    fetch('https://apis.youbike.com.tw/tw2/parkingInfo', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ station_no: [String(no)] })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var s = d && d.retVal && d.retVal.data && d.retVal.data[0];
+        if (!s) { row.textContent = '目前查不到即時車數'; return; }
+        if (Number(s.status) !== 1) { row.textContent = '這站暫停營運'; return; }
+        var e = (s.available_spaces_detail || {}).eyb;
+        row.textContent = '🚲 可借 ' + s.available_spaces + ' 台' + (e ? '(電輔 ' + e + ')' : '') + '　🅿️ 可還 ' + s.empty_spaces + ' 位';
+      })
+      .catch(function () { row.textContent = '目前查不到即時車數'; });
+    return row;
   }
 
   function initBrand(m, b) {
@@ -8104,7 +8131,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 道路資料(OpenFreeMap 的 transportation_name)：國道路段 class=motorway、ref=編號；交流道的 ref 是出口里程，名稱有「交流道」，要排除
   var FW = { '1': '中山高速公路', '3': '福爾摩沙高速公路', '4': '臺中環線（外環）', '5': '蔣渭水高速公路' };
   var LAYER = 'snm-fw-shields', SRC = 'snm-roads';
-  var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|ntpcpark|pxmart|cpc|toilet)-points$/;
+  var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|ntpcpark|youbike|pxmart|cpc|toilet)-points$/;
 
   function addIcons(m, done) {
     var keys = Object.keys(FW), left = keys.length;
@@ -8171,7 +8198,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 /* ===== 📝 地標回報：點開地標(超商、加油站、廁所、測速照相…)右下角「回報錯誤」 ===== */
 (function(){
   var LAYERS = ['fm-points', 'seven-points', 'okmart-points', 'hilife-points', 'times-points', 'simplemart-points', 'dodohome-points',
-                'mcd-points', 'bafang-points', 'wanjiafu-points', 'lejiakang-points', 'showba-points', 'ntpcpark-points', 'pxmart-points',
+                'mcd-points', 'bafang-points', 'wanjiafu-points', 'lejiakang-points', 'showba-points', 'ntpcpark-points', 'youbike-points', 'pxmart-points',
                 'cpc-points', 'toilet-points', 'speed-point'];
   var REASONS = [
     ['gone',      '這裡已經沒有了'],
