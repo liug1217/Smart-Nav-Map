@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { compactJs } = require('./compact-data');
 
 const ROOT = path.join(__dirname, '..');
 const BBOX = '(21.8,119.3,26.5,122.2)'; // 台澎金馬
@@ -126,11 +127,12 @@ function writeData(file, varName, title, list) {
   const r6 = v => Math.round(v * 1e6) / 1e6;
   const feats = list
     .sort((a, b) => b.lat - a.lat || a.lng - b.lng)
-    .map(s => `{type:'Feature',geometry:{type:'Point',coordinates:[${r6(s.lng)},${r6(s.lat)}]},properties:{name:${JSON.stringify(s.name)}}}`);
+    .map(s => ({ geometry: { coordinates: [r6(s.lng), r6(s.lat)] }, properties: { name: s.name } }));
   const out =
     `// ${title}：${list.length} 家。由 tools/update-stores.js 產生，不要手動改(手動的店請加在 tools/stores-manual.json)\n` +
     `// 資料來源：© OpenStreetMap 貢獻者(ODbL)＋手動加入\n` +
-    `window.${varName} = {\n  type: 'FeatureCollection',\n  features: [\n    ${feats.join(',\n    ')}\n  ]\n};\n`;
+    `// 精簡格式(tools/compact-data.js)，每筆：[經度, 緯度, 名稱]\n` +
+    compactJs(varName, ['name'], feats);
   fs.writeFileSync(path.join(ROOT, file), out);
 }
 

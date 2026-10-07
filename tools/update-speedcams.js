@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { compactJs } = require('./compact-data');
 
 const URL = 'https://opdadm.moi.gov.tw/api/v1/no-auth/resource/api/dataset/EA5E6FCD-B82D-43B7-A5CF-E9893253187E/resource/1FBE57A8-4B79-4D89-B01D-35D3E4C52BE5/download';
 
@@ -60,9 +61,9 @@ async function main() {
     if (!(lat > 21.5 && lat < 26.5 && lng > 118 && lng < 122.5)) { bad++; continue; } // 座標壞掉的不收
     cams.push({ lng, lat, limit: parseInt(r[cLim], 10) || 0, addr, city: (r[cCity] || '').trim(), dir: (r[cDir] || '').trim() });
   }
-  const lines = cams.map(c => JSON.stringify({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
-    properties: { limit: c.limit, addr: c.addr, city: c.city, dir: c.dir } }));
-  const out = '﻿window.speedCameraData={"type":"FeatureCollection","features":[\n' + lines.join(',\n') + '\n]};\n';
+  // 精簡格式(tools/compact-data.js)，每筆：[經度, 緯度, 速限, 地址, 縣市, 方向]
+  const feats = cams.map(c => ({ geometry: { coordinates: [c.lng, c.lat] }, properties: { limit: c.limit, addr: c.addr, city: c.city, dir: c.dir } }));
+  const out = '﻿' + compactJs('speedCameraData', ['limit', 'addr', 'city', 'dir'], feats);
   fs.writeFileSync(path.join(__dirname, '..', 'speed_camera_data.js'), out);
   console.log(`測速照相：${cams.length} 支(手動修正座標 ${fixed} 支、座標壞掉略過 ${bad} 支)`);
 }

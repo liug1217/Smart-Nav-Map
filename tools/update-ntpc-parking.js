@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { compactJs } = require('./compact-data');
 
 const API = 'https://data.ntpc.gov.tw/api/datasets/b1464ef0-9c7c-4a6f-abf7-6bdf32847e68/json';
 
@@ -47,11 +48,12 @@ async function main() {
   }).filter(l => l.lat > 24.6 && l.lat < 25.4 && l.lng > 121.2 && l.lng < 122.1); // 新北市範圍外的(座標填錯)不要
   const r6 = v => Math.round(v * 1e6) / 1e6;
   const feats = lots.sort((a, b) => b.lat - a.lat)
-    .map(l => `{type:'Feature',geometry:{type:'Point',coordinates:[${r6(l.lng)},${r6(l.lat)}]},properties:${JSON.stringify({ name: l.name, addr: l.addr, fee: l.fee, hours: l.hours })}}`);
+    .map(l => ({ geometry: { coordinates: [r6(l.lng), r6(l.lat)] }, properties: { name: l.name, addr: l.addr, fee: l.fee, hours: l.hours } }));
   const out =
     `// 新北市公有停車場：${lots.length} 處。由 tools/update-ntpc-parking.js 產生，不要手動改\n` +
     `// 資料來源：新北市政府 新北市路外公共停車場資訊(政府資料開放授權條款)\n` +
-    `window.ntpcParkingData = {\n  type: 'FeatureCollection',\n  features: [\n    ${feats.join(',\n    ')}\n  ]\n};\n`;
+    `// 精簡格式(tools/compact-data.js)，每筆：[經度, 緯度, 名稱, 地址, 收費, 營業時間]\n` +
+    compactJs('ntpcParkingData', ['name', 'addr', 'fee', 'hours'], feats);
   fs.writeFileSync(path.join(__dirname, '..', 'ntpc_parking_data.js'), out);
   console.log(`新北市公有停車場：${lots.length} 處(官方資料 ${rows.length} 筆，取公有的)`);
 }
