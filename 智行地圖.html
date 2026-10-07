@@ -6461,9 +6461,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/gh/liug1217/Navigation-Map@main/cctv_data.js"></script>
-<script src="speed_camera_data.js?v=moi20261005"></script>
-<script src="thb_cctv_data.js?v=0925"></script>
+<script async src="https://cdn.jsdelivr.net/gh/liug1217/Navigation-Map@main/cctv_data.js"></script>
+<script async src="speed_camera_data.js?v=moi20261005"></script>
+<script async src="thb_cctv_data.js?v=0925"></script>
 <script>
 /* ===== CCTV 攝影機整合（資料來自 cctv_data.js） ===== */
 (function(){
@@ -6606,6 +6606,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     var data = window.CCTV_DATA;
     if(!m || !data){ setTimeout(tryInit, 300); return; }
+    // 兩份資料都是背景載入；交通部(THB)那份還沒到就再等一下，最多約 12 秒
+    if(!window.THB_CCTV_DATA && (tryInit._n = (tryInit._n || 0) + 1) < 40){ setTimeout(tryInit, 300); return; }
     var thb = window.THB_CCTV_DATA || [];
     var merged = data.concat(thb);
     window.cctvCameras = merged; // 供 checkCctvProximity 使用
@@ -6793,7 +6795,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="signal_data.js"></script>
+<script async src="signal_data.js"></script>
 <script>
 /* ===== 🚦 臺北市號誌路口（GeoJSON cluster）===== */
 (function(){
@@ -6892,7 +6894,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function tryInit(){
     var m = window.map;
-    if(!m){ setTimeout(tryInit,300); return; }
+    if(!m || !window.SIGNAL_DATA){ setTimeout(tryInit,300); return; } // 資料是背景載入，還沒到就等
     if(m.isStyleLoaded()) initSignals(m);
     else m.once('styledata', function(){ initSignals(m); });
   }
@@ -7464,7 +7466,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="family_mart_data.js?v=osm1"></script>
+<script async src="family_mart_data.js?v=osm1"></script>
 <script>
 /* ===== 🏪 全家便利商店圖層 ===== */
 (function(){
@@ -7690,7 +7692,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="pxmart_data.js?v=osm2"></script>
+<script async src="pxmart_data.js?v=osm2"></script>
 <script>
 /* ===== 🛒 大全聯圖層 ===== */
 (function(){
@@ -7837,7 +7839,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   tryInit();
 })();
 </script>
-<script src="cpc_data.js?v=osm1"></script>
+<script async src="cpc_data.js?v=osm1"></script>
 <script>
 /* ===== ⛽ 中油加油站圖層 ===== */
 (function(){
@@ -7955,17 +7957,17 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script src="seven_data.js?v=osm2"></script>
-<script src="okmart_data.js?v=osm1"></script>
-<script src="hilife_data.js?v=osm1"></script>
-<script src="times_data.js?v=osm1"></script>
-<script src="simplemart_data.js?v=osm1"></script>
-<script src="dodohome_data.js?v=osm1"></script>
-<script src="mcd_data.js?v=osm1"></script>
-<script src="wanjiafu_data.js?v=osm1"></script>
-<script src="lejiakang_data.js?v=osm1"></script>
-<script src="showba_data.js?v=osm1"></script>
-<script src="ntpc_parking_data.js?v=ntpc1"></script>
+<script async src="seven_data.js?v=osm2"></script>
+<script async src="okmart_data.js?v=osm1"></script>
+<script async src="hilife_data.js?v=osm1"></script>
+<script async src="times_data.js?v=osm1"></script>
+<script async src="simplemart_data.js?v=osm1"></script>
+<script async src="dodohome_data.js?v=osm1"></script>
+<script async src="mcd_data.js?v=osm1"></script>
+<script async src="wanjiafu_data.js?v=osm1"></script>
+<script async src="lejiakang_data.js?v=osm1"></script>
+<script async src="showba_data.js?v=osm1"></script>
+<script async src="ntpc_parking_data.js?v=ntpc1"></script>
 <script>
 /* ===== 🏪 7-ELEVEN／OK超商／萊爾富／美廉社／Times／嘟嘟房／麥當勞／八方雲集圖層(資料由 tools/update-stores.js 產生) ===== */
 (function(){
@@ -8080,13 +8082,18 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
   }
 
+  var _brandTries = 0;
   function tryInit() {
     var m = window.map;
     if (!m) { setTimeout(tryInit, 300); return; }
-    var run = function () { BRANDS.forEach(function (b) { initBrand(m, b); }); };
+    var run = function () {
+      BRANDS.forEach(function (b) { initBrand(m, b); });
+      // 資料檔是背景載入：還沒到的品牌過 0.5 秒再試(已經加好的品牌 initBrand 會直接跳過)
+      if (BRANDS.some(function (b) { return !window[b.data]; }) && ++_brandTries < 120) setTimeout(tryInit, 500);
+    };
     if (m.isStyleLoaded()) run(); else m.once('styledata', run);
   }
-  window._reloadStoreBrandLayers = tryInit;
+  window._reloadStoreBrandLayers = function () { _brandTries = 0; tryInit(); };
   tryInit();
 })();
 </script>
