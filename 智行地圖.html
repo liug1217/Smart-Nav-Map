@@ -556,19 +556,72 @@ body.searchOpen .searchResultsList{
 .savedPlaceRow .spAddr{ font-size:12px; color:#666; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .savedPlaceRow .spEdit{ border:none; background:#F1F3F4; color:#3C4043; border-radius:14px; padding:5px 10px; font-size:12px; font-family:inherit; cursor:pointer; flex-shrink:0; }
 
+/* ── 地點卡片、路線卡片：跟導航大卡片(.rect1)同材質顏色(白色毛玻璃、細灰框、陰影)，左右貼齊、上方圓角 ── */
+.placeSheet, .routePanel{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  box-sizing:border-box;
+  background:rgba(255,255,255,0.8);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:0.5px solid #d9d9d9;
+  border-bottom:none;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  border-radius:40px 40px 0 0;
+  font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
+  z-index:12; /* 蓋在導航大卡片、右邊地圖按鈕上面 */
+}
+.placeSheet{
+  height:0;
+  display:none;
+  overflow:hidden;
+  transition:height 0.38s cubic-bezier(0.32,0.72,0,1);
+}
+.placeSheet.open{ display:block; }
+.placeSheet.dragging{ transition:none; }
+.psGrab{ padding:10px 0 6px; cursor:grab; touch-action:none; }
+.psHandle{ width:40px; height:5px; border-radius:3px; background:#C4C4C4; margin:0 auto; }
+.psBody{ height:calc(100% - 21px); overflow-y:auto; padding:2px 20px 28px; box-sizing:border-box; -webkit-overflow-scrolling:touch; }
+.psHead{ display:flex; gap:12px; align-items:flex-start; }
+.psLogo{ width:52px; height:52px; border-radius:14px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.15); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:28px; overflow:hidden; }
+.psLogo img{ width:100%; height:100%; object-fit:contain; }
+.psTitleBox{ flex:1; min-width:0; }
+.psName{ font-size:19px; font-weight:800; color:#000; line-height:1.25; }
+.psKind{ font-size:13px; color:#555; margin-top:2px; }
+.psClose{ border:none; background:rgba(0,0,0,0.06); border-radius:50%; width:32px; height:32px; font-size:15px; cursor:pointer; flex-shrink:0; }
+.psRating{ display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:#333; cursor:pointer; }
+.psRating .snmStars{ font-size:15px; }
+.psAddr{ font-size:13px; color:#555; margin-top:8px; line-height:1.45; }
+.psActions{ display:flex; gap:8px; margin:14px 0 4px; overflow-x:auto; scrollbar-width:none; }
+.psActions::-webkit-scrollbar{ display:none; }
+.psActions button{ flex:1 0 auto; border:1px solid #DADCE0; background:rgba(255,255,255,0.9); color:#1A73E8; border-radius:20px; padding:8px 14px;
+  font-size:14px; font-weight:600; font-family:inherit; white-space:nowrap; cursor:pointer; }
+.psActions button.main{ background:#009B65; border-color:#009B65; color:#fff; }
+.psExtra{ margin-top:10px; font-size:13px; color:#333; line-height:1.5; }
+.psSec{ margin-top:18px; }
+.psSecT{ font-size:15px; font-weight:800; color:#000; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
+.psSecT button{ border:none; background:none; color:#1A73E8; font-size:13px; font-family:inherit; cursor:pointer; }
+.psPhotos{ display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }
+.psPhotos::-webkit-scrollbar{ display:none; }
+.psPhotos img{ width:110px; height:110px; object-fit:cover; border-radius:12px; flex-shrink:0; background:#eee; cursor:pointer; }
+.psPost{ padding:12px 0; border-top:1px solid rgba(0,0,0,0.08); }
+.psPostWho{ display:flex; align-items:center; gap:8px; font-size:13px; }
+.psAv{ width:30px; height:30px; border-radius:50%; background:#E8F0FE; color:#1A73E8; display:flex; align-items:center; justify-content:center; font-weight:700; overflow:hidden; flex-shrink:0; }
+.psAv img{ width:100%; height:100%; object-fit:cover; }
+.psPostWho .when{ margin-left:auto; color:#888; font-size:12px; }
+.psPostText{ font-size:14px; color:#222; margin:6px 0 0; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+.psPostPh{ display:flex; gap:6px; margin-top:6px; overflow-x:auto; }
+.psPostPh img{ width:70px; height:70px; object-fit:cover; border-radius:8px; flex-shrink:0; cursor:pointer; }
+.psEmpty{ font-size:13px; color:#888; padding:6px 0; }
+
 /* ── 路線選擇面板(A/B/C) ── */
 .routePanel{
-  position:absolute;
-  left:8px;
-  right:8px;
-  bottom:180px;
-  z-index:11; /* 蓋在右邊地圖按鈕上面 */
-  background:#FFFFFF;
-  border-radius:14px;
-  box-shadow:0 4px 12px rgba(0,0,0,0.25);
-  padding:10px 12px 12px;
+  padding:14px 16px 18px;
   display:none;
-  max-height:52vh;
+  max-height:60vh;
   flex-direction:column;
 }
 .routePanel.open{ display:flex; }
@@ -1585,6 +1638,12 @@ html, body {
     <button type="button" data-q="全聯">🛒 全聯</button>
   </div>
   <div class="searchResultsList" id="searchResultsList"></div>
+</div>
+
+<!-- 📍 地點卡片(像各大地圖 App)：點超商、加油站、廁所、搜尋結果…從下面拉出來；跟導航大卡片同材質，左右貼齊 -->
+<div class="placeSheet" id="placeSheet" aria-hidden="true">
+  <div class="psGrab" id="psGrab"><div class="psHandle"></div></div>
+  <div class="psBody" id="psBody"></div>
 </div>
 
 <!-- 🛣️ 路線選擇(A/B/C)：選好地點後先列出幾條路線，選一條再開始導航 -->
@@ -3811,8 +3870,10 @@ function _flipCell(cell, from, to) {
     searchResultsList.style.display = 'none';
     destName.innerText = name || '選定地點';
     destAddr.innerText = addr || '';
-    destPanel.style.display = 'block';
     closeSearchPage(); // 選好地點：搜尋頁收起來，回到地圖
+    // 地點卡片(評分、照片、貼文、路線)；卡片沒載入時才用舊的小面板
+    if (window._snmOpenPlace) window._snmOpenPlace({ layer: 'place-points', name: name || '選定地點', kind: '', logo: logo || '📍', lat: lat, lng: lon, addr: addr || '' });
+    else destPanel.style.display = 'block';
   }
 
   // ===== 🏠 住家／💼 公司(同 Google 地圖)：存在這支手機；點一下就規劃路線，沒設定就先搜尋地址來設定 =====
@@ -5025,6 +5086,7 @@ function _flipCell(cell, from, to) {
     _routeChoice = { routes, delays: routes.map(() => 0), sel: 0, origin, dest: { lat: destLat, lon: destLon }, opts };
     rpPaintModes();
     _navState = 'idle';
+    if (window._snmClosePlace) window._snmClosePlace(); // 地點卡片收起來
     // 選路線時只留路線：綠色道路底圖、店家圖示先收起來(跟導航中一樣)
     document.body.classList.add('choosingRoute');
     togglePoiLayers(false);
@@ -5052,7 +5114,10 @@ function _flipCell(cell, from, to) {
   }
   if (rpClose) rpClose.addEventListener('click', () => {
     rpHide();
-    if (selectedDest) destPanel.style.display = 'block'; // 回到選好地點的畫面
+    // 回到剛才的地點卡片(沒有卡片時用舊的小面板)
+    const lp = window._snmLastPlace;
+    if (lp && window._snmOpenPlace && selectedDest && Math.abs(lp.lat - selectedDest.lat) < 1e-6 && Math.abs(lp.lng - selectedDest.lon) < 1e-6) window._snmOpenPlace(lp);
+    else if (selectedDest) destPanel.style.display = 'block';
   });
   if (rpStart) rpStart.addEventListener('click', async () => {
     const c = _routeChoice;
@@ -8134,6 +8199,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
         var storeName = props.name || '全家便利商店';
+        // 地點卡片(從下面拉出來，有評分、照片、貼文)；卡片沒載入時才用舊的小視窗
+        if (window._snmOpenPlace) { window._snmOpenPlace({ layer: 'fm-points', name: storeName, kind: '全家便利商店', logo: '圖片/fm_app.png', lat: lat, lng: lon }); return; }
         var addrId = 'fm-addr-' + Date.now();
         var safeName = storeName.replace(/\\/g, '').replace(/'/g, '');
         var html = '<div style="text-align:center;min-width:180px;padding:4px 2px">' +
@@ -8244,6 +8311,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
+        if (window._snmOpenPlace) {
+          window._snmOpenPlace({ layer: 'toilet-points', name: props.name || '公共廁所', kind: '公共廁所', logo: '🚻', lat: lat, lng: lon,
+            addr: props.addr || '', info: [[props.cat, props.tags].filter(Boolean).join('｜'), '資料來源：環境部'].filter(Boolean) });
+          return;
+        }
 
         if (_popup) { _popup.remove(); _popup = null; }
         if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
@@ -8396,6 +8468,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
 
         var pb = pxBrand(props.name);
+        if (window._snmOpenPlace) { window._snmOpenPlace({ layer: 'pxmart-points', name: props.name || pb.label, kind: pb.label, logo: pb.logo, lat: lat, lng: lon }); return; }
         var container = document.createElement('div');
         container.style.cssText = 'font-family:-apple-system,sans-serif;min-width:160px;display:flex;flex-direction:column;gap:8px;';
         container.innerHTML =
@@ -8509,6 +8582,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         var props = e.features[0].properties;
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
+        if (window._snmOpenPlace) { window._snmOpenPlace({ layer: 'cpc-points', name: props.name || '中油加油站', kind: '台灣中油加油站', logo: '圖片/cpc.svg', lat: lat, lng: lon }); return; }
 
         if (_popup) { _popup.remove(); _popup = null; }
         if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
@@ -8638,6 +8712,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function showPopup(m, b, f) {
     var lon = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
     var name = f.properties.name || b.name;
+    if (window._snmOpenPlace) {
+      window._snmOpenPlace({ layer: b.key + '-points', name: name, kind: b.name, logo: b.logo, lat: lat, lng: lon,
+        addr: b.useAddr ? (f.properties.addr || '') : '',
+        extraEl: (b.live === 'youbike' && f.properties.no) ? youbikeLive(f.properties.no) : null });
+      return;
+    }
     if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
     document.querySelectorAll('.maplibregl-popup').forEach(function (el) { el.remove(); });
     var box = document.createElement('div');
@@ -8918,6 +8998,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if (typeof window._snmCmAttach === 'function') window._snmCmAttach(box, poi, btn); // 星星與留言
   }
 
+  window._snmReportOpen = openSheet; // 地點卡片的「回報」也用同一個回報表單
   var bound = false;
   function bind() {
     var m = window.map;
@@ -9291,6 +9372,195 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     row.onclick = function () { openList(poi, paint); };
     paint();
   };
+  // 給地點卡片用：讀留言、留言列表、寫留言、看大圖
+  window._snmCm = { load: load, openList: openList, openComposer: openComposer, viewPhoto: viewPhoto, starsEl: starsEl, ago: ago, photoUrl: photoUrl };
+})();
+</script>
+
+<script>
+/* ===== 📍 地點卡片：點地點從下面拉出來(半高 → 往上拉到快全螢幕 → 往下拉關掉)，
+   內容：logo、名稱、類別、距離、地址、星星評分、路線/留言/回報、照片、貼文(留言)。
+   各圖層點下去呼叫 window._snmOpenPlace({ layer, name, kind, logo, color, lat, lng, addr, info, extraEl }) ===== */
+(function () {
+  var sheet = document.getElementById('placeSheet'), body = document.getElementById('psBody'), grab = document.getElementById('psGrab');
+  if (!sheet) return;
+  var cur = null, gen = 0;
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function peekH() { return Math.min(Math.round(window.innerHeight * 0.48), 420); }
+  function fullH() { return Math.round(window.innerHeight * 0.88); }
+  function setH(h) { sheet.style.height = h + 'px'; }
+  function distTxt(lat, lng) {
+    if (window.currentLat == null || window.currentLon == null) return '';
+    var kx = 111320 * Math.cos(lat * Math.PI / 180), d = Math.hypot((lng - window.currentLon) * kx, (lat - window.currentLat) * 110540);
+    return d < 1000 ? Math.round(d / 10) * 10 + ' 公尺' : (d / 1000).toFixed(d < 10000 ? 1 : 0) + ' 公里';
+  }
+  function close() {
+    if (!sheet.classList.contains('open')) return;
+    setH(0);
+    gen++;
+    setTimeout(function () { if (!cur) { sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); } }, 380);
+    cur = null;
+  }
+  window._snmClosePlace = close;
+  window._snmLastPlace = null;
+
+  function render(p) {
+    var myGen = ++gen;
+    body.innerHTML = '';
+    // 標頭：logo、名稱、類別 · 距離、關閉
+    var head = el('div', 'psHead');
+    var logo = el('div', 'psLogo');
+    if (p.logo && /[./]/.test(p.logo)) { var im = new Image(); im.src = p.logo; im.alt = ''; im.onerror = function () { logo.textContent = '📍'; }; logo.appendChild(im); }
+    else logo.textContent = p.logo || '📍';
+    head.appendChild(logo);
+    var tb = el('div', 'psTitleBox');
+    tb.appendChild(el('div', 'psName', p.name || '這個地點'));
+    var d = distTxt(p.lat, p.lng);
+    tb.appendChild(el('div', 'psKind', [p.kind !== p.name ? p.kind : '', d ? '距離 ' + d : ''].filter(Boolean).join(' · '))); // 名稱就是品牌名(沒分店名)時不重複
+    var rating = el('div', 'psRating', '💬 載入評分…');
+    tb.appendChild(rating);
+    head.appendChild(tb);
+    var x = el('button', 'psClose', '✕'); x.setAttribute('aria-label', '關閉'); x.onclick = close;
+    head.appendChild(x);
+    body.appendChild(head);
+    // 地址
+    var addr = el('div', 'psAddr', p.addr ? '📍 ' + p.addr : '📍 查詢地址中…');
+    body.appendChild(addr);
+    if (!p.addr) {
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + p.lat + '&lon=' + p.lng + '&accept-language=zh-TW')
+        .then(function (r) { return r.json(); })
+        .then(function (dd) {
+          if (myGen !== gen) return;
+          var a = dd.address || {};
+          var road = a.road || a.pedestrian || a.path || '', dist = a.suburb || a.quarter || a.city_district || '', city = a.city || a.town || a.county || '';
+          var t = [city, dist, road].filter(Boolean).join('') || (dd.display_name || '').split(',').slice(0, 3).join('，');
+          addr.textContent = t ? '📍 ' + t : '';
+        }).catch(function () { if (myGen === gen) addr.textContent = ''; });
+    }
+    // 動作：路線(主)、寫留言、回報
+    var acts = el('div', 'psActions');
+    var bRoute = el('button', 'main', '🧭 路線');
+    bRoute.onclick = function () { close(); if (window._navigateToCoord) window._navigateToCoord(p.lat, p.lng, p.name, p.logo); };
+    acts.appendChild(bRoute);
+    var poi = { layer: p.layer || 'place-points', name: p.name || '', lat: p.lat, lng: p.lng };
+    var cm = window._snmCm;
+    var bWrite = el('button', null, '✏️ 寫留言');
+    bWrite.onclick = function () { if (cm) cm.openComposer(poi, function () { loadPosts(); }); };
+    acts.appendChild(bWrite);
+    if (p.layer && window._snmReportOpen) {
+      var bRpt = el('button', null, '⚠️ 回報');
+      bRpt.onclick = function () { window._snmReportOpen(poi); };
+      acts.appendChild(bRpt);
+    }
+    body.appendChild(acts);
+    // 額外資訊(YouBike 即時車數、廁所類型…)
+    if (p.info && p.info.length) { var inf = el('div', 'psExtra'); p.info.forEach(function (t) { inf.appendChild(el('div', null, t)); }); body.appendChild(inf); }
+    if (p.extraEl) { var ex = el('div', 'psExtra'); ex.appendChild(p.extraEl); body.appendChild(ex); }
+    // 照片、貼文
+    var phSec = el('div', 'psSec'); phSec.style.display = 'none';
+    phSec.appendChild(el('div', 'psSecT', '照片'));
+    var phRow = el('div', 'psPhotos'); phSec.appendChild(phRow);
+    body.appendChild(phSec);
+    var postSec = el('div', 'psSec');
+    var postT = el('div', 'psSecT'); postT.appendChild(el('span', null, '評論'));
+    var all = el('button', null, '查看全部'); all.onclick = function () { if (cm) cm.openList(poi, loadPosts); }; postT.appendChild(all);
+    postSec.appendChild(postT);
+    var posts = el('div'); postSec.appendChild(posts);
+    body.appendChild(postSec);
+
+    function loadPosts() {
+      if (!cm) { rating.textContent = ''; posts.appendChild(el('div', 'psEmpty', '留言功能載入中')); return; }
+      posts.innerHTML = ''; posts.appendChild(el('div', 'psEmpty', '載入中…'));
+      cm.load(poi).then(function (dd) {
+        if (myGen !== gen) return;
+        rating.innerHTML = '';
+        if (dd.count) {
+          rating.appendChild(el('b', null, dd.avg.toFixed(1)));
+          rating.appendChild(cm.starsEl(dd.avg));
+          rating.appendChild(el('span', null, '(' + dd.count + ')'));
+        } else rating.appendChild(el('span', null, '☆☆☆☆☆ 還沒有評分，來當第一個'));
+        rating.onclick = function () { cm.openList(poi, loadPosts); };
+        // 照片：所有留言的照片
+        phRow.innerHTML = '';
+        var phs = [];
+        dd.items.forEach(function (c) { (c.photos || []).forEach(function (ph) { phs.push({ ph: ph, mine: c.mine }); }); });
+        phSec.style.display = phs.length ? '' : 'none';
+        phs.slice(0, 20).forEach(function (o) {
+          var im2 = new Image(); im2.loading = 'lazy'; im2.alt = ''; im2.src = cm.photoUrl(o.ph.id, true);
+          im2.onerror = function () { if (im2.src.indexOf('_t.jpg') > 0) im2.src = cm.photoUrl(o.ph.id, false); };
+          im2.onclick = function () { cm.viewPhoto(poi, o.ph, o.mine); };
+          phRow.appendChild(im2);
+        });
+        // 貼文：最新 5 則
+        posts.innerHTML = '';
+        all.style.display = dd.count > 5 ? '' : 'none';
+        if (!dd.items.length) { posts.appendChild(el('div', 'psEmpty', '還沒有人留言，按「寫留言」分享照片和心得吧！')); return; }
+        dd.items.slice(0, 5).forEach(function (c) {
+          var it = el('div', 'psPost'), who = el('div', 'psPostWho');
+          var nick = c.nick || '智行地圖使用者', av = el('div', 'psAv');
+          if (c.avatar) { var ai = new Image(); ai.src = c.avatar; ai.alt = ''; av.appendChild(ai); } else av.textContent = nick.slice(0, 1);
+          who.appendChild(av);
+          var nm = el('div'); nm.appendChild(el('div', null, nick)); nm.appendChild(cm.starsEl(c.stars)); who.appendChild(nm);
+          who.appendChild(el('span', 'when', cm.ago(c.t)));
+          it.appendChild(who);
+          if (c.text) it.appendChild(el('p', 'psPostText', c.text));
+          if (c.photos && c.photos.length) {
+            var strip = el('div', 'psPostPh');
+            c.photos.forEach(function (ph) {
+              var pi = new Image(); pi.loading = 'lazy'; pi.alt = ''; pi.src = cm.photoUrl(ph.id, true);
+              pi.onerror = function () { if (pi.src.indexOf('_t.jpg') > 0) pi.src = cm.photoUrl(ph.id, false); };
+              pi.onclick = function () { cm.viewPhoto(poi, ph, c.mine); };
+              strip.appendChild(pi);
+            });
+            it.appendChild(strip);
+          }
+          posts.appendChild(it);
+        });
+      }).catch(function () {
+        if (myGen !== gen) return;
+        rating.textContent = '💬 評分';
+        posts.innerHTML = ''; posts.appendChild(el('div', 'psEmpty', '留言載入失敗，請檢查網路'));
+      });
+    }
+    loadPosts();
+  }
+
+  window._snmOpenPlace = function (p) {
+    if (document.body.classList.contains('navigating')) return; // 導航中不跳卡片
+    if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
+    document.querySelectorAll('.maplibregl-popup').forEach(function (e) { e.remove(); });
+    cur = p;
+    window._snmLastPlace = p;
+    render(p);
+    body.scrollTop = 0;
+    sheet.classList.add('open');
+    sheet.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(function () { setH(peekH()); });
+  };
+
+  // 拖拉：往上拉展開、往下拉收起/關閉(放手時吸到最近的高度)
+  var startY = 0, startH = 0, dragging = false;
+  grab.addEventListener('pointerdown', function (e) {
+    dragging = true; startY = e.clientY; startH = sheet.getBoundingClientRect().height;
+    sheet.classList.add('dragging'); grab.setPointerCapture(e.pointerId);
+  });
+  grab.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    setH(Math.max(0, Math.min(fullH(), startH + (startY - e.clientY))));
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false; sheet.classList.remove('dragging');
+    var h = sheet.getBoundingClientRect().height, moved = Math.abs(e.clientY - startY);
+    if (moved < 6) { setH(h < fullH() - 20 ? fullH() : peekH()); return; } // 點一下：展開/收回
+    if (h < peekH() * 0.55) close();
+    else setH(Math.abs(h - fullH()) < Math.abs(h - peekH()) ? fullH() : peekH());
+  }
+  grab.addEventListener('pointerup', endDrag);
+  grab.addEventListener('pointercancel', endDrag);
+  // 開始導航時收起來
+  new MutationObserver(function () { if (document.body.classList.contains('navigating')) close(); })
+    .observe(document.body, { attributes: true, attributeFilter: ['class'] });
 })();
 </script>
 
