@@ -1712,7 +1712,7 @@ html, body {
     </svg>
   </button>
   <!-- 地圖風格 -->
-  <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🛰</button>
+  <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🗺</button>
   <!-- AI 助理 -->
   <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
 </div>
@@ -1919,35 +1919,11 @@ function _flipCell(cell, from, to) {
 </script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-geocoder/dist/maplibre-gl-geocoder.min.js"></script>
 <script>
-  const satelliteStyle = {
-    version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-    sources: {
-      'esri-satellite': {
-        type: 'raster',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256,
-        attribution: '© Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS',
-        maxzoom: 19
-      }
-    },
-    layers: [
-      {
-        id: 'background',
-        type: 'background',
-        paint: { 'background-color': '#000' }
-      },
-      {
-        id: 'satellite',
-        type: 'raster',
-        source: 'esri-satellite'
-      }
-    ]
-  };
-
+  // 預設地圖：像 Google 地圖的街道圖(淺灰底、白色道路、黃色主要道路、立體建築)；衛星圖、夜間圖用右邊的按鈕切換
+  const DEFAULT_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
   const map = new maplibregl.Map({
     container: 'map',
-    style: satelliteStyle,
+    style: DEFAULT_STYLE_URL,
     center: [121.394, 24.951],
     zoom: 16,
     pitch: 60,
@@ -6242,13 +6218,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
     /* --- 地圖風格切換 --- */
     const STYLES = [
+      { icon:'🗺', label:'街道', style:'https://tiles.openfreemap.org/styles/liberty' }, // 預設(同 DEFAULT_STYLE_URL)
       { icon:'🛰', label:'衛星', style:{
         version:8,
         glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources:{ 'esri':{ type:'raster', tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize:256, maxzoom:19 }},
         layers:[{ id:'bg', type:'background', paint:{'background-color':'#000'}},{ id:'sat', type:'raster', source:'esri'}]
       }},
-      { icon:'🗺', label:'街道', style:'https://tiles.openfreemap.org/styles/liberty' },
       { icon:'🌙', label:'夜間', style:{
         version:8,
         glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
