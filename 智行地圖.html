@@ -581,9 +581,10 @@ body.searchOpen .searchResultsList{
 }
 .placeSheet.open{ display:block; }
 .placeSheet.dragging{ transition:none; }
-.psGrab{ padding:10px 0 6px; cursor:grab; touch-action:none; }
-.psHandle{ width:40px; height:5px; border-radius:3px; background:#C4C4C4; margin:0 auto; }
-.psBody{ height:calc(100% - 21px); overflow-y:auto; padding:2px 20px 28px; box-sizing:border-box; -webkit-overflow-scrolling:touch; }
+/* 拉條跟導航大卡片(.rect3)完全一樣：寬 56、高 4、離頂 6、同顏色圓角；拉的範圍跟導航卡片內容的上緣(18px)一樣高 */
+.psGrab{ position:relative; height:18px; cursor:grab; touch-action:none; }
+.psHandle{ position:absolute; left:50%; top:6px; transform:translateX(-50%); width:56px; height:4px; background:rgba(60,60,67,0.3); border-radius:2.5px; }
+.psBody{ height:calc(100% - 18px); overflow-y:auto; padding:2px 20px 28px; box-sizing:border-box; -webkit-overflow-scrolling:touch; }
 .psHead{ display:flex; gap:12px; align-items:flex-start; }
 .psLogo{ width:52px; height:52px; border-radius:14px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.15); flex-shrink:0;
   display:flex; align-items:center; justify-content:center; font-size:28px; overflow:hidden; }
