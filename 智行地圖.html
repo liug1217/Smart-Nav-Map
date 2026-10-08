@@ -2198,12 +2198,12 @@ function _flipCell(cell, from, to) {
       map.addLayer({
         id: 'navRoute-outline', type: 'line', source: 'navRoute',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#325cb3', 'line-width': 15, 'line-opacity': 0.9 }
+        paint: { 'line-color': '#1E8E3E', 'line-width': 15, 'line-opacity': 0.9 }
       });
       map.addLayer({
         id: 'navRoute-line', type: 'line', source: 'navRoute',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#4783fe', 'line-width': 11, 'line-opacity': 0.95 }
+        paint: { 'line-color': '#34B85A', 'line-width': 11, 'line-opacity': 0.95 }
       });
       _buildNavArrow();
       map.addLayer({
@@ -2245,10 +2245,10 @@ function _flipCell(cell, from, to) {
       map.addSource('navRoute', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
       map.addLayer({ id:'navRoute-outline', type:'line', source:'navRoute',
         layout:{ 'line-join':'round','line-cap':'round' },
-        paint:{ 'line-color':'#325cb3','line-width':15,'line-opacity':0.9 } });
+        paint:{ 'line-color':'#1E8E3E','line-width':15,'line-opacity':0.9 } });
       map.addLayer({ id:'navRoute-line', type:'line', source:'navRoute',
         layout:{ 'line-join':'round','line-cap':'round' },
-        paint:{ 'line-color':'#4783fe','line-width':11,'line-opacity':0.95 } });
+        paint:{ 'line-color':'#34B85A','line-width':11,'line-opacity':0.95 } });
       _buildNavArrow();
       map.addLayer({ id:'navRoute-arrows', type:'symbol', source:'navRoute',
         layout:{ 'symbol-placement':'line',
@@ -2570,7 +2570,7 @@ function _flipCell(cell, from, to) {
   // ===== 🎙 對講列（底部卡片）=====
   // 左右滑動切換兩種模式：
   //   0 = 對講（麥克風，橘色）：按住說話，放開就關
-  //   1 = 通話（電話，青綠色）：點一下開麥克風，要自己再點一下才關
+  //   1 = 通話（電話，綠色）：點一下開麥克風，要自己再點一下才關
   // 還沒啟用麥克風時，點任何地方都是「啟用麥克風」→ 建立房間並顯示代碼
   (function _initPTT() {
     var AM = window.AudioManager;
@@ -9230,16 +9230,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TRAFFIC MAP LAYER（路況：依塞車程度把道路上色）
-  // 順暢＝導航路線的淺藍色；車多黃、緩慢橘、壅塞紅、嚴重壅塞深紅。
+  // 順暢＝導航路線的綠色；車多黃、緩慢橘、壅塞紅、嚴重壅塞深紅。
   // 沒在導航時也顯示(預設開啟，🚦 可以關掉並記住)；畫在導航路線上方，路線上塞車的那段會變色
   // ═══════════════════════════════════════════════════════════════════════════
   var TRAFFIC_SOURCE = 'snm-traffic-src';
   var TRAFFIC_CASING = 'snm-traffic-casing';  // 塞車路段的外框(同色系深色)
-  // 塞車外框：跟塞車顏色同色系的深色，不沿用道路/導航路線的藍色外框
+  // 塞車外框：跟塞車顏色同色系的深色，不沿用道路/導航路線的綠色外框
   var CASING_BY_LEVEL = { moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' };
   var TRAFFIC_LAYER  = 'snm-traffic-lines';   // 道路線段
   var TRAFFIC_POINTS = 'snm-traffic-points';  // 方向不明、只能畫成點的少數路段
-  // 沒人開過(沒有車速資料)的道路也要顯示成「順暢」的藍色：道路形狀取自 OpenFreeMap 的向量道路資料，
+  // 沒人開過(沒有車速資料)的道路也要顯示成「順暢」的綠色：道路形狀取自 OpenFreeMap 的向量道路資料，
   // 任何地圖樣式(衛星/街道/夜間)都疊得上去；畫在導航路線底下，塞車路段畫在最上面
   var ROADS_SOURCE   = 'snm-roads';
   // 依縮放程度逐層出現，不然全部道路一起畫會很亂：縮小看國道＋快速道路(同時出現) → 放大加一般道路 → 巷弄小路。
@@ -9255,10 +9255,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var ROAD_PROBE    = 'snm-roads-probe';
   var PROBE_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
   // 跟導航路線完全一樣的粗細與顏色(navRoute-outline / navRoute-line)
-  var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#325cb3', NAV_LINE_C = '#4783fe';
+  var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#1E8E3E', NAV_LINE_C = '#34B85A';
   var TRAFFIC_LAYERS = ROAD_LAYERS.concat([TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS]);
 
-  // 導航中只顯示導航路線：藍色道路底圖整個藏起來，路況也只留在路線上的路段
+  // 導航中只顯示導航路線：綠色道路底圖整個藏起來，路況也只留在路線上的路段
   function isNavigating() { return document.body.classList.contains('navigating'); }
   var ON_ROUTE_M = 40;
   function nearRoute(coord, route) {
@@ -9276,7 +9276,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   // ── 塞車直接讓「道路本身」變色：不另外沿 GPS 軌跡畫一條線(會跟道路對不齊)，
   //    而是找出這一格(約 150m)裡、方向相符的那條道路，用道路本身的形狀、同樣的粗細上色。
-  //    順暢的路段本來就是藍色，不用再畫；導航時改切導航路線上的那一段 ──
+  //    順暢的路段本來就是綠色，不用再畫；導航時改切導航路線上的那一段 ──
   var GH32 = '0123456789bcdefghjkmnpqrstuvwxyz';
   function ghBounds(gh) {
     var lat = [-90, 90], lng = [-180, 180], even = true;
@@ -9382,7 +9382,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var cands = null, out = [];
     data.features.forEach(function (f) {
       var p = f.properties || {};
-      if (p.trafficLevel === 'free') return;                       // 順暢：道路本來就是藍色
+      if (p.trafficLevel === 'free') return;                       // 順暢：道路本來就是綠色
       var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
       if (nav && !nearRoute(mid, route)) return;                   // 導航中只看路線上的
       if (!cands) cands = roadCandidates();
@@ -9422,12 +9422,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     return m.getLayer('user-pulse') ? 'user-pulse' : (m.getLayer('user-car') ? 'user-car' : undefined);
   }
-  // 藍色道路底圖放在導航路線底下(路線本身才看得清楚)
+  // 綠色道路底圖放在導航路線底下(路線本身才看得清楚)
   function roadsBeforeId() {
     var m = window.map;
     return m.getLayer('navRoute-outline') ? 'navRoute-outline' : trafficBeforeId();
   }
-  // 圖層順序(由下到上)：底圖 → 藍色道路 → 導航路線 → 塞車線 → 路線箭頭 → 加油站/測速照相等圖示 → 車子。
+  // 圖層順序(由下到上)：底圖 → 綠色道路 → 導航路線 → 塞車線 → 路線箭頭 → 加油站/測速照相等圖示 → 車子。
   // 線都要在圖示底下，不然會把加油站、測速照相蓋住
   var LINE_STACK_TAIL = ['navRoute-outline', 'navRoute-line', TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS, 'navRoute-arrows'];
   var NON_ICON_LAYERS = ['route', 'route-outline', 'navWalkLink'];
@@ -9491,7 +9491,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var vis = _trafficOn ? 'visible' : 'none';
     var roadsVis = (_trafficOn && !isNavigating()) ? 'visible' : 'none';
 
-    // ── 藍色道路底圖(沒有車速資料 = 視為順暢)，依縮放逐層出現 ──
+    // ── 綠色道路底圖(沒有車速資料 = 視為順暢)，依縮放逐層出現 ──
     if (!m.getSource(ROADS_SOURCE)) {
       m.addSource(ROADS_SOURCE, { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
     }
@@ -9511,7 +9511,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       });
     });
 
-    // ── 完全透明的探測圖層：導航時藍色道路被藏起來，道路資料就不會下載；
+    // ── 完全透明的探測圖層：導航時綠色道路被藏起來，道路資料就不會下載；
     //    靠這層讓道路資料一直在，才能判斷車子目前在哪一種道路上(上傳路況時用) ──
     if (!m.getLayer(ROAD_PROBE)) {
       m.addLayer({
@@ -9521,8 +9521,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       }, roadsBeforeId());
     }
 
-    // ── 沒導航時的塞車路段：塞車色內線 + 同色系深色外框(不沿用道路的藍色外框)。
-    //    塞車路段是從道路本身裁出來的，形狀跟道路完全重疊，外框剛好蓋住道路的藍色外框，只看得到一道邊框。
+    // ── 沒導航時的塞車路段：塞車色內線 + 同色系深色外框(不沿用道路的綠色外框)。
+    //    塞車路段是從道路本身裁出來的，形狀跟道路完全重疊，外框剛好蓋住道路的綠色外框，只看得到一道邊框。
     //    (導航中塞車直接畫在導航路線上，見 colorizeNavRoute) ──
     if (!m.getLayer(TRAFFIC_CASING)) {
       m.addLayer({
@@ -9549,7 +9549,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         paint: {
           'line-color':   ['get', 'color'],
           'line-width':   NAV_LINE_W,
-          'line-opacity': 1,          // 不透明：底下的藍色不會透出來
+          'line-opacity': 1,          // 不透明：底下的綠色不會透出來
         },
       }, trafficBeforeId());
     }
@@ -9848,7 +9848,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
 
   // ── 導航中塞車直接畫在「導航路線本身」：把路線在塞車路段的起訖點切開，塞車那幾段帶上顏色，
-  //    其他段維持藍色。只有一條線，不會跟另一層對不齊、也不會多出邊框 ──
+  //    其他段維持綠色。只有一條線，不會跟另一層對不齊、也不會多出邊框 ──
   var LEVEL_RANK = { moderate: 1, slow: 2, congested: 3, severe: 4 };
   function pointAlong(route, cum, d) {
     var lo = 0, hi = cum.length - 1;
@@ -9867,9 +9867,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var src = m && m.getSource('navRoute');
     // 只在導航中處理：結束導航時主程式會把路線清掉，這裡不能再把它畫回來
     if (!isNavigating() || !src || !route || route.length < 2 || !m.getLayer('navRoute-line')) return;
-    // 每一段路線的顏色由資料決定，沒有顏色的就是原本的藍色
+    // 每一段路線的顏色由資料決定，沒有顏色的就是原本的綠色
     m.setPaintProperty('navRoute-line', 'line-color', ['coalesce', ['get', 'color'], NAV_LINE_C]);
-    // 外框也分段：塞車那段用同色系深色外框，其他段維持藍色外框
+    // 外框也分段：塞車那段用同色系深色外框，其他段維持綠色外框
     if (m.getLayer('navRoute-outline')) m.setPaintProperty('navRoute-outline', 'line-color', ['coalesce', ['get', 'casing'], NAV_OUTLINE_C]);
     alongRoute(route, route[0]);                 // 確保 _routeCum 是這條路線的累積距離
     var cum = _routeCum, total = cum[cum.length - 1];
@@ -9878,7 +9878,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       var cands = [{ coords: route, oneway: true }];
       _trafficData.features.forEach(function (f) {
         var p = f.properties || {};
-        if (!LEVEL_RANK[p.trafficLevel]) return;  // 順暢：維持藍色
+        if (!LEVEL_RANK[p.trafficLevel]) return;  // 順暢：維持綠色
         var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
         if (!nearRoute(mid, route)) return;
         var piece = matchRoadPiece(f, cands);
