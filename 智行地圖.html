@@ -4324,14 +4324,16 @@ function _flipCell(cell, from, to) {
     if (!map.getSource('navRoute')) return false;
     if (!map.hasImage('nav-turn-head')) {
       // 箭頭：白色三角形，尖端朝上(北)，用 icon-rotate 轉到行進方向。
-      // 深藍外框只畫兩條斜邊，底邊不畫：底邊接著箭身，畫了會在接縫多一條橫線
+      // 深藍外框三邊都畫(底邊比箭身寬的兩側也要有框)，只有箭身白色穿過的中間那段底邊塗回白色，接縫才不會多一條橫線。
+      // 箭身白色寬度約是箭頭底寬的 41%(各縮放等級都一樣，見下面 line-width / icon-size)
       const W = 64, H = 58, c = document.createElement('canvas');
       c.width = W; c.height = H;
       const x = c.getContext('2d');
-      x.beginPath(); x.moveTo(W / 2, 3); x.lineTo(W - 3, H); x.lineTo(3, H); x.closePath();
+      // 外框粗細跟箭身邊框一樣：箭身兩側各露出 (外框寬−白色寬)/2 ≈ 箭頭底寬的 11%，換算到這張圖約 7.4px
+      x.beginPath(); x.moveTo(W / 2, 4.5); x.lineTo(W - 4, H - 3.7); x.lineTo(4, H - 3.7); x.closePath();
       x.fillStyle = '#ffffff'; x.fill();
-      x.beginPath(); x.moveTo(3, H); x.lineTo(W / 2, 3); x.lineTo(W - 3, H);
-      x.lineJoin = 'round'; x.lineWidth = 5; x.strokeStyle = '#123a7a'; x.stroke();
+      x.lineJoin = 'round'; x.lineWidth = 7.4; x.strokeStyle = '#123a7a'; x.stroke();
+      x.fillStyle = '#ffffff'; x.fillRect(W / 2 - 13, H - 8, 26, 8);
       map.addImage('nav-turn-head', x.getImageData(0, 0, W, H), { pixelRatio: 2 });
     }
     map.addSource('navTurnArrow', { type: 'geojson', data: TURN_ARROW_EMPTY });
