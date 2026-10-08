@@ -3105,6 +3105,7 @@ function _flipCell(cell, from, to) {
     // _bufs 存的可能是 Promise（載入中）或 AudioBuffer/null（完成）
     _load(name) {
       if (name in this._bufs) return Promise.resolve(this._bufs[name]);
+      if (this._noPack) return Promise.resolve(null); // 已確認語音包不存在：不再去抓，直接用 TTS，不用等 404
       const p = (async () => {
         try {
           const url = this.base + encodeURIComponent(name + '.m4a');
@@ -3129,6 +3130,7 @@ function _flipCell(cell, from, to) {
     // 先試第一個：語音包目前沒放上去(404)時，其他的就直接記成沒有，不再發 20 幾個注定失敗的請求
     prefetch(names) {
       this._load(names[0]).then(buf => {
+        if (!buf) this._noPack = true; // 語音包沒放上去：之後任何字都不再發請求
         names.slice(1).forEach(n => {
           if (buf) this._load(n);
           else if (!(n in this._bufs)) this._bufs[n] = null;
@@ -3454,7 +3456,9 @@ function _flipCell(cell, from, to) {
       var n = (f.properties.name || '').toLowerCase();
       return hasKw ? (!rest || n.includes(rest)) : n.includes(q.toLowerCase());
     }).map(function (f) {
-      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || b.name };
+      // 有官方地址的(YouBike)直接帶著，搜尋結果不用再查
+      return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || b.name,
+               addr: b.useAddr ? f.properties.addr : undefined };
     });
   }
 
@@ -3600,10 +3604,11 @@ function _flipCell(cell, from, to) {
           item,
           '<img src="' + g.b.logo + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff" onerror="this.style.display=\'none\'">',
           g.b.color,
-          function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || g.b.name, g.b.logo); }
+          function() { selectDestination(item.lat, item.lon, item.name, item.addr || _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || g.b.name, g.b.logo); }
         );
         searchResultsList.appendChild(el);
-        _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
+        if (item.addr) el.querySelector('.addr').textContent = item.addr;
+        else _enqueueReverse(item.lat, item.lon, document.getElementById(addrId) || el.querySelector('.addr'));
       });
     });
 
@@ -3773,7 +3778,11 @@ function _flipCell(cell, from, to) {
     if (maneuver.type === 'off ramp') return (maneuver.modifier && maneuver.modifier.includes('left') ? '靠左' : '靠右') + '下匝道';
     if (maneuver.type === 'fork') return '請靠' + (maneuver.modifier && maneuver.modifier.includes('left') ? '左' : '右') + '行駛';
     if (maneuver.type === 'end of road') return '路底' + (maneuver.modifier && modMap[maneuver.modifier] ? modMap[maneuver.modifier] : '轉彎');
-    if (maneuver.type === 'continue' || maneuver.type === 'new name') return '繼續直行';
+    // 「繼續」也可能是迴轉或轉彎(沿同一條路轉過去)：看 modifier，跟語音說法一致，不能一律寫「繼續直行」
+    if (maneuver.type === 'continue' || maneuver.type === 'new name') {
+      const mm = maneuver.modifier || '';
+      return (mm && mm !== 'straight' && modMap[mm]) ? modMap[mm] : '繼續直行';
+    }
     if (maneuver.type === 'notification') return '注意前方路況';
     if (maneuver.modifier && modMap[maneuver.modifier]) return modMap[maneuver.modifier];
     return '繼續前進';
@@ -3834,7 +3843,9 @@ function _flipCell(cell, from, to) {
       return isPrepare ? ('前方' + d + '準備靠右' + (into ? into : '') + '。') : (d + '後請靠右' + (into ? into : (sn ? '' : '行駛')) + '。');
     }
     if (mod === 'uturn') return d + '後迴轉。';
-    if (mod === 'straight' || m.type === 'continue' || m.type === 'new name') return d + '後直行。';
+    // 只是路名改變/沿同一條路直走(例如忠孝東路三段→四段)：不倒數「幾公尺後直行」，太吵；路口直行(turn+straight)照念
+    if (m.type === 'continue' || m.type === 'new name') return null;
+    if (mod === 'straight') return d + '後直行。';
     return d + '後' + maneuverToChinese(m) + '。';
   }
 
@@ -4083,7 +4094,9 @@ function _flipCell(cell, from, to) {
     {
       const m = step.maneuver || {};
       const mod = m.modifier || '';
-      const isRealTurn = !['depart', 'arrive', 'continue', 'new name', 'notification'].includes(m.type) &&
+      // 「繼續」類型但其實是迴轉/轉彎(modifier 不是直行、也不是微靠)：一樣當成真正的轉彎
+      const contTurn = (m.type === 'continue' || m.type === 'new name') && /^(uturn|left|right|sharp left|sharp right)$/.test(mod);
+      const isRealTurn = contTurn || !['depart', 'arrive', 'continue', 'new name', 'notification'].includes(m.type) &&
         (mod !== 'straight' && mod !== '' || m.type === 'roundabout' || m.type === 'rotary');
       window._navTurnView = isRealTurn && meters <= NAV_TURN_VIEW_M;
     }
