@@ -32,3 +32,17 @@ test('official congestion levels map to our five levels; 0 (no data) is not show
   assert.equal(LEVEL_BY_OFFICIAL[5], 'severe');
   assert.equal(LEVEL_BY_OFFICIAL[0], undefined);
 });
+
+test('Taipei sections: only busy/jammed ones are kept, cut into cells along start→end; bad coordinates dropped', () => {
+  const { parse } = require('../lib/traffic/taipei');
+  const sec = (id, lv, spd, x1, y1, x2, y2) => `<vd:SectionData><vd:SectionId>${id}</vd:SectionId><vd:SectionName>光復北路  健康路-南京東路</vd:SectionName>` +
+    `<vd:AvgSpd>${spd}</vd:AvgSpd><vd:MOELevel>${lv}</vd:MOELevel><vd:StartWgsX>${x1}</vd:StartWgsX><vd:StartWgsY>${y1}</vd:StartWgsY>` +
+    `<vd:EndWgsX>${x2}</vd:EndWgsX><vd:EndWgsY>${y2}</vd:EndWgsY></vd:SectionData>`;
+  const xml = sec('A', 2, 18.4, 121.5566, 25.0537, 121.5573, 25.0515) +   // 壅塞、往南約 250 公尺
+              sec('B', 0, 50, 121.50, 25.06, 121.51, 25.06) +             // 順暢：不送
+              sec('C', 1, 30, 121.50, 25.06, 140.0, 35.0) +               // 座標錯誤(上千公里)：不用
+              sec('D', -1, 40, 121.50, 25.06, 121.501, 25.06);            // 沒資料
+  const cells = parse(xml);
+  assert.ok(cells.length >= 1 && cells.length <= 4, 'cells: ' + cells.length);
+  cells.forEach(c => { assert.equal(c.level, 'congested'); assert.equal(c.speed, 18); assert.equal(c.dir, 'S'); assert.equal(c.name, '光復北路 健康路-南京東路'); });
+});

@@ -2102,6 +2102,7 @@ function _flipCell(cell, from, to) {
     plannedRouteCoordinates = [];
     updateWalkLink(0, 0, null); // 清掉道路外的虛線
     window._navTurnView = false; window._navTurnHoldUntil = 0;
+    window._navTrafficSpans = null; // 塞車多花時間的計算資料也清掉
     if (window._clearTurnArrow) window._clearTurnArrow();
     if (destMarker) { destMarker.remove(); destMarker = null; }
     selectedDest = null;
@@ -2197,12 +2198,12 @@ function _flipCell(cell, from, to) {
       });
       map.addLayer({
         id: 'navRoute-outline', type: 'line', source: 'navRoute',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        layout: { 'line-join': 'round', 'line-cap': 'butt' },
         paint: { 'line-color': '#009B65', 'line-width': 15, 'line-opacity': 0.9 }
       });
       map.addLayer({
         id: 'navRoute-line', type: 'line', source: 'navRoute',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        layout: { 'line-join': 'round', 'line-cap': 'butt' },
         paint: { 'line-color': '#16E098', 'line-width': 11, 'line-opacity': 0.95 }
       });
       _buildNavArrow();
@@ -2244,10 +2245,10 @@ function _flipCell(cell, from, to) {
     if (!map.getSource('navRoute')) {
       map.addSource('navRoute', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
       map.addLayer({ id:'navRoute-outline', type:'line', source:'navRoute',
-        layout:{ 'line-join':'round','line-cap':'round' },
+        layout:{ 'line-join':'round','line-cap':'butt' },
         paint:{ 'line-color':'#009B65','line-width':15,'line-opacity':0.9 } });
       map.addLayer({ id:'navRoute-line', type:'line', source:'navRoute',
-        layout:{ 'line-join':'round','line-cap':'round' },
+        layout:{ 'line-join':'round','line-cap':'butt' },
         paint:{ 'line-color':'#16E098','line-width':11,'line-opacity':0.95 } });
       _buildNavArrow();
       map.addLayer({ id:'navRoute-arrows', type:'symbol', source:'navRoute',
@@ -4019,7 +4020,34 @@ function _flipCell(cell, from, to) {
       for (let i = currentStepIndex; i < navSteps.length; i++) remain += navSteps[i].distance || 0;
     }
     remain = Math.max(0, Math.min(remain, _navTotals.dist));
-    renderNavTripInfo(remain, _navTotals.dur * remain / _navTotals.dist);
+    const carFrac = pos ? pos.along / pos.g.total : 1 - remain / _navTotals.dist;
+    renderNavTripInfo(remain, _navTotals.dur * remain / _navTotals.dist + navTrafficDelaySec(carFrac));
+  }
+
+  // 塞車多花的時間：車子前方每一段塞車路段，用「實際車速」開完要多久 − 路線規劃原本估的時間(該段所在路段的規劃車速)。
+  // 塞車路段由路況程式算好放在 window._navTrafficSpans(位置是佔路線全長的比例)
+  function navRefSpeedAt(frac) {
+    const tot = navSteps.reduce((s, x) => s + (x.distance || 0), 0) || 1;
+    let acc = 0;
+    for (const s of navSteps) {
+      const d = s.distance || 0;
+      if (d > 0 && s.duration > 0 && (acc + d) / tot >= frac) return d / s.duration; // 公尺/秒
+      acc += d;
+    }
+    return _navTotals && _navTotals.dur ? _navTotals.dist / _navTotals.dur : 10;
+  }
+  function navTrafficDelaySec(carFrac) {
+    const spans = window._navTrafficSpans;
+    if (!spans || !spans.length || !_navTotals || !_navTotals.dist) return 0;
+    let delay = 0;
+    spans.forEach(s => {
+      const fa = Math.max(s.fa, carFrac), fb = s.fb;
+      if (fb <= fa || !(s.kmh > 0)) return;                 // 已經開過的、沒有車速的不算
+      const len = (fb - fa) * _navTotals.dist;              // 公尺
+      const vRef = navRefSpeedAt((fa + fb) / 2), vNow = Math.max(s.kmh, 3) / 3.6;
+      if (vNow < vRef) delay += len / vNow - len / vRef;    // 只加「比規劃慢」多出來的時間
+    });
+    return delay;
   }
 
   // 車子目前在導航路線上的沿線距離;順便算好每個轉彎點的沿線位置(同一份路線只算一次)
@@ -9454,7 +9482,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function showTrafficPopup(e) {
     if (!e.features || !e.features[0]) return;
     var p = e.features[0].properties;
-    if (p.source === 'freeway') { // 國道官方即時路況(高速公路局，每分鐘更新)
+    var OFFICIAL_SRC = { freeway: '高速公路局即時路況', taipei: '臺北市交通局即時路況' };
+    if (OFFICIAL_SRC[p.source]) { // 官方即時路況(國道、臺北市區，每分鐘更新)
       new maplibregl.Popup({ offset: 12, closeButton: true })
         .setLngLat(e.lngLat)
         .setHTML(
@@ -9462,7 +9491,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           '<strong style="color:' + p.color + '">' + (p.label || '路況') + '</strong><br>' +
           (p.sectionName ? p.sectionName + '<br>' : '') +
           '目前平均車速：' + p.averageSpeed + ' km/h' + (p.baselineSpeed && p.baselineSpeed !== 'null' ? '（速限 ' + p.baselineSpeed + '）' : '') + '<br>' +
-          '<span style="color:#888;font-size:11px">資料來源：高速公路局即時路況，每分鐘更新</span>' +
+          '<span style="color:#888;font-size:11px">資料來源：' + OFFICIAL_SRC[p.source] + '，每分鐘更新</span>' +
           '</div>'
         )
         .addTo(window.map);
@@ -9915,9 +9944,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         if (!piece) return;
         var a = alongRoute(route, piece[0]), b = alongRoute(route, piece[piece.length - 1]);
         if (b < a) { var t = a; a = b; b = t; }
-        if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel] });
+        if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel],
+                                     kmh: Number(p.averageSpeed) || 0 });
       });
     }
+    // 給剩餘時間用：塞車路段在路線上的位置(佔全長的比例)和實際車速，主程式依此加上塞車多花的時間
+    window._navTrafficSpans = spans.map(function (s) { return { fa: s.a / total, fb: s.b / total, kmh: s.kmh }; });
     // 依所有切點把路線切成小段，每段取覆蓋它的最嚴重塞車顏色；相鄰同色的再合併
     var cuts = [0, total];
     spans.forEach(function (s) { cuts.push(s.a, s.b); });

@@ -55,6 +55,7 @@ function createHarness() {
       },
       gps(lat, lon, speed, now) { snapVehicleToRoute(lat, lon, speed, now); checkTurnByTurn(lat, lon); },
       stepIndex: () => currentStepIndex,
+      setSpans(s) { window._navTrafficSpans = s; },
     };
   `, context);
   return { els, api: context.api };
@@ -98,4 +99,20 @@ test('remaining distance follows the route position', () => {
   for (let km = 0; km <= 10; km += 0.03) h.api.gps(0, lonAt(km), 30, t += 1000);
   const km = Number(h.els.info.innerText.match(/([\d.]+)公里/)[1]);
   assert.ok(Math.abs(km - 23.6) <= 0.1, 'expected ~23.6 km left, got ' + h.els.info.innerText);
+});
+
+test('a jam ahead on the route adds its extra time to the remaining time; a jam already passed does not', () => {
+  const h = createHarness();
+  const { coords, steps } = highwayRoute();
+  h.api.start(steps, 33600, 32 * 60, coords, 1);
+  // 路線中間 3.36 公里塞車，只能開 20 km/h(規劃車速約 63 km/h)：多花約 7 分鐘
+  h.api.setSpans([{ fa: 0.5, fb: 0.6, kmh: 20 }]);
+  let t = 0;
+  for (let km = 0; km <= 1; km += 0.03) h.api.gps(0, lonAt(km), 30, t += 1000);
+  const min1 = Number(h.els.info.innerText.match(/(\d+)分鐘/)[1]);
+  assert.ok(min1 >= 37 && min1 <= 39, 'expected ~38 min with the jam ahead, got ' + h.els.info.innerText);
+  // 開過塞車路段之後就不再加
+  for (let km = 1; km <= 21; km += 0.05) h.api.gps(0, lonAt(km), 30, t += 1000);
+  const min2 = Number(h.els.info.innerText.match(/(\d+)分鐘/)[1]);
+  assert.ok(min2 >= 11 && min2 <= 13, 'expected ~12 min after passing the jam, got ' + h.els.info.innerText);
 });
