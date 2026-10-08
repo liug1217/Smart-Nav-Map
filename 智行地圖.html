@@ -4701,6 +4701,8 @@ function _flipCell(cell, from, to) {
         });
         // 新路線也立刻把塞車路段畫上去(塞車直接是導航路線的顏色)
         if (typeof window._snmColorizeRoute === 'function') setTimeout(window._snmColorizeRoute, 0);
+        // 再抓一次整條路線範圍的路況(手上的路況可能只涵蓋原本畫面)，剩餘時間才能把路線上的塞車都算進去
+        if (typeof window._snmRefetchTraffic === 'function') setTimeout(window._snmRefetchTraffic, 500);
       }
 
       // 更新底部面板的時間/距離/到達時間顯示
@@ -9661,6 +9663,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     // 多抓畫面外一圈(上下左右各多半個畫面)：開車、拖地圖時不用每動一下就重抓
     var dLat = (b.getNorth() - b.getSouth()) / 2, dLng = (b.getEast() - b.getWest()) / 2;
     _trafficFetchedBox = { n: b.getNorth() + dLat, s: b.getSouth() - dLat, e: b.getEast() + dLng, w: b.getWest() - dLng };
+    // 導航中：整條路線經過的範圍都要抓(路線上每一段塞車都要算進剩餘時間，不能只看畫面附近)
+    var route = window.plannedRouteCoordinates;
+    if (isNavigating() && route && route.length > 1) {
+      var fb = _trafficFetchedBox;
+      route.forEach(function (c) {
+        if (c[1] + 0.005 > fb.n) fb.n = c[1] + 0.005; if (c[1] - 0.005 < fb.s) fb.s = c[1] - 0.005;
+        if (c[0] + 0.005 > fb.e) fb.e = c[0] + 0.005; if (c[0] - 0.005 < fb.w) fb.w = c[0] - 0.005;
+      });
+    }
     var q = '?n=' + _trafficFetchedBox.n.toFixed(5) +
             '&s=' + _trafficFetchedBox.s.toFixed(5) +
             '&e=' + _trafficFetchedBox.e.toFixed(5)  +
@@ -9972,6 +9983,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     });
   }
   window._snmColorizeRoute = colorizeNavRoute;   // 重新規劃路線後由主程式呼叫
+  window._snmRefetchTraffic = function () { fetchTrafficSegments(); }; // 新路線規劃好後由主程式呼叫
 
   // 導航中：只播報「導航路線上、在車子前方」100m~3km 內的壅塞，距離照沿路線計算、最近的先播。
   // 不再要求 3 人以上回報：地圖上已經畫成紅色的，語音就要講，兩邊才一致
