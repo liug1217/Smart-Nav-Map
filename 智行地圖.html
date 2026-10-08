@@ -9602,6 +9602,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     keepTrafficOnTop();
     setTimeout(keepTrafficOnTop, 3000); // 加油站、測速照相等圖示是陸續載入的，晚一點再排一次
     fetchTrafficSegments();
+    if (!window.map._snmTrafficMoveBound) { window.map._snmTrafficMoveBound = true; window.map.on('moveend', trafficOnMoveEnd); }
   }
   // 換地圖樣式後重建(由 reloadMapLayers 呼叫)
   window._reloadTrafficLayer = initTrafficLayer;
@@ -9611,15 +9612,30 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   else { setTimeout(initTrafficLayer, 1500); }
 
   // ── 取得路況資料 ──────────────────────────────────────────────────────────
+  var _trafficFetchedBox = null; // 上次抓路況的範圍(含外圍)
+  // 地圖移動停下來後：畫面超出上次抓的範圍才重抓(原本只有開地圖、有人回報車速時才抓，移到新地方看不到路況)
+  var _trafficMoveTimer = null;
+  function trafficOnMoveEnd() {
+    clearTimeout(_trafficMoveTimer);
+    _trafficMoveTimer = setTimeout(function () {
+      var m = window.map, f = _trafficFetchedBox;
+      if (!m || !_trafficOn) return;
+      var b = m.getBounds();
+      if (!f || b.getNorth() > f.n || b.getSouth() < f.s || b.getEast() > f.e || b.getWest() < f.w) fetchTrafficSegments();
+    }, 800);
+  }
   function fetchTrafficSegments() {
     if (!_trafficOn) return;
     if (!window.map) return;
     if (document.hidden) return; // 畫面看不到時不抓(回到畫面會立刻補抓一次)
     var b = window.map.getBounds();
-    var q = '?n=' + b.getNorth().toFixed(5) +
-            '&s=' + b.getSouth().toFixed(5) +
-            '&e=' + b.getEast().toFixed(5)  +
-            '&w=' + b.getWest().toFixed(5);
+    // 多抓畫面外一圈(上下左右各多半個畫面)：開車、拖地圖時不用每動一下就重抓
+    var dLat = (b.getNorth() - b.getSouth()) / 2, dLng = (b.getEast() - b.getWest()) / 2;
+    _trafficFetchedBox = { n: b.getNorth() + dLat, s: b.getSouth() - dLat, e: b.getEast() + dLng, w: b.getWest() - dLng };
+    var q = '?n=' + _trafficFetchedBox.n.toFixed(5) +
+            '&s=' + _trafficFetchedBox.s.toFixed(5) +
+            '&e=' + _trafficFetchedBox.e.toFixed(5)  +
+            '&w=' + _trafficFetchedBox.w.toFixed(5);
     apiGet('/traffic/segments' + q)
       .then(function (r) { return (r && r.data) ? r.data : r; })
       .then(function (geojson) {
