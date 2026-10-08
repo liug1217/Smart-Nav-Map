@@ -490,6 +490,97 @@ body.ptt-in-room .pttChat{ display:flex; }
   color:#666;
   margin-top:2px;
 }
+/* ── 全螢幕搜尋頁(像 Google 地圖)：點搜尋框就整個畫面變搜尋頁，選好地點才回到地圖 ── */
+.searchBackBtn{
+  display:none;
+  border:none;
+  background:transparent;
+  font-size:22px;
+  width:36px;
+  height:36px;
+  margin-left:-8px;
+  border-radius:50%;
+  cursor:pointer;
+  color:#333;
+}
+.searchChips{ display:none; }
+body.searchOpen .searchBarWrap{
+  position:fixed;
+  left:0; right:0; top:0; bottom:0;
+  z-index:1000;
+  background:#FFFFFF;
+  padding:8px 8px 0;
+  display:flex;
+  flex-direction:column;
+}
+body.searchOpen .searchBar{ box-shadow:none; background:#F1F3F4; }
+body.searchOpen .searchBackBtn{ display:block; }
+body.searchOpen .searchChips{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:12px 2px 10px;
+  scrollbar-width:none;
+  flex-shrink:0;
+}
+body.searchOpen .searchChips::-webkit-scrollbar{ display:none; }
+.searchChips button{
+  flex-shrink:0;
+  border:1px solid #DADCE0;
+  background:#FFFFFF;
+  color:#3C4043;
+  border-radius:18px;
+  padding:7px 13px;
+  font-size:13px;
+  font-family:inherit;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.searchChips button:active{ background:#F1F3F4; }
+body.searchOpen .searchResultsList{
+  display:block !important;
+  flex:1;
+  max-height:none;
+  margin:0 -8px;
+  border-radius:0;
+  box-shadow:none;
+  border-top:1px solid #EEE;
+  -webkit-overflow-scrolling:touch;
+}
+.searchHint{ padding:24px 16px; font-size:13px; color:#888; text-align:center; line-height:1.6; }
+
+/* ── 路線選擇面板(A/B/C) ── */
+.routePanel{
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:180px;
+  z-index:11; /* 蓋在右邊地圖按鈕上面 */
+  background:#FFFFFF;
+  border-radius:14px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.25);
+  padding:10px 12px 12px;
+  display:none;
+  max-height:52vh;
+  flex-direction:column;
+}
+.routePanel.open{ display:flex; }
+.rpHead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.rpTitle{ font-weight:700; font-size:15px; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rpClose{ border:none; background:#EEE; border-radius:50%; width:30px; height:30px; font-size:14px; cursor:pointer; flex-shrink:0; }
+.rpList{ overflow-y:auto; margin:0 -4px 10px; }
+.rpItem{ display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:10px; border:2px solid transparent; cursor:pointer; }
+.rpItem.sel{ border-color:#16E098; background:#F0FBF7; }
+.rpBadge{ width:28px; height:28px; border-radius:50%; background:#9AA0A6; color:#fff; font-weight:800; font-size:14px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.rpItem.sel .rpBadge{ background:#009B65; }
+.rpMain{ flex:1; min-width:0; }
+.rpTime{ font-size:17px; font-weight:800; color:#000; }
+.rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
+.rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#009B65; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
+.rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rpStart{ width:100%; flex:none; }
+
 .searchResultsEmpty{
   padding:14px;
   font-size:13px;
@@ -1465,10 +1556,32 @@ html, body {
 <!-- 🔍 搜尋地點 -->
 <div class="searchBarWrap" id="searchBarWrap">
   <div class="searchBar">
+    <button type="button" class="searchBackBtn" id="searchBackBtn" aria-label="返回地圖">←</button>
     <input type="text" id="searchInput" placeholder="搜尋地點、地址" autocomplete="off" />
     <button type="button" class="searchIconBtn" id="searchBtn">🔍</button>
   </div>
+  <!-- 全螢幕搜尋頁才出現的快捷分類 -->
+  <div class="searchChips" id="searchChips">
+    <button type="button" data-q="加油站">⛽ 加油站</button>
+    <button type="button" data-q="7-11">🏪 7-11</button>
+    <button type="button" data-q="全家">🏪 全家</button>
+    <button type="button" data-q="廁所">🚻 廁所</button>
+    <button type="button" data-q="停車場">🅿️ 停車場</button>
+    <button type="button" data-q="YouBike">🚲 YouBike</button>
+    <button type="button" data-q="麥當勞">🍔 麥當勞</button>
+    <button type="button" data-q="全聯">🛒 全聯</button>
+  </div>
   <div class="searchResultsList" id="searchResultsList"></div>
+</div>
+
+<!-- 🛣️ 路線選擇(A/B/C)：選好地點後先列出幾條路線，選一條再開始導航 -->
+<div class="routePanel" id="routePanel">
+  <div class="rpHead">
+    <div class="rpTitle" id="rpTitle">選擇路線</div>
+    <button type="button" class="rpClose" id="rpClose" aria-label="取消">✕</button>
+  </div>
+  <div class="rpList" id="rpList"></div>
+  <button type="button" class="navigateBtn rpStart" id="rpStart">開始導航</button>
 </div>
 
 <!-- 📍 選定地點後的導航面板 -->
@@ -3663,7 +3776,42 @@ function _flipCell(cell, from, to) {
     destName.innerText = name || '選定地點';
     destAddr.innerText = addr || '';
     destPanel.style.display = 'block';
+    closeSearchPage(); // 選好地點：搜尋頁收起來，回到地圖
   }
+
+  // ===== 🔍 全螢幕搜尋頁(像 Google 地圖)：點搜尋框整個畫面變成搜尋頁，選好地點或按返回才回到地圖 =====
+  const searchBackBtn = document.getElementById('searchBackBtn');
+  const searchChips = document.getElementById('searchChips');
+  let _searchHistPushed = false;
+  function showSearchHome() {
+    if (getRecentDests().length) { showRecentDests(); return; }
+    searchResultsList.innerHTML = '<div class="searchHint">輸入地點、地址或店名<br>也可以點上面的分類快速找附近的店</div>';
+  }
+  function openSearchPage() {
+    if (document.body.classList.contains('searchOpen') || document.body.classList.contains('navigating')) return;
+    document.body.classList.add('searchOpen');
+    if (!searchInput.value.trim()) showSearchHome();
+    // 手機的「返回」也能關掉搜尋頁(不會直接離開網頁)
+    try { history.pushState({ snmSearch: 1 }, ''); _searchHistPushed = true; } catch (_) {}
+  }
+  function closeSearchPage(fromPopState) {
+    if (!document.body.classList.contains('searchOpen')) return;
+    document.body.classList.remove('searchOpen');
+    searchInput.blur();
+    searchResultsList.style.display = 'none';
+    const pushed = _searchHistPushed;
+    _searchHistPushed = false;
+    if (pushed && !fromPopState) { try { history.back(); } catch (_) {} }
+  }
+  window._closeSearchPage = closeSearchPage;
+  window.addEventListener('popstate', () => { if (document.body.classList.contains('searchOpen')) closeSearchPage(true); });
+  if (searchBackBtn) searchBackBtn.addEventListener('click', () => closeSearchPage());
+  if (searchChips) searchChips.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-q]');
+    if (!b) return;
+    searchInput.value = b.dataset.q;
+    searchPlaces(b.dataset.q);
+  });
 
   if (searchBtn) {
     searchBtn.addEventListener('click', () => searchPlaces(searchInput.value));
@@ -3673,10 +3821,11 @@ function _flipCell(cell, from, to) {
       if (e.key === 'Enter') searchPlaces(searchInput.value);
     });
     searchInput.addEventListener('focus', () => {
-      if (!searchInput.value.trim()) showRecentDests();
+      openSearchPage();
+      if (!searchInput.value.trim()) showSearchHome();
     });
     searchInput.addEventListener('input', () => {
-      if (!searchInput.value.trim()) showRecentDests();
+      if (!searchInput.value.trim()) showSearchHome();
     });
   }
   if (closeDestBtn) {
@@ -4628,12 +4777,138 @@ function _flipCell(cell, from, to) {
     });
   }
 
-  async function planRouteTo(destLat, destLon, fromPosition = null){
+  // ===== 🛣️ 路線選擇(A/B/C)：列出幾條路線(時間含目前塞車多花的時間)，地圖上選中的綠色、其他灰色，選好再開始導航 =====
+  const routePanel = document.getElementById('routePanel');
+  const rpList = document.getElementById('rpList');
+  const rpTitle = document.getElementById('rpTitle');
+  const rpStart = document.getElementById('rpStart');
+  const rpClose = document.getElementById('rpClose');
+  let _routeChoice = null; // { routes, delays, sel, origin, dest }
+  const RP_SRC = 'routeOptions';
+  function rpEnsureLayers() {
+    if (map.getSource(RP_SRC)) return;
+    map.addSource(RP_SRC, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    const before = map.getLayer('navRoute-outline') ? 'navRoute-outline' : (map.getLayer('user-car') ? 'user-car' : undefined);
+    const other = ['!=', ['get', 'sel'], true], sel = ['==', ['get', 'sel'], true];
+    const lay = { 'line-join': 'round', 'line-cap': 'butt' };
+    map.addLayer({ id: 'routeOpt-other-casing', type: 'line', source: RP_SRC, filter: other, layout: lay, paint: { 'line-color': '#6B7280', 'line-width': 13 } }, before);
+    map.addLayer({ id: 'routeOpt-other', type: 'line', source: RP_SRC, filter: other, layout: lay, paint: { 'line-color': '#BDC1C6', 'line-width': 9 } }, before);
+    map.addLayer({ id: 'routeOpt-sel-casing', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#009B65', 'line-width': 15 } }, before);
+    map.addLayer({ id: 'routeOpt-sel', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#16E098', 'line-width': 11 } }, before);
+    if (!map._snmRpClickBound) { // 點地圖上灰色的路線也能換選(換地圖樣式後圖層會重建，事件只綁一次)
+      map._snmRpClickBound = true;
+      const pick = (e) => { const i = e.features && e.features[0] && e.features[0].properties.idx; if (i != null) rpSelect(Number(i)); };
+      map.on('click', 'routeOpt-other', pick);
+      map.on('click', 'routeOpt-other-casing', pick);
+    }
+  }
+  function rpDraw() {
+    if (!_routeChoice) return;
+    rpEnsureLayers();
+    map.getSource(RP_SRC).setData({ type: 'FeatureCollection', features: _routeChoice.routes.map((r, i) => (
+      { type: 'Feature', geometry: r.geometry, properties: { idx: i, sel: i === _routeChoice.sel } })) });
+  }
+  // 選路線時也收起群集圓圈(公廁、紅綠燈、監視器…的數量圓圈)，不然會蓋住路線；只還原自己藏起來的
+  let _rpHiddenCircles = [];
+  function rpToggleCircles(show) {
+    if (show) {
+      _rpHiddenCircles.forEach(id => { try { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible'); } catch (_) {} });
+      _rpHiddenCircles = [];
+      return;
+    }
+    (map.getStyle().layers || []).forEach(l => {
+      if (l.type !== 'circle' || /^snm-traffic/.test(l.id)) return;
+      if ((map.getLayoutProperty(l.id, 'visibility') || 'visible') === 'none') return;
+      try { map.setLayoutProperty(l.id, 'visibility', 'none'); _rpHiddenCircles.push(l.id); } catch (_) {}
+    });
+  }
+  function rpFmtMin(sec) {
+    const m = Math.max(1, Math.round(sec / 60)), h = Math.floor(m / 60);
+    return (h ? h + ' 小時 ' : '') + (m % 60) + ' 分鐘';
+  }
+  function rpRender() {
+    const c = _routeChoice;
+    if (!c) return;
+    const tot = c.routes.map((r, i) => r.duration + (c.delays[i] || 0));
+    const fastest = tot.indexOf(Math.min.apply(null, tot));
+    rpList.innerHTML = '';
+    c.routes.forEach((r, i) => {
+      const el = document.createElement('div');
+      el.className = 'rpItem' + (i === c.sel ? ' sel' : '');
+      const jam = c.delays[i] >= 60 ? '<span class="rpJam">塞車 +' + Math.round(c.delays[i] / 60) + ' 分</span>' : '';
+      const fast = c.routes.length > 1 && i === fastest ? '<span class="rpFast">最快</span>' : '';
+      const via = (r.legs && r.legs[0] && r.legs[0].summary) ? r.legs[0].summary.split(',').map(x => x.trim()).filter(Boolean).slice(0, 2).join('、') : '';
+      const eta = new Date(Date.now() + tot[i] * 1000);
+      el.innerHTML = '<div class="rpBadge">' + String.fromCharCode(65 + i) + '</div>' +
+        '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + jam + fast + '</div>' +
+        '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' +
+        (via ? ' · 經由 ' + via : '') + '</div></div>';
+      el.addEventListener('click', () => rpSelect(i));
+      rpList.appendChild(el);
+    });
+  }
+  function rpSelect(i) {
+    if (!_routeChoice || i === _routeChoice.sel) return;
+    _routeChoice.sel = i;
+    rpRender(); rpDraw();
+  }
+  function rpHide() {
+    routePanel.classList.remove('open');
+    document.body.classList.remove('choosingRoute');
+    if (!isNavigating) togglePoiLayers(true);
+    rpToggleCircles(true);
+    const src = map.getSource(RP_SRC);
+    if (src) src.setData({ type: 'FeatureCollection', features: [] });
+    _routeChoice = null;
+  }
+  function showRouteChooser(routes, origin, destLat, destLon) {
+    _routeChoice = { routes, delays: routes.map(() => 0), sel: 0, origin, dest: { lat: destLat, lon: destLon } };
+    _navState = 'idle';
+    // 選路線時只留路線：綠色道路底圖、店家圖示先收起來(跟導航中一樣)
+    document.body.classList.add('choosingRoute');
+    togglePoiLayers(false);
+    rpToggleCircles(false);
+    destPanel.style.display = 'none';
+    rpTitle.textContent = '到 ' + ((selectedDest && selectedDest.name) || '目的地') + (routes.length > 1 ? '：' + routes.length + ' 條路線' : '');
+    routePanel.classList.add('open');
+    rpRender(); rpDraw();
+    // 所有路線都看得到；下面留給路線面板
+    const lons = [], lats = [];
+    routes.forEach(r => r.geometry.coordinates.forEach(c => { lons.push(c[0]); lats.push(c[1]); }));
+    if (window._setFollowUser) window._setFollowUser(false);
+    // 選路線用正上方俯視(像 Google)：3D 傾斜時路線會被壓扁、躲在面板後面；下方留出路線面板實際的高度
+    // 跟隨鏡頭會在地圖上設很大的留白(讓車子停在畫面下方)；fitBounds 會把它跟這裡的留白加在一起、超過畫面就直接不動，要先清掉
+    map.jumpTo({ pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 } });
+    const panelTop = routePanel.getBoundingClientRect().top || window.innerHeight * 0.5;
+    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+      { padding: { top: 120, bottom: Math.max(60, window.innerHeight - panelTop + 16), left: 40, right: 40 }, duration: 800 }); // 上方留給搜尋框、時鐘那排
+    // 背景估各路線目前塞車多花的時間，估好再更新時間與「最快」
+    const mine = _routeChoice;
+    if (typeof window._snmEstimateRouteDelays === 'function') {
+      window._snmEstimateRouteDelays(routes).then(d => { if (_routeChoice === mine) { mine.delays = d; rpRender(); } });
+    }
+  }
+  if (rpClose) rpClose.addEventListener('click', () => {
+    rpHide();
+    if (selectedDest) destPanel.style.display = 'block'; // 回到選好地點的畫面
+  });
+  if (rpStart) rpStart.addEventListener('click', () => {
+    const c = _routeChoice;
+    if (!c) return;
+    const chosen = { route: c.routes[c.sel], origin: c.origin };
+    rpHide();
+    planRouteTo(c.dest.lat, c.dest.lon, null, chosen);
+  });
+
+  // chosen：路線選擇面板選好的路線 { route, origin }(有它就不再向路線服務查詢)
+  async function planRouteTo(destLat, destLon, fromPosition = null, chosen = null){
     // 初始導航開新場次;偏航重新規劃沿用目前場次
     const mySession = fromPosition ? _navSession : ++_navSession;
     let origin;
     try {
-      if (fromPosition) {
+      if (chosen) {
+        origin = chosen.origin;
+      } else if (fromPosition) {
         // 偏航重新規劃：直接用傳入的GPS位置當起點，不用重新取得
         origin = { lat: fromPosition.lat, lon: fromPosition.lon };
       } else {
@@ -4651,11 +4926,17 @@ function _flipCell(cell, from, to) {
     }
 
     try {
-      const url = 'https://router.project-osrm.org/route/v1/driving/' +
-        origin.lon + ',' + origin.lat + ';' + destLon + ',' + destLat +
-        '?overview=full&geometries=geojson&steps=true';
-      const res = await fetch(url);
-      const data = await res.json();
+      let data;
+      if (chosen) {
+        data = { routes: [chosen.route] };
+      } else {
+        // 第一次規劃要多條路線(A/B/C)讓使用者選；偏航重新規劃只要一條，直接接著導航
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+          origin.lon + ',' + origin.lat + ';' + destLon + ',' + destLat +
+          '?overview=full&geometries=geojson&steps=true' + (fromPosition ? '' : '&alternatives=3');
+        const res = await fetch(url);
+        data = await res.json();
+      }
 
       // 等待回應期間使用者已退出(或開始了另一次導航):不要套用這份路線
       if (mySession !== _navSession) return false;
@@ -4663,6 +4944,12 @@ function _flipCell(cell, from, to) {
       if (!data.routes || !data.routes.length) {
         if (!fromPosition) alert('找不到可行的路線');
         return;
+      }
+
+      // 第一次規劃：先列出路線讓使用者選，選好按「開始導航」才真的開始(再呼叫一次 planRouteTo 帶 chosen)
+      if (!fromPosition && !chosen) {
+        showRouteChooser(data.routes, origin, destLat, destLon);
+        return 'choosing';
       }
 
       const route = data.routes[0];
@@ -6692,9 +6979,16 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
             '<img id="'+uid+'" src="'+baseUrl+sep+'t='+Date.now()+'" style="width:300px;height:200px;object-fit:cover;display:block;background:#000">'+
             '<span class="cctvLive"><span class="dot"></span>即時</span>'+
           '</div>'+
-          '<div style="color:#888;font-size:11px;margin-top:4px">點擊關閉即停止串流</div>'
+          '<div style="color:#888;font-size:11px;margin-top:4px">點擊關閉即停止串流</div>'+
+          '<button type="button" id="'+uid+'_nav" style="margin-top:8px;width:100%;border:none;border-radius:8px;padding:8px 0;font-size:14px;font-weight:600;color:#fff;background:#2F80FF;cursor:pointer">🗺 導航到這裡</button>'
         )
         .addTo(m);
+      // 導航到這台監視器的位置(一樣先列出 A/B/C 路線)
+      var navBtn=document.getElementById(uid+'_nav');
+      if(navBtn) navBtn.addEventListener('click',function(){
+        if(cctvPopup) cctvPopup.remove();
+        if(typeof window._navigateToCoord==='function') window._navigateToCoord(coords[1],coords[0],label||'監視器');
+      });
       function reconnect(){
         var img=document.getElementById(uid);
         if(!img) return;
@@ -6809,12 +7103,20 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     _onceOn(m,'click','speed-point',function(e){
       var p=e.features[0].properties;
       var coords=e.features[0].geometry.coordinates.slice();
-      new maplibregl.Popup({closeButton:true,maxWidth:'260px'})
+      var navId='spnav_'+Date.now();
+      var spPopup=new maplibregl.Popup({closeButton:true,maxWidth:'260px'})
         .setLngLat(coords)
         .setHTML('<div style="font-size:13px;font-weight:700;color:#CC2200">📸 固定測速</div>'+
           '<div style="font-size:12px;margin-top:4px">限速 <b>'+p.limit+'</b> km/h</div>'+
-          '<div style="font-size:11px;color:#666;margin-top:2px">'+p.addr+'</div>')
+          '<div style="font-size:11px;color:#666;margin-top:2px">'+p.addr+'</div>'+
+          '<button type="button" id="'+navId+'" style="margin-top:8px;width:100%;border:none;border-radius:8px;padding:8px 0;font-size:14px;font-weight:600;color:#fff;background:#2F80FF;cursor:pointer">🗺 導航到這裡</button>')
         .addTo(m);
+      // 導航到這支測速照相的位置(一樣先列出 A/B/C 路線)
+      var spBtn=document.getElementById(navId);
+      if(spBtn) spBtn.addEventListener('click',function(){
+        spPopup.remove();
+        if(typeof window._navigateToCoord==='function') window._navigateToCoord(coords[1],coords[0],'測速照相 '+(p.addr||''));
+      });
     });
     ['speed-clusters','speed-point'].forEach(function(id){
       m.on('mouseenter',id,function(){ m.getCanvas().style.cursor='pointer'; });
@@ -9409,7 +9711,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function applyTrafficDisplay() {
     var m = window.map;
     if (!m) return;
-    var roadsVis   = (_trafficOn && !isNavigating()) ? 'visible' : 'none';
+    // 導航中、選路線時都把綠色道路底圖藏起來：不然選中的綠色路線跟所有道路混在一起看不出來
+    var roadsVis   = (_trafficOn && !isNavigating() && !document.body.classList.contains('choosingRoute')) ? 'visible' : 'none';
     var trafficVis = _trafficOn ? 'visible' : 'none';
     TRAFFIC_LAYERS.forEach(function (id) {
       if (!m.getLayer(id)) return;
@@ -9915,6 +10218,73 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     out.push(pointAlong(route, cum, b));
     return out;
   }
+  // 路線上有哪些塞車路段：把路況對齊到這條路線(方向要相同)，回傳 { spans:[{a,b(沿線公尺),rank,color,casing,kmh}], total }
+  function spansOnRoute(route, features) {
+    alongRoute(route, route[0]);
+    var total = _routeCum[_routeCum.length - 1], spans = [];
+    var cands = [{ coords: route, oneway: true }];
+    features.forEach(function (f) {
+      var p = f.properties || {};
+      if (!LEVEL_RANK[p.trafficLevel]) return;  // 順暢：維持綠色
+      var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
+      if (!nearRoute(mid, route)) return;
+      var piece = matchRoadPiece(f, cands);
+      if (!piece) return;
+      var a = alongRoute(route, piece[0]), b = alongRoute(route, piece[piece.length - 1]);
+      if (b < a) { var t = a; a = b; b = t; }
+      if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel],
+                                   kmh: Number(p.averageSpeed) || 0 });
+    });
+    return { spans: spans, total: total };
+  }
+  // 重疊的塞車路段合併成不重疊的小段，每段取最慢的車速(算時間用，不會重複加)
+  function slowParts(spans, total) {
+    var cuts = [0, total];
+    spans.forEach(function (s) { if (s.kmh > 0) cuts.push(s.a, s.b); });
+    cuts = cuts.filter(function (c, i, arr) { return arr.indexOf(c) === i; }).sort(function (x, y) { return x - y; });
+    var out = [];
+    for (var i = 1; i < cuts.length; i++) {
+      var a = cuts[i - 1], b = cuts[i], mid = (a + b) / 2, kmh = 0;
+      spans.forEach(function (s) { if (s.kmh > 0 && s.a <= mid && s.b >= mid && (!kmh || s.kmh < kmh)) kmh = s.kmh; });
+      if (kmh && b - a >= 1) out.push({ a: a, b: b, kmh: kmh });
+    }
+    return out;
+  }
+  // 路線選擇(A/B/C)用：抓這幾條路線範圍的路況，估每條「現在塞車」會多花幾秒。
+  // 參考車速用該路段的規劃車速(路線各步驟的 距離/時間)，只加比規劃慢的部分
+  window._snmEstimateRouteDelays = function (routes) {
+    var n = -90, s = 90, e = -180, w = 180;
+    routes.forEach(function (rt) { rt.geometry.coordinates.forEach(function (c) {
+      if (c[1] > n) n = c[1]; if (c[1] < s) s = c[1]; if (c[0] > e) e = c[0]; if (c[0] < w) w = c[0]; }); });
+    var q = '?n=' + (n + 0.005).toFixed(5) + '&s=' + (s - 0.005).toFixed(5) + '&e=' + (e + 0.005).toFixed(5) + '&w=' + (w - 0.005).toFixed(5);
+    return apiGet('/traffic/segments' + q)
+      .then(function (r) { return (r && r.data) ? r.data : r; })
+      .then(function (gj) {
+        var feats = (gj && gj.features) || [];
+        return routes.map(function (rt) {
+          var coords = rt.geometry.coordinates, sr = spansOnRoute(coords, feats);
+          if (!sr.total) return 0;
+          var steps = (rt.legs && rt.legs[0] && rt.legs[0].steps) || [], stepTot = steps.reduce(function (x, st) { return x + (st.distance || 0); }, 0) || 1;
+          var avg = rt.duration > 0 ? rt.distance / rt.duration : 10;
+          var refAt = function (frac) {
+            var acc = 0;
+            for (var i = 0; i < steps.length; i++) {
+              var d = steps[i].distance || 0;
+              if (d > 0 && steps[i].duration > 0 && (acc + d) / stepTot >= frac) return d / steps[i].duration;
+              acc += d;
+            }
+            return avg;
+          };
+          var scale = rt.distance / sr.total, delay = 0;
+          slowParts(sr.spans, sr.total).forEach(function (p) {
+            var len = (p.b - p.a) * scale, vRef = refAt((p.a + p.b) / 2 / sr.total), v = Math.max(p.kmh, 3) / 3.6;
+            if (v < vRef) delay += len / v - len / vRef;
+          });
+          return delay;
+        });
+      })
+      .catch(function () { return routes.map(function () { return 0; }); });
+  };
   function colorizeNavRoute() {
     var m = window.map, route = window.plannedRouteCoordinates;
     var src = m && m.getSource('navRoute');
@@ -9924,26 +10294,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     m.setPaintProperty('navRoute-line', 'line-color', ['coalesce', ['get', 'color'], NAV_LINE_C]);
     // 外框也分段：塞車那段用同色系深色外框，其他段維持綠色外框
     if (m.getLayer('navRoute-outline')) m.setPaintProperty('navRoute-outline', 'line-color', ['coalesce', ['get', 'casing'], NAV_OUTLINE_C]);
-    alongRoute(route, route[0]);                 // 確保 _routeCum 是這條路線的累積距離
-    var cum = _routeCum, total = cum[cum.length - 1];
-    var spans = [];
-    if (_trafficOn && isNavigating() && _trafficData) {
-      var cands = [{ coords: route, oneway: true }];
-      _trafficData.features.forEach(function (f) {
-        var p = f.properties || {};
-        if (!LEVEL_RANK[p.trafficLevel]) return;  // 順暢：維持綠色
-        var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
-        if (!nearRoute(mid, route)) return;
-        var piece = matchRoadPiece(f, cands);
-        if (!piece) return;
-        var a = alongRoute(route, piece[0]), b = alongRoute(route, piece[piece.length - 1]);
-        if (b < a) { var t = a; a = b; b = t; }
-        if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel],
-                                     kmh: Number(p.averageSpeed) || 0 });
-      });
-    }
+    var sr = (_trafficOn && _trafficData) ? spansOnRoute(route, _trafficData.features) : spansOnRoute(route, []);
+    var spans = sr.spans, total = sr.total, cum = _routeCum; // spansOnRoute 之後 _routeCum 就是這條路線的累積距離
     // 給剩餘時間用：塞車路段在路線上的位置(佔全長的比例)和實際車速，主程式依此加上塞車多花的時間
-    window._navTrafficSpans = spans.map(function (s) { return { fa: s.a / total, fb: s.b / total, kmh: s.kmh }; });
+    // (同一段有好幾筆路況重疊時只算一次、取最慢的，避免重複加時間)
+    window._navTrafficSpans = slowParts(spans, total).map(function (s) { return { fa: s.a / total, fb: s.b / total, kmh: s.kmh }; });
     // 依所有切點把路線切成小段，每段取覆蓋它的最嚴重塞車顏色；相鄰同色的再合併
     var cuts = [0, total];
     spans.forEach(function (s) { cuts.push(s.a, s.b); });
