@@ -548,6 +548,13 @@ body.searchOpen .searchResultsList{
   -webkit-overflow-scrolling:touch;
 }
 .searchHint{ padding:24px 16px; font-size:13px; color:#888; text-align:center; line-height:1.6; }
+.savedPlaceRow{ display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid #EEE; cursor:pointer; }
+.savedPlaceRow:active{ background:#F2F2F2; }
+.savedPlaceRow .spIcon{ width:34px; height:34px; border-radius:50%; background:#E8F0FE; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+.savedPlaceRow .spText{ flex:1; min-width:0; }
+.savedPlaceRow .spName{ font-weight:700; font-size:14px; color:#000; }
+.savedPlaceRow .spAddr{ font-size:12px; color:#666; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.savedPlaceRow .spEdit{ border:none; background:#F1F3F4; color:#3C4043; border-radius:14px; padding:5px 10px; font-size:12px; font-family:inherit; cursor:pointer; flex-shrink:0; }
 
 /* ── 路線選擇面板(A/B/C) ── */
 .routePanel{
@@ -3585,6 +3592,8 @@ function _flipCell(cell, from, to) {
 
   async function searchPlaces(query){
     if (!query || !query.trim()) return;
+    const pq = _settingPlace ? null : parseRouteQuery(query);
+    if (pq) { await runSmartRoute(pq); return; }
     searchResultsList.innerHTML = '<div class="searchResultsEmpty">搜尋中...</div>';
     searchResultsList.style.display = 'block';
 
@@ -3772,6 +3781,20 @@ function _flipCell(cell, from, to) {
   }
 
   window.selectDestination = function selectDestination(lat, lon, name, addr, logo){
+    if (_settingPlace) { // 設定住家/公司：存起來、回到搜尋頁首頁
+      const k = _settingPlace;
+      setSavedPlace(k, { lat, lon, name: name || '', addr: addr || name || '' });
+      _settingPlace = null;
+      searchInput.placeholder = '搜尋地點、地址';
+      searchInput.value = '';
+      showSearchHome();
+      const t = document.createElement('div');
+      t.className = 'coinToast';
+      t.textContent = SAVED_PLACES[k].icon + ' 已設為' + SAVED_PLACES[k].label;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2000);
+      return;
+    }
     selectedDest = { lat, lon, name, addr, logo: logo || '' };
 
     if (destMarker) destMarker.remove();
@@ -3792,13 +3815,81 @@ function _flipCell(cell, from, to) {
     closeSearchPage(); // 選好地點：搜尋頁收起來，回到地圖
   }
 
+  // ===== 🏠 住家／💼 公司(同 Google 地圖)：存在這支手機；點一下就規劃路線，沒設定就先搜尋地址來設定 =====
+  const SAVED_PLACES = { home: { key: 'snm_home', label: '住家', icon: '🏠' }, work: { key: 'snm_work', label: '公司', icon: '💼' } };
+  function getSavedPlace(k) { try { return JSON.parse(localStorage.getItem(SAVED_PLACES[k].key) || 'null'); } catch (_) { return null; } }
+  function setSavedPlace(k, p) { try { localStorage.setItem(SAVED_PLACES[k].key, JSON.stringify(p)); } catch (_) {} }
+  let _settingPlace = null; // 'home' | 'work'：設定中，下一個選到的搜尋結果就存成住家/公司
+  function startSetPlace(k) {
+    _settingPlace = k;
+    searchInput.value = '';
+    searchInput.placeholder = '搜尋要設為' + SAVED_PLACES[k].label + '的地址或地點';
+    searchResultsList.innerHTML = '<div class="searchHint">輸入' + SAVED_PLACES[k].label + '的地址或附近地標，<br>點選搜尋結果就會設為' + SAVED_PLACES[k].label + '</div>';
+    searchInput.focus();
+  }
+  function savedPlaceRows() {
+    const box = document.createElement('div');
+    Object.keys(SAVED_PLACES).forEach(k => {
+      const sp = SAVED_PLACES[k], p = getSavedPlace(k);
+      const row = document.createElement('div');
+      row.className = 'savedPlaceRow';
+      row.innerHTML = '<div class="spIcon">' + sp.icon + '</div><div class="spText"><div class="spName">' + sp.label + '</div>' +
+        '<div class="spAddr"></div></div>' + (p ? '<button type="button" class="spEdit">更改</button>' : '');
+      row.querySelector('.spAddr').textContent = p ? (p.addr || p.name || '') : '點這裡設定' + sp.label + '地址';
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.spEdit') || !p) { startSetPlace(k); return; }
+        closeSearchPage();
+        window._snmRouteBetween(null, { lat: p.lat, lon: p.lon, name: sp.label, addr: p.addr || '' });
+      });
+      box.appendChild(row);
+    });
+    return box;
+  }
+
+  // ===== 🧠 聰明搜尋(像 Google 地圖)：「住家到台中市」「台北車站到住家」「從公司到台北101」「回家」直接出路線 =====
+  function parseRouteQuery(q) {
+    q = (q || '').trim();
+    if (/^(回家|回住家|go ?home)$/i.test(q)) return { from: '', to: '住家' };
+    const m = q.match(/^(?:從)?\s*(.+?)\s*(?:到|去|至|→|->)\s*(.+)$/);
+    if (!m || !m[1] || !m[2]) return null;
+    return { from: m[1].trim(), to: m[2].trim() };
+  }
+  const HERE_WORDS = /^(這裡|這邊|目前位置|現在位置|我的位置|我這裡|現在|目前)$/;
+  // 文字 → 地點：住家/公司 用存好的；這裡/目前位置 = null(目前位置)；其他用地名搜尋取第一筆
+  async function resolveEndpoint(t) {
+    if (!t || HERE_WORDS.test(t)) return null;
+    if (/^(住家|家|我家|home)$/i.test(t)) { const p = getSavedPlace('home'); if (!p) throw new Error('還沒設定住家'); return { lat: p.lat, lon: p.lon, name: '住家', addr: p.addr || '' }; }
+    if (/^(公司|work)$/i.test(t)) { const p = getSavedPlace('work'); if (!p) throw new Error('還沒設定公司'); return { lat: p.lat, lon: p.lon, name: '公司', addr: p.addr || '' }; }
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&accept-language=zh-TW&q=' + encodeURIComponent(t);
+    const list = await (await fetch(url)).json();
+    if (!list || !list.length) throw new Error('找不到「' + t + '」');
+    return { lat: Number(list[0].lat), lon: Number(list[0].lon), name: t, addr: list[0].display_name || '' };
+  }
+  async function runSmartRoute(pq) {
+    searchResultsList.innerHTML = '<div class="searchResultsEmpty">規劃「' + (pq.from || '目前位置') + ' → ' + pq.to + '」路線中…</div>';
+    searchResultsList.style.display = 'block';
+    try {
+      const [from, to] = await Promise.all([resolveEndpoint(pq.from), resolveEndpoint(pq.to)]);
+      if (!to) throw new Error('請輸入要去的地方');
+      closeSearchPage();
+      window._snmRouteBetween(from, to);
+    } catch (e) {
+      const needSet = /還沒設定/.test(e.message);
+      searchResultsList.innerHTML = '<div class="searchResultsEmpty">' + e.message + (needSet ? '，請先點上面的「' + (/公司/.test(e.message) ? '公司' : '住家') + '」設定' : '') + '</div>';
+      if (needSet) searchResultsList.insertBefore(savedPlaceRows(), searchResultsList.firstChild);
+    }
+  }
+
   // ===== 🔍 全螢幕搜尋頁(像 Google 地圖)：點搜尋框整個畫面變成搜尋頁，選好地點或按返回才回到地圖 =====
   const searchBackBtn = document.getElementById('searchBackBtn');
   const searchChips = document.getElementById('searchChips');
   let _searchHistPushed = false;
   function showSearchHome() {
-    if (getRecentDests().length) { showRecentDests(); return; }
-    searchResultsList.innerHTML = '<div class="searchHint">輸入地點、地址或店名<br>也可以點上面的分類快速找附近的店</div>';
+    if (_settingPlace) return; // 設定住家/公司中：保留提示
+    if (getRecentDests().length) showRecentDests();
+    else searchResultsList.innerHTML = '<div class="searchHint">輸入地點、地址或店名，或「住家到台中市」直接規劃路線<br>也可以點上面的分類快速找附近的店</div>';
+    searchResultsList.insertBefore(savedPlaceRows(), searchResultsList.firstChild);
+    searchResultsList.style.display = 'block';
   }
   function openSearchPage() {
     if (document.body.classList.contains('searchOpen') || document.body.classList.contains('navigating')) return;
@@ -3810,6 +3901,7 @@ function _flipCell(cell, from, to) {
   function closeSearchPage(fromPopState) {
     if (!document.body.classList.contains('searchOpen')) return;
     document.body.classList.remove('searchOpen');
+    if (_settingPlace) { _settingPlace = null; searchInput.placeholder = '搜尋地點、地址'; }
     searchInput.blur();
     searchResultsList.style.display = 'none';
     const pushed = _searchHistPushed;
@@ -4922,13 +5014,15 @@ function _flipCell(cell, from, to) {
       const data = await fetchRoutes(navMode, c.origin, c.dest.lat, c.dest.lon, true);
       if (_routeChoice !== mine) return;
       if (!data.routes || !data.routes.length) { rpList.innerHTML = '<div class="rpLoading">找不到' + NAV_MODES[navMode].label + '可走的路線</div>'; return; }
-      showRouteChooser(data.routes, c.origin, c.dest.lat, c.dest.lon);
+      showRouteChooser(data.routes, c.origin, c.dest.lat, c.dest.lon, c.opts);
     } catch (_) {
       if (_routeChoice === mine) rpList.innerHTML = '<div class="rpLoading">路線規劃失敗，請檢查網路</div>';
     }
   });
-  function showRouteChooser(routes, origin, destLat, destLon) {
-    _routeChoice = { routes, delays: routes.map(() => 0), sel: 0, origin, dest: { lat: destLat, lon: destLon } };
+  // opts.fromName：起點不是目前位置時的名稱(聰明搜尋「住家到台中市」)
+  function showRouteChooser(routes, origin, destLat, destLon, opts) {
+    opts = opts || {};
+    _routeChoice = { routes, delays: routes.map(() => 0), sel: 0, origin, dest: { lat: destLat, lon: destLon }, opts };
     rpPaintModes();
     _navState = 'idle';
     // 選路線時只留路線：綠色道路底圖、店家圖示先收起來(跟導航中一樣)
@@ -4936,7 +5030,8 @@ function _flipCell(cell, from, to) {
     togglePoiLayers(false);
     rpToggleCircles(false);
     destPanel.style.display = 'none';
-    rpTitle.textContent = '到 ' + ((selectedDest && selectedDest.name) || '目的地') + (routes.length > 1 ? '：' + routes.length + ' 條路線' : '');
+    const toName = (selectedDest && selectedDest.name) || '目的地';
+    rpTitle.textContent = (opts.fromName ? opts.fromName + ' → ' + toName : '到 ' + toName) + (routes.length > 1 ? '：' + routes.length + ' 條路線' : '');
     routePanel.classList.add('open');
     rpRender(); rpDraw();
     // 所有路線都看得到；下面留給路線面板
@@ -4959,13 +5054,39 @@ function _flipCell(cell, from, to) {
     rpHide();
     if (selectedDest) destPanel.style.display = 'block'; // 回到選好地點的畫面
   });
-  if (rpStart) rpStart.addEventListener('click', () => {
+  if (rpStart) rpStart.addEventListener('click', async () => {
     const c = _routeChoice;
     if (!c) return;
-    const chosen = { route: c.routes[c.sel], origin: c.origin };
+    let chosen = { route: c.routes[c.sel], origin: c.origin };
+    // 起點不是目前位置(例如看「住家到台中市」)：開始導航時改從目前位置出發(同 Google)
+    if (c.opts && c.opts.fromName) {
+      try {
+        const here = await getCurrentPositionPromise();
+        const far = Math.hypot((here.lon - c.origin.lon) * 101000, (here.lat - c.origin.lat) * 111000) > 300;
+        if (far) {
+          const data = await fetchRoutes(navMode, here, c.dest.lat, c.dest.lon, false);
+          if (data.routes && data.routes.length) chosen = { route: data.routes[0], origin: here };
+        }
+      } catch (_) {}
+    }
     rpHide();
     planRouteTo(c.dest.lat, c.dest.lon, null, chosen);
   });
+  // 從任意起點到任意終點(聰明搜尋、住家/公司)：from = null 表示目前位置
+  window._snmRouteBetween = async function (from, to) {
+    let origin = from;
+    if (!origin) {
+      try { origin = await getCurrentPositionPromise(); } catch (_) { alert('無法取得目前位置,請確認已允許定位權限'); return; }
+    }
+    selectedDest = { lat: to.lat, lon: to.lon, name: to.name || '目的地', addr: to.addr || '', logo: '' };
+    if (destMarker) destMarker.remove();
+    destMarker = new maplibregl.Marker({ element: makeDestMarkerEl(''), anchor: 'bottom' }).setLngLat([to.lon, to.lat]).addTo(map);
+    try {
+      const data = await fetchRoutes(navMode, origin, to.lat, to.lon, true);
+      if (!data.routes || !data.routes.length) { alert('找不到可行的路線'); return; }
+      showRouteChooser(data.routes, origin, to.lat, to.lon, { fromName: from ? (from.name || '起點') : null });
+    } catch (_) { alert('路線規劃失敗,請檢查網路連線'); }
+  };
 
   // chosen：路線選擇面板選好的路線 { route, origin }(有它就不再向路線服務查詢)
   async function planRouteTo(destLat, destLon, fromPosition = null, chosen = null){
