@@ -9484,7 +9484,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function showTrafficPopup(e) {
     if (!e.features || !e.features[0]) return;
     var p = e.features[0].properties;
-    var OFFICIAL_SRC = { freeway: '高速公路局即時路況', taipei: '臺北市交通局即時路況' };
+    var OFFICIAL_SRC = { freeway: '高速公路局即時路況', taipei: '臺北市交通局即時路況', taoyuan: '桃園市交通局即時路況' };
     if (OFFICIAL_SRC[p.source]) { // 官方即時路況(國道、臺北市區，每分鐘更新)
       new maplibregl.Popup({ offset: 12, closeButton: true })
         .setLngLat(e.lngLat)

@@ -12,8 +12,9 @@ const { ROLLING_WINDOW_MS } = require('../../lib/traffic/config');
 const { ffKey, rcKey, resolveBaseline } = require('../../lib/traffic/baseline');
 const { freewayFeatures } = require('../../lib/traffic/freeway');
 const { taipeiFeatures } = require('../../lib/traffic/taipei');
+const { taoyuanFeatures } = require('../../lib/traffic/taoyuan');
 
-// 手機路況 + 官方路況(國道、臺北市區)合併：同一格同方向兩邊都有時，取比較塞的(寧可提早提醒)
+// 手機路況 + 官方路況(國道、臺北市區、桃園市區)合併：同一格同方向兩邊都有時，取比較塞的(寧可提早提醒)
 const LEVEL_RANK = { free: 0, moderate: 1, slow: 2, congested: 3, severe: 4 };
 function mergeTraffic(gps, freeway) {
   const byId = new Map();
@@ -62,8 +63,8 @@ module.exports = async (req, res) => {
   try {
     const members = await redisCmd('ZRANGEBYSCORE', 'traffic:segs', String(activeFrom), '+inf');
 
-    const [fwRoads, tpRoads] = await Promise.all([freewayFeatures(bbox), taipeiFeatures(bbox)]);
-    const fw = fwRoads.concat(tpRoads);
+    const [fwRoads, tpRoads, tyRoads] = await Promise.all([freewayFeatures(bbox), taipeiFeatures(bbox), taoyuanFeatures(bbox)]);
+    const fw = fwRoads.concat(tpRoads, tyRoads);
     if (!members || members.length === 0) {
       return ok(res, { type: 'FeatureCollection', features: fw, updatedAt: now }, { cache: 'public, max-age=15' });
     }

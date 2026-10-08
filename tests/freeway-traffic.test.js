@@ -46,3 +46,22 @@ test('Taipei sections: only busy/jammed ones are kept, cut into cells along star
   assert.ok(cells.length >= 1 && cells.length <= 4, 'cells: ' + cells.length);
   cells.forEach(c => { assert.equal(c.level, 'congested'); assert.equal(c.speed, 18); assert.equal(c.dir, 'S'); assert.equal(c.name, '光復北路 健康路-南京東路'); });
 });
+
+test('Taoyuan detectors: speed is the volume-weighted lane average; broken lanes ignored; free flow not sent', () => {
+  const { parseDevices, parseLive, levelFromKmh } = require('../lib/traffic/taoyuan');
+  const dev = parseDevices('<VD><VDID>V1</VDID><PositionLon>121.31</PositionLon><PositionLat>25.0</PositionLat><RoadName>春日路</RoadName></VD>' +
+                           '<VD><VDID>V2</VDID><PositionLon>121.32</PositionLon><PositionLat>25.01</PositionLat><RoadName>中山路</RoadName></VD>');
+  const row = (id, lane, sp, type, vol, status = 0) => `<VDLive><VDID>${id}</VDID><LaneID>${lane}</LaneID><LaneSpeed>${sp}</LaneSpeed><VehicleType>${type}</VehicleType><Volume>${vol}</Volume><Status>${status}</Status></VDLive>`;
+  const xml = row('V1', 0, 10, 'S', 30) + row('V1', 0, 10, 'M', 10) +   // 車道 0：10 km/h，車流 40
+              row('V1', 1, 30, 'S', 10) +                              // 車道 1：30 km/h，車流 10 → 加權 (10×40+30×10)/50 = 14
+              row('V1', 2, 90, 'S', 99, 1) +                           // 故障車道：不算
+              row('V2', 0, 50, 'S', 20);                               // 順暢：不送
+  const pts = parseLive(xml, dev);
+  assert.equal(pts.length, 1);
+  assert.equal(pts[0].speed, 14);
+  assert.equal(pts[0].level, 'slow');
+  assert.equal(pts[0].road, '春日路');
+  assert.equal(levelFromKmh(35), 'free');
+  assert.equal(levelFromKmh(25), 'moderate');
+  assert.equal(levelFromKmh(8), 'congested');
+});
