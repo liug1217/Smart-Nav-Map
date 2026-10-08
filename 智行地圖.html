@@ -2102,6 +2102,7 @@ function _flipCell(cell, from, to) {
     plannedRouteCoordinates = [];
     updateWalkLink(0, 0, null); // 清掉道路外的虛線
     window._navTurnView = false; window._navTurnHoldUntil = 0;
+    if (window._clearTurnArrow) window._clearTurnArrow();
     if (destMarker) { destMarker.remove(); destMarker = null; }
     selectedDest = null;
     if (destPanel) destPanel.style.display = 'none';
@@ -4088,6 +4089,7 @@ function _flipCell(cell, from, to) {
 
     updateRect8Display(meters);
     updateNavTripInfo(meters, pos);
+    updateTurnArrow(pos);
 
     // ===== 🎥 轉彎鏡頭:接近真正的轉彎 → 拉遠 + 變成平面俯視;過了轉彎幾秒後再回到 3D =====
     // (rAF 迴圈讀 window._navTurnView / _navTurnHoldUntil 並逐幀平滑改變 zoom / pitch)
@@ -4138,6 +4140,7 @@ function _flipCell(cell, from, to) {
         document.body.classList.remove('navigating');
         _setPanelState(232, true);
         if (rect8) rect8.style.display = 'none';
+        if (window._clearTurnArrow) window._clearTurnArrow(); // 到達：拿掉轉彎箭頭
         if (speedPillNum) speedPillNum.innerText = '0';
         if (searchBarWrapEl) searchBarWrapEl.style.display = '';
         togglePoiLayers(true);
@@ -4305,6 +4308,74 @@ function _flipCell(cell, from, to) {
   }
   window._routePointAt = routePointAt; // 給 rAF 插值迴圈用
 
+  // ===== ➡️ 轉彎箭頭：在「下一個轉彎」處沿導航路線畫大白色箭頭(箭身沿著實際要轉的路彎過去，箭頭指向轉進去的方向) =====
+  // 箭身：轉彎點前 55 公尺 → 後 30 公尺(轉過去的那段要夠長，箭頭才看得出往哪彎)；箭頭接在箭身尾端。直行/路名改變/出發/到達不畫
+  const TURN_ARROW_BEFORE_M = 55, TURN_ARROW_AFTER_M = 30;
+  const TURN_ARROW_EMPTY = { type: 'FeatureCollection', features: [] };
+  function isTurnManeuver(m) {
+    const mod = m.modifier || '';
+    if (['depart', 'arrive', 'notification'].includes(m.type)) return false;
+    if (m.type === 'roundabout' || m.type === 'rotary' || m.type === 'roundabout turn') return true;
+    if (m.type === 'continue' || m.type === 'new name') return /^(uturn|left|right|sharp left|sharp right)$/.test(mod);
+    return mod !== '' && mod !== 'straight';
+  }
+  function _ensureTurnArrowLayers() {
+    if (map.getSource('navTurnArrow')) return true;
+    if (!map.getSource('navRoute')) return false;
+    if (!map.hasImage('nav-turn-head')) {
+      // 箭頭：白色三角形＋深藍外框，尖端朝上(北)，用 icon-rotate 轉到行進方向
+      const W = 64, H = 58, c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const x = c.getContext('2d');
+      x.beginPath(); x.moveTo(W / 2, 3); x.lineTo(W - 3, H - 3); x.lineTo(3, H - 3); x.closePath();
+      x.lineJoin = 'round'; x.lineWidth = 5; x.strokeStyle = '#123a7a'; x.stroke();
+      x.fillStyle = '#ffffff'; x.fill();
+      map.addImage('nav-turn-head', x.getImageData(0, 0, W, H), { pixelRatio: 2 });
+    }
+    map.addSource('navTurnArrow', { type: 'geojson', data: TURN_ARROW_EMPTY });
+    const before = map.getLayer('user-car') ? 'user-car' : undefined; // 在車子下面、路線上面
+    // 寬度隨縮放等比例變(exponential 2)：看起來永遠跟道路差不多寬
+    const width = (z14, z16, z18) => ['interpolate', ['exponential', 2], ['zoom'], 14, z14, 16, z16, 18, z18];
+    map.addLayer({ id: 'navTurnArrow-casing', type: 'line', source: 'navTurnArrow', minzoom: 13,
+      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
+      paint: { 'line-color': '#123a7a', 'line-width': width(6, 14, 30) } }, before);
+    map.addLayer({ id: 'navTurnArrow-line', type: 'line', source: 'navTurnArrow', minzoom: 13,
+      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
+      paint: { 'line-color': '#ffffff', 'line-width': width(3.5, 9, 20) } }, before);
+    map.addLayer({ id: 'navTurnArrow-head', type: 'symbol', source: 'navTurnArrow', minzoom: 13,
+      filter: ['==', ['geometry-type'], 'Point'],
+      layout: { 'icon-image': 'nav-turn-head', 'icon-size': width(0.27, 0.68, 1.5), 'icon-anchor': 'bottom',
+                'icon-rotate': ['get', 'bearing'], 'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
+                'icon-allow-overlap': true, 'icon-ignore-placement': true } }, before);
+    return true;
+  }
+  // 每次 GPS 更新呼叫；同一個轉彎只畫一次(換到下一個轉彎、重新規劃、換地圖樣式後才重畫)
+  function updateTurnArrow(pos) {
+    if (typeof map === 'undefined' || !map || !map.getSource) return; // 地圖還沒建好(或單元測試環境)
+    if (!pos || !_ensureTurnArrowLayers()) return; // 偏航中(不在路線上)：先保留原本的箭頭
+    const src = map.getSource('navTurnArrow');
+    const step = navSteps[currentStepIndex];
+    const along = pos.stepAlong ? pos.stepAlong[currentStepIndex] : null;
+    const show = isNavigating && step && along != null && isTurnManeuver(step.maneuver || {});
+    const key = show ? (_navSession + ':' + currentStepIndex + ':' + pos.g.total) : 'none';
+    if (src._snmKey === key) return;
+    src._snmKey = key;
+    if (!show) { src.setData(TURN_ARROW_EMPTY); return; }
+    const g = pos.g, a0 = Math.max(0, along - TURN_ARROW_BEFORE_M), a1 = Math.min(g.total, along + TURN_ARROW_AFTER_M);
+    const pts = [routePointAt(g, a0)];
+    for (let i = 0; i < g.cum.length; i++) if (g.cum[i] > a0 && g.cum[i] < a1) pts.push({ lng: g.coords[i][0], lat: g.coords[i][1] });
+    const end = routePointAt(g, a1);
+    pts.push(end);
+    src.setData({ type: 'FeatureCollection', features: [
+      { type: 'Feature', geometry: { type: 'LineString', coordinates: pts.map(p => [p.lng, p.lat]) }, properties: {} },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [end.lng, end.lat] }, properties: { bearing: end.bearing } },
+    ] });
+  }
+  window._clearTurnArrow = function () {
+    const s = map.getSource && map.getSource('navTurnArrow');
+    if (s) { s._snmKey = 'none'; s.setData(TURN_ARROW_EMPTY); }
+  };
+
   // GPS 更新時呼叫:回傳吸附結果 { snapped, along, speed, geom, proj },沒有導航路線時回傳 null
   function snapVehicleToRoute(lat, lon, gpsSpeed, now){
     if (!isNavigating) return null;
@@ -4413,7 +4484,7 @@ function _flipCell(cell, from, to) {
     style.layers.forEach(layer => {
       // 隱藏所有 symbol 類型圖層（包含 POI marker、地名、圖示）
       // 只保留 line（道路）、fill（區域填色）、background，以及車子圖層
-      const isPoiSymbol = layer.type === 'symbol' && layer.id !== 'user-car' && layer.id !== 'navRoute-arrows';
+      const isPoiSymbol = layer.type === 'symbol' && layer.id !== 'user-car' && layer.id !== 'navRoute-arrows' && layer.id !== 'navTurnArrow-head';
       if (isPoiSymbol) {
         try {
           map.setLayoutProperty(layer.id, 'visibility', visibility);
