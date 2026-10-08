@@ -9287,6 +9287,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 跟導航路線完全一樣的粗細與顏色(navRoute-outline / navRoute-line)
   var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#009B65', NAV_LINE_C = '#16E098';
   var TRAFFIC_LAYERS = ROAD_LAYERS.concat([TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS]);
+  // 路況線跟綠色道路底圖一樣依縮放逐層出現：縮小只看得到國道＋快速道路的路況，13 級起一般道路，15.5 級起巷弄
+  // (以前路況不分道路等級，縮很小時市區每條路的塞車都畫成一團粗框)
+  var TRAFFIC_ZOOM_OPACITY = ['step', ['zoom'],
+    ['match', ['get', 'roadClass'], ['motorway', 'trunk'], 1, 0],
+    13,   ['match', ['get', 'roadClass'], ['minor', 'service'], 0, 1],
+    15.5, 1];
 
   // 導航中只顯示導航路線：綠色道路底圖整個藏起來，路況也只留在路線上的路段
   function isNavigating() { return document.body.classList.contains('navigating'); }
@@ -9372,7 +9378,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
             if (ow === -1) c = c.slice().reverse();     // 單行道反向畫的，轉成行進方向
             var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
             c.forEach(function (p) { if (p[0] < w) w = p[0]; if (p[0] > e) e = p[0]; if (p[1] < s) s = p[1]; if (p[1] > n) n = p[1]; });
-            out.push({ coords: c, oneway: ow !== 0, bbox: { w: w, e: e, s: s, n: n } });
+            out.push({ coords: c, oneway: ow !== 0, bbox: { w: w, e: e, s: s, n: n }, cls: f.properties.class });
           });
         });
     } catch (e) {}
@@ -9401,7 +9407,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
                               : Math.abs(((pb - want) % 180 + 270) % 180 - 90);    // 雙向道路看 180 度
           if (diff > 55) pen = 25;
         }
-        if (!best || dmean + pen < best.score) best = { score: dmean + pen, piece: piece };
+        if (!best || dmean + pen < best.score) { piece.cls = c.cls; best = { score: dmean + pen, piece: piece }; }
       });
     });
     return best && best.piece;
@@ -9419,7 +9425,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       var piece = matchRoadPiece(f, cands);
       // 只畫對得到道路的：塞車一定是從道路本身裁出來、跟道路完全重疊(合為一體)。
       // 對不到就不畫，不再退回畫原始 GPS 軌跡 —— 軌跡跟道路平行但偏幾公尺，會變成兩組邊框(4 道)
-      if (piece) out.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: piece }, properties: p });
+      if (piece) out.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: piece },
+                            properties: Object.assign({}, p, { roadClass: piece.cls || '' }) });
     });
     return { type: 'FeatureCollection', features: out };
   }
@@ -9580,7 +9587,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
           'line-color':   ['match', ['get', 'trafficLevel'], 'moderate', CASING_BY_LEVEL.moderate, 'slow', CASING_BY_LEVEL.slow,
                            'congested', CASING_BY_LEVEL.congested, 'severe', CASING_BY_LEVEL.severe, NAV_OUTLINE_C],
           'line-width':   NAV_OUTLINE_W,
-          'line-opacity': 1,
+          'line-opacity': TRAFFIC_ZOOM_OPACITY,
         },
       }, trafficBeforeId());
     }
@@ -9594,7 +9601,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         paint: {
           'line-color':   ['get', 'color'],
           'line-width':   NAV_LINE_W,
-          'line-opacity': 1,          // 不透明：底下的綠色不會透出來
+          'line-opacity': TRAFFIC_ZOOM_OPACITY, // 看得到時不透明：底下的綠色不會透出來
         },
       }, trafficBeforeId());
     }
