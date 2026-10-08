@@ -2198,12 +2198,12 @@ function _flipCell(cell, from, to) {
       map.addLayer({
         id: 'navRoute-outline', type: 'line', source: 'navRoute',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#1E8E3E', 'line-width': 15, 'line-opacity': 0.9 }
+        paint: { 'line-color': '#009B65', 'line-width': 15, 'line-opacity': 0.9 }
       });
       map.addLayer({
         id: 'navRoute-line', type: 'line', source: 'navRoute',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#34B85A', 'line-width': 11, 'line-opacity': 0.95 }
+        paint: { 'line-color': '#16E098', 'line-width': 11, 'line-opacity': 0.95 }
       });
       _buildNavArrow();
       map.addLayer({
@@ -2245,10 +2245,10 @@ function _flipCell(cell, from, to) {
       map.addSource('navRoute', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
       map.addLayer({ id:'navRoute-outline', type:'line', source:'navRoute',
         layout:{ 'line-join':'round','line-cap':'round' },
-        paint:{ 'line-color':'#1E8E3E','line-width':15,'line-opacity':0.9 } });
+        paint:{ 'line-color':'#009B65','line-width':15,'line-opacity':0.9 } });
       map.addLayer({ id:'navRoute-line', type:'line', source:'navRoute',
         layout:{ 'line-join':'round','line-cap':'round' },
-        paint:{ 'line-color':'#34B85A','line-width':11,'line-opacity':0.95 } });
+        paint:{ 'line-color':'#16E098','line-width':11,'line-opacity':0.95 } });
       _buildNavArrow();
       map.addLayer({ id:'navRoute-arrows', type:'symbol', source:'navRoute',
         layout:{ 'symbol-placement':'line',
@@ -9255,7 +9255,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var ROAD_PROBE    = 'snm-roads-probe';
   var PROBE_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
   // 跟導航路線完全一樣的粗細與顏色(navRoute-outline / navRoute-line)
-  var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#1E8E3E', NAV_LINE_C = '#34B85A';
+  var NAV_OUTLINE_W = 15, NAV_LINE_W = 11, NAV_OUTLINE_C = '#009B65', NAV_LINE_C = '#16E098';
   var TRAFFIC_LAYERS = ROAD_LAYERS.concat([TRAFFIC_CASING, TRAFFIC_LAYER, TRAFFIC_POINTS]);
 
   // 導航中只顯示導航路線：綠色道路底圖整個藏起來，路況也只留在路線上的路段
