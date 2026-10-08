@@ -2063,6 +2063,33 @@ function _onceOn(m, type, layer, fn) {
   m.on(type, layer, fn);
 }
 
+// ── 地圖上店家圖示的底：圓角白色小方塊＋細灰框(跟地點卡片、導航大卡片同樣式) ──
+// draw(ctx, size) 在圓角裡面畫 logo；回傳 canvas(要 ImageData 就 getContext('2d').getImageData)
+const SNM_TILE_R = 14; // 圖示 60px(顯示 30px)時的圓角
+function snmRoundPath(x, a, b, w, h, r) {
+  x.beginPath();
+  x.moveTo(a + r, b); x.lineTo(a + w - r, b); x.quadraticCurveTo(a + w, b, a + w, b + r);
+  x.lineTo(a + w, b + h - r); x.quadraticCurveTo(a + w, b + h, a + w - r, b + h);
+  x.lineTo(a + r, b + h); x.quadraticCurveTo(a, b + h, a, b + h - r);
+  x.lineTo(a, b + r); x.quadraticCurveTo(a, b, a + r, b); x.closePath();
+}
+function snmRoundTile(draw, size, bg) {
+  size = size || 60;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const x = c.getContext('2d');
+  x.save();
+  snmRoundPath(x, 0.5, 0.5, size - 1, size - 1, SNM_TILE_R);
+  x.clip();
+  x.fillStyle = bg || '#FFFFFF';
+  x.fillRect(0, 0, size, size);
+  draw(x, size);
+  x.restore();
+  snmRoundPath(x, 0.5, 0.5, size - 1, size - 1, SNM_TILE_R);
+  x.lineWidth = 1; x.strokeStyle = '#d9d9d9'; x.stroke();
+  return c;
+}
+
 // ── 翻牌時鐘效果：只有變動的那一位數字會翻(上半片往下翻走 → 下半片翻上來)，其他字不動 ──
 // 用法：setFlipText(元素, '12分鐘 3.4公里')。字數或非數字的位置變了(例如 999→1000、公尺→公里)就直接換，不翻
 function setFlipText(el, text) {
@@ -8147,9 +8174,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var raw = new Image();
     raw.onload = function() {
       var W = 60, H = 60;
-      var c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      c.getContext('2d').drawImage(raw, 0, 0, W, H);
+      var c = snmRoundTile(function (x) { x.drawImage(raw, 0, 0, W, H); }, W); // 圓角白底
       var sized = new Image(W, H);
       sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
       sized.src = c.toDataURL('image/png');
@@ -8380,9 +8405,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var raw = new Image();
     raw.onload = function() {
       var W = 60, H = 60;
-      var c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      c.getContext('2d').drawImage(raw, 0, 0, W, H);
+      var c = snmRoundTile(function (x) { x.drawImage(raw, 0, 0, W, H); }, W); // 圓角白底
       var sized = new Image(W, H);
       sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
       sized.src = c.toDataURL('image/png');
@@ -8406,12 +8429,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if (!m.hasImage(FC_ICON_ID)) {
       var fc = new Image();
       fc.onload = function() {
-        var c = document.createElement('canvas');
-        c.width = 60; c.height = 60;
-        var ctx = c.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 60, 60);
-        ctx.drawImage(fc, 0, 0, 60, 60);
-        if (!m.hasImage(FC_ICON_ID)) m.addImage(FC_ICON_ID, ctx.getImageData(0, 0, 60, 60), { pixelRatio: 2 });
+        var c = snmRoundTile(function (x) { x.drawImage(fc, 0, 0, 60, 60); }, 60); // 圓角白底
+        if (!m.hasImage(FC_ICON_ID)) m.addImage(FC_ICON_ID, c.getContext('2d').getImageData(0, 0, 60, 60), { pixelRatio: 2 });
       };
       fc.onerror = function() { // 載入失敗：深藍底白字「全聯」
         var c = document.createElement('canvas');
@@ -8527,12 +8546,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var raw = new Image();
     raw.onload = function() {
       var W = 60, H = 60;
-      var c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      var cx = c.getContext('2d');
-      cx.fillStyle = '#fff'; // 中油 logo 是透明底,墊一層白色方形底
-      cx.fillRect(0, 0, W, H);
-      cx.drawImage(raw, 4, 4, W - 8, H - 8);
+      // 中油 logo 是透明底，墊圓角白底
+      var c = snmRoundTile(function (cx) { cx.drawImage(raw, 4, 4, W - 8, H - 8); }, W);
       var sized = new Image(W, H);
       sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
       sized.src = c.toDataURL('image/png');
@@ -8686,13 +8701,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if (m.hasImage(id)) { done(); return; }
     var raw = new Image();
     raw.onload = function () {
-      var S = 60, c = document.createElement('canvas');
-      c.width = S; c.height = S;
-      var ctx = c.getContext('2d');
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, S, S);
-      var cr = b.crop || [0, 0, raw.naturalWidth, raw.naturalHeight];
-      ctx.drawImage(raw, cr[0], cr[1], cr[2], cr[3], 0, 0, S, S);
-      if (!m.hasImage(id)) m.addImage(id, ctx.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      var S = 60, cr = b.crop || [0, 0, raw.naturalWidth, raw.naturalHeight];
+      var c = snmRoundTile(function (ctx) { ctx.drawImage(raw, cr[0], cr[1], cr[2], cr[3], 0, 0, S, S); }, S); // 圓角白底
+      if (!m.hasImage(id)) m.addImage(id, c.getContext('2d').getImageData(0, 0, S, S), { pixelRatio: 2 });
       done();
     };
     raw.onerror = function () {
