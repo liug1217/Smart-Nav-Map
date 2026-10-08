@@ -569,6 +569,12 @@ body.searchOpen .searchResultsList{
 .rpTitle{ font-weight:700; font-size:15px; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rpClose{ border:none; background:#EEE; border-radius:50%; width:30px; height:30px; font-size:14px; cursor:pointer; flex-shrink:0; }
 .rpList{ overflow-y:auto; margin:0 -4px 10px; }
+.rpModes{ display:flex; gap:6px; margin:0 0 8px; overflow-x:auto; scrollbar-width:none; flex-shrink:0; }
+.rpModes::-webkit-scrollbar{ display:none; }
+.rpModes button{ flex:1 0 auto; border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:16px; padding:6px 10px;
+  font-size:13px; font-family:inherit; white-space:nowrap; cursor:pointer; }
+.rpModes button.on{ background:#E6F7F1; border-color:#009B65; color:#00764D; font-weight:700; }
+.rpLoading{ padding:16px 4px; font-size:13px; color:#888; text-align:center; }
 .rpItem{ display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:10px; border:2px solid transparent; cursor:pointer; }
 .rpItem.sel{ border-color:#16E098; background:#F0FBF7; }
 .rpBadge{ width:28px; height:28px; border-radius:50%; background:#9AA0A6; color:#fff; font-weight:800; font-size:14px;
@@ -1579,6 +1585,13 @@ html, body {
   <div class="rpHead">
     <div class="rpTitle" id="rpTitle">選擇路線</div>
     <button type="button" class="rpClose" id="rpClose" aria-label="取消">✕</button>
+  </div>
+  <!-- 交通方式(名稱同 Google 地圖)：開車／機車(避開國道、快速道路)／單車／步行 -->
+  <div class="rpModes" id="rpModes">
+    <button type="button" data-mode="car">🚗 開車</button>
+    <button type="button" data-mode="scooter">🛵 機車</button>
+    <button type="button" data-mode="bike">🚲 單車</button>
+    <button type="button" data-mode="foot">🚶 步行</button>
   </div>
   <div class="rpList" id="rpList"></div>
   <button type="button" class="navigateBtn rpStart" id="rpStart">開始導航</button>
@@ -4777,6 +4790,37 @@ function _flipCell(cell, from, to) {
     });
   }
 
+  // ===== 🚗🛵🚲🚶 交通方式：開車／機車／單車／步行(名稱同 Google 地圖) =====
+  // 開車：OSRM；機車：Valhalla 機車模式並設定不走國道、快速道路(台灣機車大多不能上)；單車、步行：OSM 德國的 OSRM。
+  // 三個服務都回傳同樣格式(OSRM)，後面的導航、語音、轉彎箭頭都不用改
+  const NAV_MODES = {
+    car:     { label: '開車', traffic: true },
+    scooter: { label: '機車', traffic: true },
+    bike:    { label: '單車', traffic: false },
+    foot:    { label: '步行', traffic: false },
+  };
+  let navMode = (function () { try { const m = localStorage.getItem('snm_nav_mode'); return NAV_MODES[m] ? m : 'car'; } catch (_) { return 'car'; } })();
+  window._navMode = () => navMode;
+  async function fetchRoutes(mode, origin, destLat, destLon, alternatives) {
+    const ll = origin.lon + ',' + origin.lat + ';' + destLon + ',' + destLat;
+    const q = '?overview=full&geometries=geojson&steps=true' + (alternatives ? '&alternatives=3' : '');
+    let url;
+    if (mode === 'scooter') {
+      const body = { locations: [{ lat: origin.lat, lon: origin.lon }, { lat: destLat, lon: destLon }],
+        costing: 'motorcycle', costing_options: { motorcycle: { use_highways: 0 } },
+        format: 'osrm', shape_format: 'geojson', alternates: alternatives ? 2 : 0 };
+      url = 'https://valhalla1.openstreetmap.de/route?json=' + encodeURIComponent(JSON.stringify(body));
+    } else if (mode === 'bike') {
+      url = 'https://routing.openstreetmap.de/routed-bike/route/v1/driving/' + ll + q;
+    } else if (mode === 'foot') {
+      url = 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/' + ll + q;
+    } else {
+      url = 'https://router.project-osrm.org/route/v1/driving/' + ll + q;
+    }
+    const res = await fetch(url);
+    return res.json();
+  }
+
   // ===== 🛣️ 路線選擇(A/B/C)：列出幾條路線(時間含目前塞車多花的時間)，地圖上選中的綠色、其他灰色，選好再開始導航 =====
   const routePanel = document.getElementById('routePanel');
   const rpList = document.getElementById('rpList');
@@ -4837,7 +4881,7 @@ function _flipCell(cell, from, to) {
       el.className = 'rpItem' + (i === c.sel ? ' sel' : '');
       const jam = c.delays[i] >= 60 ? '<span class="rpJam">塞車 +' + Math.round(c.delays[i] / 60) + ' 分</span>' : '';
       const fast = c.routes.length > 1 && i === fastest ? '<span class="rpFast">最快</span>' : '';
-      const via = (r.legs && r.legs[0] && r.legs[0].summary) ? r.legs[0].summary.split(',').map(x => x.trim()).filter(Boolean).slice(0, 2).join('、') : '';
+      const via = (r.legs && r.legs[0] && r.legs[0].summary) ? r.legs[0].summary.split(',').map(x => x.trim()).filter(x => x && !/^[\d\s]+$/.test(x)).slice(0, 2).join('、') : ''; // 機車路線摘要有純數字的道路編號(例如 5 = 台5線)，不顯示
       const eta = new Date(Date.now() + tot[i] * 1000);
       el.innerHTML = '<div class="rpBadge">' + String.fromCharCode(65 + i) + '</div>' +
         '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + jam + fast + '</div>' +
@@ -4861,8 +4905,31 @@ function _flipCell(cell, from, to) {
     if (src) src.setData({ type: 'FeatureCollection', features: [] });
     _routeChoice = null;
   }
+  const rpModes = document.getElementById('rpModes');
+  function rpPaintModes() {
+    if (rpModes) rpModes.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === navMode));
+  }
+  if (rpModes) rpModes.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-mode]');
+    const c = _routeChoice;
+    if (!b || !c || b.dataset.mode === navMode) return;
+    navMode = b.dataset.mode;
+    try { localStorage.setItem('snm_nav_mode', navMode); } catch (_) {}
+    rpPaintModes();
+    rpList.innerHTML = '<div class="rpLoading">規劃' + NAV_MODES[navMode].label + '路線中…</div>';
+    const mine = c;
+    try {
+      const data = await fetchRoutes(navMode, c.origin, c.dest.lat, c.dest.lon, true);
+      if (_routeChoice !== mine) return;
+      if (!data.routes || !data.routes.length) { rpList.innerHTML = '<div class="rpLoading">找不到' + NAV_MODES[navMode].label + '可走的路線</div>'; return; }
+      showRouteChooser(data.routes, c.origin, c.dest.lat, c.dest.lon);
+    } catch (_) {
+      if (_routeChoice === mine) rpList.innerHTML = '<div class="rpLoading">路線規劃失敗，請檢查網路</div>';
+    }
+  });
   function showRouteChooser(routes, origin, destLat, destLon) {
     _routeChoice = { routes, delays: routes.map(() => 0), sel: 0, origin, dest: { lat: destLat, lon: destLon } };
+    rpPaintModes();
     _navState = 'idle';
     // 選路線時只留路線：綠色道路底圖、店家圖示先收起來(跟導航中一樣)
     document.body.classList.add('choosingRoute');
@@ -4884,7 +4951,7 @@ function _flipCell(cell, from, to) {
       { padding: { top: 120, bottom: Math.max(60, window.innerHeight - panelTop + 16), left: 40, right: 40 }, duration: 800 }); // 上方留給搜尋框、時鐘那排
     // 背景估各路線目前塞車多花的時間，估好再更新時間與「最快」
     const mine = _routeChoice;
-    if (typeof window._snmEstimateRouteDelays === 'function') {
+    if (NAV_MODES[navMode].traffic && typeof window._snmEstimateRouteDelays === 'function') {
       window._snmEstimateRouteDelays(routes).then(d => { if (_routeChoice === mine) { mine.delays = d; rpRender(); } });
     }
   }
@@ -4930,12 +4997,8 @@ function _flipCell(cell, from, to) {
       if (chosen) {
         data = { routes: [chosen.route] };
       } else {
-        // 第一次規劃要多條路線(A/B/C)讓使用者選；偏航重新規劃只要一條，直接接著導航
-        const url = 'https://router.project-osrm.org/route/v1/driving/' +
-          origin.lon + ',' + origin.lat + ';' + destLon + ',' + destLat +
-          '?overview=full&geometries=geojson&steps=true' + (fromPosition ? '' : '&alternatives=3');
-        const res = await fetch(url);
-        data = await res.json();
+        // 第一次規劃要多條路線(A/B/C)讓使用者選；偏航重新規劃只要一條，直接接著導航(交通方式不變)
+        data = await fetchRoutes(navMode, origin, destLat, destLon, !fromPosition);
       }
 
       // 等待回應期間使用者已退出(或開始了另一次導航):不要套用這份路線
