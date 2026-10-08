@@ -30,10 +30,10 @@ test('50 km/h on a freeway that normally runs 100 is congestion, not free flow',
   assert.equal(st.baselineSource, 'learned');
 });
 
-test('28 km/h on a street that normally runs 30 is free flow and shown light blue', () => {
+test('28 km/h on a street that normally runs 30 is free flow and shown green', () => {
   const st = computeState(samples([28, 27, 29]), 30);
   assert.equal(st.level.level, 'free');
-  assert.equal(st.level.color, '#4783fe');
+  assert.equal(st.level.color, '#16E098');
 });
 
 test('before a road has history: normal street speed is not falsely marked as a jam', () => {

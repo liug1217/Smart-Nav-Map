@@ -10,6 +10,18 @@ const { ghDecode } = require('../../lib/traffic/geohash');
 const { computeState } = require('../../lib/traffic/aggregator');
 const { ROLLING_WINDOW_MS } = require('../../lib/traffic/config');
 const { ffKey, rcKey, resolveBaseline } = require('../../lib/traffic/baseline');
+const { freewayFeatures } = require('../../lib/traffic/freeway');
+
+// 手機路況 + 國道官方路況合併：同一格同方向兩邊都有時，取比較塞的(寧可提早提醒)
+const LEVEL_RANK = { free: 0, moderate: 1, slow: 2, congested: 3, severe: 4 };
+function mergeTraffic(gps, freeway) {
+  const byId = new Map();
+  for (const f of freeway.concat(gps)) {
+    const id = f.properties.segmentId, old = byId.get(id);
+    if (!old || (LEVEL_RANK[f.properties.trafficLevel] || 0) > (LEVEL_RANK[old.properties.trafficLevel] || 0)) byId.set(id, f);
+  }
+  return [...byId.values()];
+}
 const SEG_ACTIVE_WINDOW_MS  = 30 * 60 * 1000;
 
 // 路況要畫成道路線段：優先用使用者實際開過的軌跡；沒有軌跡時，
@@ -49,8 +61,9 @@ module.exports = async (req, res) => {
   try {
     const members = await redisCmd('ZRANGEBYSCORE', 'traffic:segs', String(activeFrom), '+inf');
 
+    const fw = await freewayFeatures(bbox);
     if (!members || members.length === 0) {
-      return ok(res, { type: 'FeatureCollection', features: [], updatedAt: now }, { cache: 'public, max-age=15' });
+      return ok(res, { type: 'FeatureCollection', features: fw, updatedAt: now }, { cache: 'public, max-age=15' });
     }
 
     // Filter to bbox and deduplicate
@@ -68,7 +81,7 @@ module.exports = async (req, res) => {
     }
 
     if (inBbox.length === 0) {
-      return ok(res, { type: 'FeatureCollection', features: [], updatedAt: now }, { cache: 'public, max-age=15' });
+      return ok(res, { type: 'FeatureCollection', features: fw, updatedAt: now }, { cache: 'public, max-age=15' });
     }
 
     // 一次批次取回：每段的近期車速樣本、學到的順暢車速、實際開過的道路軌跡
@@ -110,7 +123,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    return ok(res, { type: 'FeatureCollection', features, updatedAt: now }, { cache: 'public, max-age=15' });
+    return ok(res, { type: 'FeatureCollection', features: mergeTraffic(features, fw), updatedAt: now }, { cache: 'public, max-age=15' });
   } catch (e) {
     console.error('[traffic/segments]', e.message);
     return err(res, 503, 'service_unavailable', 'Redis error');

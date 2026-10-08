@@ -9454,6 +9454,20 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function showTrafficPopup(e) {
     if (!e.features || !e.features[0]) return;
     var p = e.features[0].properties;
+    if (p.source === 'freeway') { // 國道官方即時路況(高速公路局，每分鐘更新)
+      new maplibregl.Popup({ offset: 12, closeButton: true })
+        .setLngLat(e.lngLat)
+        .setHTML(
+          '<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
+          '<strong style="color:' + p.color + '">' + (p.label || '路況') + '</strong><br>' +
+          (p.sectionName ? p.sectionName + '<br>' : '') +
+          '目前平均車速：' + p.averageSpeed + ' km/h' + (p.baselineSpeed && p.baselineSpeed !== 'null' ? '（速限 ' + p.baselineSpeed + '）' : '') + '<br>' +
+          '<span style="color:#888;font-size:11px">資料來源：高速公路局即時路況，每分鐘更新</span>' +
+          '</div>'
+        )
+        .addTo(window.map);
+      return;
+    }
     var srcTxt = { learned: '實際車速學到的', limit: '依速限', 'class': '依道路等級推估' }[p.baselineSource] || '';
     var base = (p.baselineSpeed == null || p.baselineSpeed === 'null')
       ? '學習中（資料累積後自動判斷）'
