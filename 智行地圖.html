@@ -4341,11 +4341,10 @@ function _flipCell(cell, from, to) {
     // 寬度隨縮放等比例變(exponential 2)：看起來永遠跟道路差不多寬
     const width = (z14, z16, z18) => ['interpolate', ['exponential', 2], ['zoom'], 14, z14, 16, z16, 18, z18];
     map.addLayer({ id: 'navTurnArrow-casing', type: 'line', source: 'navTurnArrow', minzoom: 13,
-      // 圓頭：箭身起點不會像被切斷；尾端的圓頭會被箭頭蓋住
-      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'round' },
+      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: { 'line-color': '#123a7a', 'line-width': width(6, 14, 30) } }, before);
     map.addLayer({ id: 'navTurnArrow-line', type: 'line', source: 'navTurnArrow', minzoom: 13,
-      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'round' },
+      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: { 'line-color': '#ffffff', 'line-width': width(3.5, 9, 20) } }, before);
     map.addLayer({ id: 'navTurnArrow-head', type: 'symbol', source: 'navTurnArrow', minzoom: 13,
       filter: ['==', ['geometry-type'], 'Point'],
