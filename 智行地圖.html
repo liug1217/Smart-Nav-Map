@@ -693,7 +693,7 @@ body.searchOpen .searchResultsList{
   background:#2F80FF;
   color:#FFFFFF;
   border:none;
-  border-radius:10px;
+  border-radius:999px; /* 最圓：兩端整個半圓 */
   padding:11px 0;
   font-weight:700;
   font-size:14px;
@@ -9158,10 +9158,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     '.snmStars{color:' + STAR_ON + ';letter-spacing:1px;white-space:nowrap}' +
     '.snmStars .off{color:' + STAR_OFF + '}' +
     '.snmCmMask{position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}' +
-    '.snmCmSheet{width:100%;max-width:520px;height:86vh;background:#fff;color:#1c1c1e;border-radius:16px 16px 0 0;display:flex;flex-direction:column;font-family:-apple-system,sans-serif;box-sizing:border-box}' +
-    '.snmCmHead{padding:14px 16px 10px;border-bottom:1px solid #e5e5ea;position:relative}' +
+    '.snmCmSheet{width:100%;height:86vh;background:rgba(255,255,255,0.8);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:0.5px solid #d9d9d9;border-bottom:none;box-shadow:0 4px 4px rgba(0,0,0,0.25);color:#1c1c1e;border-radius:40px 40px 0 0;display:flex;flex-direction:column;font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;box-sizing:border-box;overflow:hidden}' +
+    '.snmCmSheet > .psGrab{flex-shrink:0}' +
+    '.snmCmHead{padding:2px 20px 10px;border-bottom:1px solid rgba(0,0,0,0.08);position:relative}' +
     '.snmCmHead h3{margin:0 40px 4px 0;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-    '.snmCmX{position:absolute;right:10px;top:10px;width:32px;height:32px;border:none;border-radius:16px;background:#e5e5ea;font-size:16px;cursor:pointer}' +
+    '.snmCmX{position:absolute;right:16px;top:0;width:32px;height:32px;border:none;border-radius:16px;background:rgba(0,0,0,0.06);font-size:15px;cursor:pointer}' +
     '.snmCmWrite{margin-top:10px;width:100%;padding:11px 0;border:none;border-radius:10px;background:#007aff;color:#fff;font-size:15px;font-weight:600;cursor:pointer}' +
     '.snmCmList{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 16px calc(16px + env(safe-area-inset-bottom))}' +
     '.snmCmItem{padding:12px 0;border-bottom:1px solid #f2f2f7}' +
@@ -9255,6 +9256,23 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     document.body.appendChild(v);
   }
 
+  function addGrab(sheet, close) {
+    var g = el('div', 'psGrab'); g.appendChild(el('div', 'psHandle'));
+    sheet.insertBefore(g, sheet.firstChild);
+    var y0 = null, dy = 0;
+    g.addEventListener('pointerdown', function (e) { y0 = e.clientY; dy = 0; sheet.style.transition = 'none'; try { g.setPointerCapture(e.pointerId); } catch (_) {} });
+    g.addEventListener('pointermove', function (e) { if (y0 === null) return; dy = Math.max(0, e.clientY - y0); sheet.style.transform = 'translateY(' + dy + 'px)'; });
+    function end() {
+      if (y0 === null) return;
+      y0 = null;
+      sheet.style.transition = 'transform 0.25s ease';
+      sheet.style.transform = '';
+      if (dy > 80) close();
+    }
+    g.addEventListener('pointerup', end);
+    g.addEventListener('pointercancel', end);
+  }
+
   // ── 留言列表 ────────────────────────────────────────
   function openList(poi, onChange) {
     var mask = el('div', 'snmCmMask'), sheet = el('div', 'snmCmSheet');
@@ -9267,6 +9285,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     sheet.appendChild(head); sheet.appendChild(list); mask.appendChild(sheet);
     document.body.appendChild(mask);
     var close = function () { mask.remove(); };
+    addGrab(sheet, close);
     x.onclick = close;
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
     write.onclick = function () { openComposer(poi, function () { refresh(); if (onChange) onChange(); }); };
@@ -9418,6 +9437,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     document.body.appendChild(mask);
     var busy = false;
     var close = function () { if (!busy) mask.remove(); };
+    addGrab(sheet, close);
     x.onclick = close;
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
     function check() { send.disabled = busy || !stars; }
@@ -9575,7 +9595,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     // 動作：路線(主)、寫留言、回報
     var acts = el('div', 'psActions');
     // 導航：不用選路線，直接用最快的路線開始導航
-    var bNav = el('button', 'main', '▶ 導航');
+    var bNav = el('button', null, '▶ 導航');
     bNav.onclick = function () { close(); if (window._navigateNow) window._navigateNow(p.lat, p.lng, p.name, p.logo); };
     acts.appendChild(bNav);
     var bRoute = el('button', 'route', '🧭 路線');
