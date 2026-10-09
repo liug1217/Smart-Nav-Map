@@ -4,7 +4,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
-const html = fs.readFileSync(path.join(__dirname, '..', '智行地圖.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', '智行地圖.html'), 'utf8')
+  .replace(/\r\n/g, '\n'); // Windows 取出的檔案是 CRLF，下面用 \n 切程式碼
 const stateCode = html.match(/  const SPEED_CAM_WARN_KM[\s\S]*?\n  \/\/ 語音播報時平滑降低/)[0]
   .replace(/\n  \/\/ 語音播報時平滑降低[\s\S]*/, '');
 // 選照相機(沿路距離、方向、鎖定)＋播報入口
