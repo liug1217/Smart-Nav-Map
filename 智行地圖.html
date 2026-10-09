@@ -2184,16 +2184,29 @@ function _flipCell(cell, from, to) {
   window.map = map;
 
   // 路線類圖層一律放在 3D 建築下面(之後才加的圖層、換地圖樣式後也會自動移過去)
+  // 每次都照固定順序整組重排(由下到上)：綠色道路 → 備選路線 → 導航路線 → 塞車線 → 路線箭頭 → 轉彎大箭頭。
+  // 只搬「跑到建築上面的」會讓沒被搬的轉彎箭頭、備選路線被壓在導航路線/綠色道路底下
   (function () {
-    const SINK = /^(snm-roads-|snm-traffic-|navRoute-|routeOpt-|navTurnArrow-)/;
+    const ORDER = [/^snm-roads-outline-/, /^snm-roads-line-/, /^snm-roads-probe$/,
+      /^routeOpt-other-casing$/, /^routeOpt-other$/, /^routeOpt-sel-casing$/, /^routeOpt-sel$/,
+      /^navRoute-outline$/, /^navRoute-line$/,
+      /^snm-traffic-casing$/, /^snm-traffic-lines$/, /^snm-traffic-points$/,
+      /^navRoute-arrows$/, /^navTurnArrow-casing$/, /^navTurnArrow-line$/, /^navTurnArrow-head$/];
+    const rank = id => ORDER.findIndex(re => re.test(id));
     function sink() {
       const ls = (map.getStyle() || {}).layers || [];
       const bi = ls.findIndex(l => l.type === 'fill-extrusion' && l.id !== 'route');
-      if (bi < 0) return;
+      if (bi < 0) return false;
       const bid = ls[bi].id;
-      const late = ls.slice(bi + 1).filter(l => SINK.test(l.id)).map(l => l.id);
-      late.forEach(id => { try { map.moveLayer(id, bid); } catch (_) {} });
+      const cur = ls.map(l => l.id).filter(id => rank(id) >= 0);
+      // 同一級(例如 snm-roads-line-*)維持原本的相對順序
+      const want = cur.map((id, i) => [rank(id), i, id]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
+      const below = ls.slice(bi - want.length, bi).map(l => l.id);
+      if (want.every((id, i) => below[i] === id)) return true; // 已經排好(不重排，避免 styledata 無限觸發)
+      want.forEach(id => { try { map.moveLayer(id, bid); } catch (_) {} });
+      return true;
     }
+    window.snmSinkRouteLayers = sink;
     map.on('styledata', sink);
   })();
 
@@ -10519,6 +10532,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function keepTrafficOnTop() {
     var m = window.map;
     if (!m || !m.getStyle()) return;
+    // 有 3D 建築的地圖：整組排在建築下面(本來就在圖示底下)，不要先拉到建築上面再搬回去(會閃、順序會亂)
+    if (window.snmSinkRouteLayers && window.snmSinkRouteLayers()) return;
     var moving = ROAD_LAYERS.concat(LINE_STACK_TAIL).filter(function (id) { return m.getLayer(id); });
     var anchor = lowestIconLayer(m, moving);
     try { moving.forEach(function (id) { m.moveLayer(id, anchor); }); } catch (e) {}
