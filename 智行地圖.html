@@ -9025,7 +9025,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   css.textContent =
     '.snmRptBtn{display:block;margin:8px 0 0 auto;padding:2px 0;background:none;border:none;color:#8e8e93;font-size:12px;cursor:pointer;text-decoration:underline}' +
     '.snmRptMask{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}' +
-    '.snmRptSheet{width:100%;max-width:480px;background:#fff;color:#1c1c1e;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;font-family:-apple-system,sans-serif}' +
+    '.snmRptSheet{width:100%;background:rgba(255,255,255,0.8);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:0.5px solid #d9d9d9;border-bottom:none;box-shadow:0 4px 4px rgba(0,0,0,0.25);color:#1c1c1e;border-radius:40px 40px 0 0;padding:0 20px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif}' +
+    '.snmRptSheet > .psGrab{margin:0 -20px 2px}' +
     '.snmRptSheet h3{margin:0 0 2px;font-size:17px}' +
     '.snmRptSheet .sub{font-size:12px;color:#8e8e93;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '.snmRptOpt{display:block;width:100%;text-align:left;padding:11px 12px;margin-bottom:6px;border:1px solid #d1d1d6;border-radius:10px;background:#fff;color:#1c1c1e;font-size:15px;cursor:pointer}' +
@@ -9079,6 +9080,22 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     document.body.appendChild(mask);
 
     var close = function () { mask.remove(); };
+    // 拉條(跟地點卡片同一個 .psGrab/.psHandle)：往下拉超過 80px 就關，不到就彈回；手指、滑鼠都可以
+    var grab = document.createElement('div'); grab.className = 'psGrab';
+    var hd = document.createElement('div'); hd.className = 'psHandle'; grab.appendChild(hd);
+    sheet.insertBefore(grab, sheet.firstChild);
+    var gy0 = null, gdy = 0;
+    grab.addEventListener('pointerdown', function (e) { gy0 = e.clientY; gdy = 0; sheet.style.transition = 'none'; try { grab.setPointerCapture(e.pointerId); } catch (_) {} });
+    grab.addEventListener('pointermove', function (e) { if (gy0 === null) return; gdy = Math.max(0, e.clientY - gy0); sheet.style.transform = 'translateY(' + gdy + 'px)'; });
+    var gEnd = function () {
+      if (gy0 === null) return;
+      gy0 = null;
+      sheet.style.transition = 'transform 0.25s ease';
+      sheet.style.transform = '';
+      if (gdy > 80) close();
+    };
+    grab.addEventListener('pointerup', gEnd);
+    grab.addEventListener('pointercancel', gEnd);
     cancel.addEventListener('click', close);
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
     send.addEventListener('click', function () {
