@@ -590,6 +590,8 @@ body.searchOpen .searchResultsList{
 .psLogo{ width:52px; height:52px; border-radius:14px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.15); flex-shrink:0;
   display:flex; align-items:center; justify-content:center; font-size:28px; overflow:hidden; }
 .psLogo img{ width:100%; height:100%; object-fit:contain; }
+.psLogo.circle{ border-radius:50%; background:transparent; }                       /* 圓形圖案(限速牌) */
+.psLogo.tall{ width:32px; height:52px; border-radius:10px; background:transparent; margin:0 10px; } /* 直立長方形(紅綠燈)，左右補空讓文字對齊 */
 .psTitleBox{ flex:1; min-width:0; }
 .psName{ font-size:19px; font-weight:800; color:#000; line-height:1.25; }
 .psKind{ font-size:13px; color:#555; margin-top:2px; }
@@ -7512,7 +7514,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       var p=e.features[0].properties;
       var coords=e.features[0].geometry.coordinates.slice();
       if(window._snmOpenPlace){
-        window._snmOpenPlace({ layer:'speed-point', name:'測速照相'+(p.limit?' 限速 '+p.limit:''), kind:'固定式測速照相', logo:limitSignUrl(p.limit),
+        window._snmOpenPlace({ layer:'speed-point', name:'測速照相'+(p.limit?' 限速 '+p.limit:''), kind:'固定式測速照相', logo:limitSignUrl(p.limit), logoShape:'circle',
           lat:coords[1], lng:coords[0], addr:[p.city,p.addr].filter(Boolean).join(''),
           info:[p.limit?'🚗 限速 '+p.limit+' 公里':'', p.dir?'↔ 取締方向：'+p.dir:'', '資料來源：警政署'].filter(Boolean) });
         return;
@@ -7715,7 +7717,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if(window._snmOpenPlace){
         var link = null;
         if (p.url) { link = document.createElement('a'); link.href = p.url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = '📄 查看時制報表(紅綠燈秒數)'; link.style.color = '#1A73E8'; }
-        window._snmOpenPlace({ layer:'signal-points', name:p.name || '號誌路口', kind:'號誌路口(紅綠燈)', logo:'🚦', lat:coord[1], lng:coord[0],
+        var tl = document.createElement('canvas'); tl.width = 64; tl.height = 104;
+        var tx = tl.getContext('2d');
+        snmRoundPath(tx, 0, 0, 64, 104, 20); tx.fillStyle = '#2B2B2B'; tx.fill();
+        [['#FF3B30', 20], ['#FFCC00', 52], ['#34C759', 84]].forEach(function (c) { tx.beginPath(); tx.arc(32, c[1], 12, 0, Math.PI * 2); tx.fillStyle = c[0]; tx.fill(); });
+        window._snmOpenPlace({ layer:'signal-points', name:p.name || '號誌路口', kind:'號誌路口(紅綠燈)', logo:tl.toDataURL('image/png'), logoShape:'tall', lat:coord[1], lng:coord[0],
           info:[p.dev ? '設備：' + p.dev : '', p.icid ? '路口 ID：' + p.icid : '', p.grp ? '群組：' + p.grp : '', '資料來源：臺北市交通局'].filter(Boolean),
           extraEl: link });
         return;
@@ -9650,7 +9656,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     body.innerHTML = '';
     // 標頭：logo、名稱、類別 · 距離、關閉
     var head = el('div', 'psHead');
-    var logo = el('div', 'psLogo');
+    var logo = el('div', 'psLogo' + (p.logoShape ? ' ' + p.logoShape : ''));
     if (p.logo && /[./]/.test(p.logo)) { var im = new Image(); im.src = p.logo; im.alt = ''; im.onerror = function () { logo.textContent = '📍'; }; logo.appendChild(im); }
     else logo.textContent = p.logo || '📍';
     head.appendChild(logo);
