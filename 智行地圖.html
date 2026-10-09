@@ -7190,21 +7190,24 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function initLayers(m, geojson){
     if(m.getSource('cctv')) return;
-    // 產生 📷 emoji + 下方三角指針圖示（圖釘樣式）
+    // 跟公廁圖示同樣式：圓角方塊整塊填滿深藍(同導航橫幅顏色)＋細灰框，白色監視器圖案(不用 emoji，各裝置都一樣)
     if(!m.hasImage('cctv-icon')){
-      var ew=48, eh=60, tip=10; // ew=寬, eh=高(含三角), tip=三角高度
-      var cv=document.createElement('canvas'); cv.width=ew; cv.height=eh;
-      var cx=cv.getContext('2d');
-      // 下方三角指針
-      cx.fillStyle='rgba(255,255,255,0.88)';
-      cx.beginPath();
-      cx.moveTo(ew/2-8, eh-tip); cx.lineTo(ew/2+8, eh-tip); cx.lineTo(ew/2, eh); cx.closePath();
-      cx.fill();
-      // 📷 emoji
-      cx.font=(ew*0.76)+'px serif';
-      cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillText('📷', ew/2, (eh-tip)/2);
-      m.addImage('cctv-icon',{width:ew,height:eh,data:cx.getImageData(0,0,ew,eh).data});
+      var sz=60, NAVY='#0E1A2D';
+      var cv=snmRoundTile(function(x){
+        x.fillStyle='#FFFFFF';
+        // 支架：直桿＋底座
+        x.fillRect(38, 25, 3.5, 17);
+        snmRoundPath(x, 31, 40, 17, 5, 2); x.fill();
+        // 機身：斜斜往左下看的長方體＋前面的鏡頭罩
+        x.save(); x.translate(27, 24); x.rotate(0.38);
+        snmRoundPath(x, -14, -7, 27, 14, 3.5); x.fill();
+        x.fillRect(-19, -5, 6, 10);
+        // 鏡頭(深藍小圓)
+        x.fillStyle=NAVY; x.beginPath(); x.arc(-15, 0, 2.6, 0, Math.PI*2); x.fill();
+        x.restore();
+      }, sz, NAVY);
+      m.addImage('cctv-icon', cv.getContext('2d').getImageData(0,0,sz,sz), { pixelRatio: 2 });
+      window._snmCctvIconUrl = cv.toDataURL('image/png'); // 地點卡片的 logo 也用這個
     }
 
     m.addSource('cctv',{
@@ -7229,7 +7232,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         'text-field':['get','point_count_abbreviated'],
         'text-size':11,
         'text-font':['Noto Sans Bold'],
-        'text-offset':[0,2.1],
+        'text-offset':[0,1.25],
         'text-allow-overlap':true,
         'text-ignore-placement':true,
         'text-anchor':'top'
@@ -7248,7 +7251,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       filter:['!',['has','point_count']],
       layout:{
         'icon-image':'cctv-icon',
-        'icon-size':['interpolate',['linear'],['zoom'],12,0.4,15,0.7,17,1.0,19,1.4],
+        'icon-size':1, // 跟公廁、店家圖示一樣大(30px)
         'icon-allow-overlap':true,
         'icon-ignore-placement':true
       }
@@ -7285,7 +7288,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         live.onerror=function(){ if(stopped) return; clearTimeout(retry); retry=setTimeout(load,2000); };
         load();
         var tick=setInterval(load,8000);
-        window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:'📹',
+        window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:(window._snmCctvIconUrl||'📹'),
           lat:coords[1], lng:coords[0], extraEl:wrap, noReport:true,
           onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); live.removeAttribute('src'); } });
         return;
