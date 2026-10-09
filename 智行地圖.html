@@ -602,6 +602,7 @@ body.searchOpen .searchResultsList{
 .psActions button{ flex:1 0 auto; border:1px solid #DADCE0; background:rgba(255,255,255,0.9); color:#1A73E8; border-radius:20px; padding:8px 14px;
   font-size:14px; font-weight:600; font-family:inherit; white-space:nowrap; cursor:pointer; }
 .psActions button.main{ background:#009B65; border-color:#009B65; color:#fff; }
+.psActions button.route{ background:#2F80FF; border-color:#2F80FF; color:#fff; }
 .psExtra{ margin-top:10px; font-size:13px; color:#333; line-height:1.5; }
 .psSec{ margin-top:18px; }
 .psSecT{ font-size:15px; font-weight:800; color:#000; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
@@ -651,7 +652,7 @@ body.searchOpen .searchResultsList{
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
 .rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#009B65; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.navigateBtn.rpStart{ width:100%; flex:none; background:#009B65; } /* 跟選中的導航路線同樣是綠色 */
+.rpStart{ width:100%; flex:none; }
 
 .searchResultsEmpty{
   padding:14px;
@@ -5440,6 +5441,22 @@ function _flipCell(cell, from, to) {
     document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
   };
 
+  // 直接導航(地點卡片的「導航」)：從目前位置用最快的路線馬上開始，不跳出路線選擇
+  window._navigateNow = async function(lat, lon, name, logo) {
+    if (destMarker) { destMarker.remove(); destMarker = null; }
+    selectedDest = { lat: lat, lon: lon, name: name || '目的地', addr: '', logo: logo || '' };
+    destMarker = new maplibregl.Marker({ element: makeDestMarkerEl(logo), anchor: 'bottom' })
+      .setLngLat([lon, lat])
+      .addTo(map);
+    let here;
+    try { here = await getCurrentPositionPromise(); } catch (_) { alert('無法取得目前位置,請確認已允許定位權限'); return; }
+    try {
+      const data = await fetchRoutes(navMode, here, lat, lon, false);
+      if (!data.routes || !data.routes.length) { alert('找不到可行的路線'); return; }
+      planRouteTo(lat, lon, null, { route: data.routes[0], origin: here });
+    } catch (_) { alert('路線規劃失敗,請檢查網路連線'); }
+  };
+
   // 長按地圖（右鍵/contextmenu；手機觸控長按）→ 提示導航選項
   (function() {
     window._ctxPopup = null;
@@ -9557,7 +9574,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     }
     // 動作：路線(主)、寫留言、回報
     var acts = el('div', 'psActions');
-    var bRoute = el('button', 'main', '🧭 路線');
+    // 導航：不用選路線，直接用最快的路線開始導航
+    var bNav = el('button', 'main', '▶ 導航');
+    bNav.onclick = function () { close(); if (window._navigateNow) window._navigateNow(p.lat, p.lng, p.name, p.logo); };
+    acts.appendChild(bNav);
+    var bRoute = el('button', 'route', '🧭 路線');
     bRoute.onclick = function () { close(); if (window._navigateToCoord) window._navigateToCoord(p.lat, p.lng, p.name, p.logo); };
     acts.appendChild(bRoute);
     var poi = { layer: p.layer || 'place-points', name: p.name || '', lat: p.lat, lng: p.lng };
