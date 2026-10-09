@@ -7273,6 +7273,23 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       var sep=baseUrl.indexOf('?')>=0?'&':'?';
       var refreshTimer=null;
       var label=props.desc||((props.road||'')+(props.mile?' '+props.mile:''));
+      if(window._snmOpenPlace){
+        // 即時影像：每 8 秒重新連線、失敗 2 秒後重試；卡片關掉就停，不浪費流量
+        var wrap=document.createElement('div'); wrap.className='cctvImgWrap';
+        var live=new Image(); live.alt='監視器即時影像';
+        live.style.cssText='width:100%;aspect-ratio:3/2;object-fit:cover;display:block;background:#000;border-radius:12px';
+        wrap.appendChild(live);
+        var badge=document.createElement('span'); badge.className='cctvLive'; badge.innerHTML='<span class="dot"></span>即時'; wrap.appendChild(badge);
+        var stopped=false, retry=null;
+        var load=function(){ if(stopped) return; live.src=baseUrl+sep+'t='+Date.now(); };
+        live.onerror=function(){ if(stopped) return; clearTimeout(retry); retry=setTimeout(load,2000); };
+        load();
+        var tick=setInterval(load,8000);
+        window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:'📹',
+          lat:coords[1], lng:coords[0], extraEl:wrap, noReport:true,
+          onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); live.removeAttribute('src'); } });
+        return;
+      }
       cctvPopup=new maplibregl.Popup({maxWidth:'320px',closeButton:true})
         .setLngLat(coords)
         .setHTML(
@@ -7402,9 +7419,25 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         m.easeTo({center:f[0].geometry.coordinates,zoom:zoom+0.5});
       });
     });
+    // 卡片 logo：跟地圖上一樣的限速牌(紅框白底黑字)
+    function limitSignUrl(lim){
+      var S=104, c=document.createElement('canvas'); c.width=S; c.height=S;
+      var x=c.getContext('2d');
+      x.beginPath(); x.arc(S/2,S/2,S/2-2,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
+      x.beginPath(); x.arc(S/2,S/2,S/2-8,0,Math.PI*2); x.strokeStyle='#FF0000'; x.lineWidth=12; x.stroke();
+      x.fillStyle='#000'; x.font='800 '+(String(lim).length>2?34:40)+'px "SF Pro Display","SF Pro Text",Arial,sans-serif';
+      x.textAlign='center'; x.textBaseline='middle'; x.fillText(String(lim||'?'),S/2,S/2+2);
+      return c.toDataURL('image/png');
+    }
     _onceOn(m,'click','speed-point',function(e){
       var p=e.features[0].properties;
       var coords=e.features[0].geometry.coordinates.slice();
+      if(window._snmOpenPlace){
+        window._snmOpenPlace({ layer:'speed-point', name:'測速照相'+(p.limit?' 限速 '+p.limit:''), kind:'固定式測速照相', logo:limitSignUrl(p.limit),
+          lat:coords[1], lng:coords[0], addr:[p.city,p.addr].filter(Boolean).join(''),
+          info:[p.limit?'🚗 限速 '+p.limit+' 公里':'', p.dir?'↔ 取締方向：'+p.dir:'', '資料來源：警政署'].filter(Boolean) });
+        return;
+      }
       var navId='spnav_'+Date.now();
       var spPopup=new maplibregl.Popup({closeButton:true,maxWidth:'260px'})
         .setLngLat(coords)
@@ -8316,18 +8349,25 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function _addToiletIcon(m) {
     if (m.hasImage(ICON_ID)) return;
     var sz = 60;
-    var c = document.createElement('canvas');
-    c.width = sz; c.height = sz;
-    var ctx = c.getContext('2d');
-    ctx.font = '44px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🚾', sz / 2, sz / 2);
+    var c = snmRoundTile(function (x) {
+      x.fillStyle = '#FFFFFF';
+      // 男生(左)：頭、身體、兩隻腳
+      x.beginPath(); x.arc(19, 15, 5, 0, Math.PI * 2); x.fill();
+      snmRoundPath(x, 13, 22, 12, 17, 3); x.fill();
+      x.fillRect(14.5, 37, 4, 13); x.fillRect(19.5, 37, 4, 13);
+      // 女生(右)：頭、裙子、兩隻腳
+      x.beginPath(); x.arc(41, 15, 5, 0, Math.PI * 2); x.fill();
+      x.beginPath(); x.moveTo(41, 22); x.lineTo(49, 40); x.lineTo(33, 40); x.closePath(); x.fill();
+      x.fillRect(37.5, 39, 3.5, 11); x.fillRect(41.5, 39, 3.5, 11);
+      // 中間分隔線
+      x.fillRect(29.25, 11, 1.5, 39);
+    }, sz, '#1A73E8');
     var img = new Image(sz, sz);
     img.onload = function() {
       if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 });
     };
     img.src = c.toDataURL('image/png');
+    window._snmToiletIconUrl = img.src; // 地點卡片的 logo 也用這個
   }
 
   function initToilets(m) {
@@ -8363,7 +8403,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         var coords = e.features[0].geometry.coordinates.slice();
         var lon = coords[0], lat = coords[1];
         if (window._snmOpenPlace) {
-          window._snmOpenPlace({ layer: 'toilet-points', name: props.name || '公共廁所', kind: '公共廁所', logo: '🚻', lat: lat, lng: lon,
+          window._snmOpenPlace({ layer: 'toilet-points', name: props.name || '公共廁所', kind: '公共廁所', logo: (window._snmToiletIconUrl || '🚻'), lat: lat, lng: lon,
             addr: props.addr || '', info: [[props.cat, props.tags].filter(Boolean).join('｜'), '資料來源：環境部'].filter(Boolean) });
           return;
         }
@@ -9431,8 +9471,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var kx = 111320 * Math.cos(lat * Math.PI / 180), d = Math.hypot((lng - window.currentLon) * kx, (lat - window.currentLat) * 110540);
     return d < 1000 ? Math.round(d / 10) * 10 + ' 公尺' : (d / 1000).toFixed(d < 10000 ? 1 : 0) + ' 公里';
   }
+  function runOnClose() { if (cur && typeof cur.onClose === 'function') { try { cur.onClose(); } catch (_) {} } } // 例如停掉監視器影像
   function close() {
     if (!sheet.classList.contains('open')) return;
+    runOnClose();
     setH(0);
     gen++;
     setTimeout(function () { if (!cur) { sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); } }, 380);
@@ -9484,7 +9526,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var bWrite = el('button', null, '✏️ 寫留言');
     bWrite.onclick = function () { if (cm) cm.openComposer(poi, function () { loadPosts(); }); };
     acts.appendChild(bWrite);
-    if (p.layer && window._snmReportOpen) {
+    if (p.layer && !p.noReport && window._snmReportOpen) {
       var bRpt = el('button', null, '⚠️ 回報');
       bRpt.onclick = function () { window._snmReportOpen(poi); };
       acts.appendChild(bRpt);
@@ -9566,6 +9608,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if (document.body.classList.contains('navigating')) return; // 導航中不跳卡片
     if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
     document.querySelectorAll('.maplibregl-popup').forEach(function (e) { e.remove(); });
+    runOnClose(); // 換到另一個地點：前一張卡片的收尾(停影像)
     cur = p;
     window._snmLastPlace = p;
     render(p);
