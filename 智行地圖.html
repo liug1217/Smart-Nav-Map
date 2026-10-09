@@ -8876,6 +8876,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script async src="simplemart_data.js?v=osm1"></script>
 <script async src="dodohome_data.js?v=osm1"></script>
 <script async src="mcd_data.js?v=osm1"></script>
+<script async src="bafang_data.js?v=web1"></script>
 <script async src="wanjiafu_data.js?v=osm1"></script>
 <script async src="lejiakang_data.js?v=osm1"></script>
 <script async src="showba_data.js?v=osm1"></script>
@@ -8924,7 +8925,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       kw: /新北.*停車|公有停車|停車場?/i },
     { key: 'mcd', data: 'mcdData', name: '麥當勞', logo: '圖片/mcd.png', color: '#da291c', crop: [60, 60, 327, 327],
       kw: /麥當勞|mcdonald|麥當當|麥麥/i },
-    { key: 'bafang', data: 'bafangData', name: '八方雲集', logo: '圖片/bafang.jpg', color: '#1a1a1a', crop: [40, 40, 420, 420],
+    { key: 'bafang', data: 'bafangData', name: '八方雲集', logo: '圖片/bafang.jpg', color: '#1a1a1a', crop: [40, 40, 420, 420], useAddr: true, // 官網資料有地址
       kw: /八方雲集|八方/i },
     // YouBike：地址用官方資料(不另外查)；點開時向官方查即時可借/可還數量
     { key: 'youbike', data: 'youbikeData', name: 'YouBike', logo: '圖片/youbike.jpg', color: '#e88a00', crop: [30, 40, 387, 387],

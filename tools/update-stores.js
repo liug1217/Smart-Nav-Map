@@ -1,4 +1,4 @@
-// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、八方雲集、蝦皮店到店、城市車旅、醫院、大樹藥局、大學眼鏡、CoCo都可，
+// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、蝦皮店到店、城市車旅、醫院、大樹藥局、大學眼鏡、CoCo都可，
 // 跟手動加的店(tools/stores-manual.json)合併，產生各品牌的 *_data.js。
 // 之後要更新店家：node tools/update-stores.js
 // 只更新某幾個品牌：node tools/update-stores.js --only shopee,mcd(檔名開頭；其他品牌的檔案不動、也不去抓它們的資料)
@@ -25,8 +25,8 @@ const QUERIES = {
   px:   `[out:json][timeout:180];nwr[shop~"supermarket|convenience"]${BBOX};out center tags;`,
   fuel: `[out:json][timeout:180];nwr[amenity=fuel]${BBOX};out center tags;`,
   parking: `[out:json][timeout:180];nwr[amenity=parking]${BBOX};out center tags;`,
-  // 餐廳全部抓太大，只抓要的品牌
-  food: `[out:json][timeout:180];nwr[amenity][~"^(brand|name|name:zh|name:en|operator)$"~"麥當勞|McDonald|八方雲集",i]${BBOX};out center tags;`,
+  // 餐廳全部抓太大，只抓要的品牌(八方雲集改用官網，見 tools/update-bafang.js)
+  food: `[out:json][timeout:180];nwr[amenity][~"^(brand|name|name:zh|name:en|operator)$"~"麥當勞|McDonald",i]${BBOX};out center tags;`,
   // 蝦皮店到店：門市是 shop=convenience，放在美廉社等店裡的取貨點是 amenity=parcel_locker，名稱都寫「蝦皮店到店」
   shopee: `[out:json][timeout:180];nwr[~"^(brand|name|name:zh|name:en|alt_name)$"~"蝦皮|Shopee",i]${BBOX};out center tags;`,
   // 停車場全部抓很大(parking)，只要城市車旅時用這個小查詢
@@ -161,7 +161,6 @@ async function main() {
   const isSimple = e => /美廉社|simple ?mart/i.test(txt(e));
   const isDodo = e => /嘟嘟房|dodohome/i.test(txt(e));
   const isMcd = e => e.t['brand:wikidata'] === 'Q38076' || /麥當勞|McDonald/i.test(txt(e));
-  const isBafang = e => /八方雲集/.test(txt(e));
   // 家樂福 2026 年改名：量販店 → 萬家福、超市/便利購 → 樂家康(OpenStreetMap 上多半還寫家樂福)
   const isCfSmall = e => /家樂福超市|便利購|樂家康|Carrefour\s*(Market|Express)/i.test(txt(e));
   const isWjf = e => /萬家福|家樂福|Carrefour/i.test(txt(e)) && !isCfSmall(e);
@@ -204,8 +203,7 @@ async function main() {
       prefix: () => '嘟嘟房', plain: '嘟嘟房停車場', suffix: '停車場', brandRe: /寶盛國際股份有限公司|嘟嘟房|dodohome|parking lot/gi },
     { file: 'mcd_data.js', v: 'mcdData', title: '麥當勞', osm: ['food', isMcd], manual: manual.mcd || [],
       prefix: () => '麥當勞', suffix: '店', brandRe: /台灣麥當勞|麥當勞|McDonald'?s?|得來速|餐廳/gi },
-    { file: 'bafang_data.js', v: 'bafangData', title: '八方雲集', osm: ['food', isBafang], manual: manual.bafang || [],
-      prefix: () => '八方雲集', suffix: '店', brandRe: /八方雲集鍋貼水餃專賣店|八方雲集|鍋貼水餃專賣店|鍋貼水餃/gi },
+    // 八方雲集改用官網門市資料：tools/update-bafang.js
     { file: 'wanjiafu_data.js', v: 'wanjiafuData', title: '萬家福', osm: ['px', isWjf], manual: manual.wanjiafu || [],
       prefix: () => '萬家福', suffix: '店', brandRe: /萬家福|家樂福量販店|家樂福|Carrefour/gi },
     { file: 'lejiakang_data.js', v: 'lejiakangData', title: '樂家康', osm: ['px', isLjk], manual: manual.lejiakang || [],
