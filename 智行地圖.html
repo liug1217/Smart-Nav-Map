@@ -9595,6 +9595,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   grab.addEventListener('pointerup', endDrag);
   grab.addEventListener('pointercancel', endDrag);
+  // 跟導航大卡片一樣：點卡片空白處就收回/展開(點到按鈕、照片、評分、連結照常操作)
+  body.addEventListener('click', function (e) {
+    if (!sheet.classList.contains('open')) return;
+    if (e.target.closest('button, a, input, textarea, select, img, .psRating, .psPhotos, .psPostPh')) return;
+    if (window.getSelection && String(window.getSelection())) return; // 正在選文字
+    var h = sheet.getBoundingClientRect().height;
+    setH(h < fullH() - 20 ? fullH() : peekH());
+  });
   // 開始導航時收起來
   new MutationObserver(function () { if (document.body.classList.contains('navigating')) close(); })
     .observe(document.body, { attributes: true, attributeFilter: ['class'] });
