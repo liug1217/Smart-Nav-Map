@@ -8884,6 +8884,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script async src="cityparking_data.js?v=osm1"></script>
 <script async src="hospital_data.js?v=osm1"></script>
 <script async src="coco_data.js?v=osm1"></script>
+<script async src="optical_data.js?v=web1"></script>
 <script async src="ntpc_parking_data.js?v=ntpc1"></script>
 <script async src="youbike_data.js?v=yb1"></script>
 <script>
@@ -8917,7 +8918,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       kw: /醫院|hospital|急診|看病/i },
     { key: 'greattree', data: 'greatTreeData', name: '大樹藥局', logo: '圖片/greattree.png', color: '#21b14b',
       kw: /大樹|藥局|藥房|greattree/i },
-    { key: 'optical', data: 'opticalData', name: '大學眼鏡', logo: '圖片/optical.png', color: '#4caf32',
+    { key: 'optical', data: 'opticalData', name: '大學眼鏡', logo: '圖片/optical.png', color: '#4caf32', useAddr: true, // 官網資料有地址
       kw: /大學眼鏡|眼鏡/i },
     { key: 'coco', data: 'cocoData', name: 'CoCo都可', logo: '圖片/coco.png', color: '#f08300',
       kw: /coco|都可|飲料|手搖/i },
