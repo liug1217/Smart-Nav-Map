@@ -7,6 +7,7 @@
 <link rel="apple-touch-icon" href="圖片/智行地圖.png">
 <link rel="icon" type="image/png" href="圖片/智行地圖.png">
 <meta name="apple-mobile-web-app-title" content="智行地圖">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <style>
 /* ===== OpenStreetMap Layer ===== */
 #map{
@@ -33,6 +34,9 @@ html,body{
   background:#0a1628;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif;
 }
+/* Apple Safari 預設把按鈕文字變藍色：沒指定顏色的按鈕、輸入框一律黑字(跟電腦的預設一樣) */
+button, input, select, textarea{ color:#000; }
+a[x-apple-data-detectors]{ color:inherit !important; text-decoration:none !important; }
 
 .bottomBar{
   position:absolute;
@@ -440,7 +444,11 @@ body.ptt-in-room .pttChat{ display:flex; }
 .searchBar{
   display:flex;
   align-items:center;
-  background:#FFFFFF;
+  background:rgba(255,255,255,0.8); /* 跟卡片一樣的毛玻璃 */
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:0.5px solid #d9d9d9;
+  box-sizing:border-box;
   border-radius:24px;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   padding:0 8px 0 16px;
@@ -467,7 +475,10 @@ body.ptt-in-room .pttChat{ display:flex; }
 }
 .searchResultsList{
   margin-top:8px;
-  background:#FFFFFF;
+  background:rgba(255,255,255,0.8); /* 跟卡片一樣的毛玻璃 */
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:0.5px solid #d9d9d9;
   border-radius:14px;
   box-shadow:0 4px 4px rgba(0,0,0,0.25);
   max-height:260px;
@@ -509,12 +520,14 @@ body.searchOpen .searchBarWrap{
   position:fixed;
   left:0; right:0; top:0; bottom:0;
   z-index:1000;
-  background:#FFFFFF;
+  background:rgba(255,255,255,0.8); /* 全螢幕搜尋頁：同樣毛玻璃 */
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
   padding:8px 8px 0;
   display:flex;
   flex-direction:column;
 }
-body.searchOpen .searchBar{ box-shadow:none; background:#F1F3F4; }
+body.searchOpen .searchBar{ box-shadow:none; }
 body.searchOpen .searchBackBtn{ display:block; }
 body.searchOpen .searchChips{
   display:flex;
@@ -545,7 +558,11 @@ body.searchOpen .searchResultsList{
   margin:0 -8px;
   border-radius:0;
   box-shadow:none;
-  border-top:1px solid #EEE;
+  background:transparent; /* 搜尋頁本身已經是毛玻璃 */
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  border:none;
+  border-top:1px solid rgba(0,0,0,0.08);
   -webkit-overflow-scrolling:touch;
 }
 .searchHint{ padding:24px 16px; font-size:13px; color:#888; text-align:center; line-height:1.6; }
@@ -2027,7 +2044,7 @@ html, body {
         <input type="range" id="voicePitchSlider" min="0.7" max="1.5" step="0.05" value="1.05" style="width:100%;margin-top:4px;accent-color:#2F80FF;">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:#aaa;"><span>低沉</span><span id="voicePitchLabel">1.05</span><span>清亮</span></div>
       </div>
-      <button id="voiceTestBtn" style="margin-top:12px;width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:600;">🔊 試聽</button>
+      <button id="voiceTestBtn" style="margin-top:12px;width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;">🔊 試聽</button>
 
       <!-- ── 音量控制 ── -->
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
@@ -2165,6 +2182,20 @@ function _flipCell(cell, from, to) {
     preserveDrawingBuffer: true
   });
   window.map = map;
+
+  // 路線類圖層一律放在 3D 建築下面(之後才加的圖層、換地圖樣式後也會自動移過去)
+  (function () {
+    const SINK = /^(snm-roads-|snm-traffic-|navRoute-|routeOpt-|navTurnArrow-)/;
+    function sink() {
+      const ls = (map.getStyle() || {}).layers || [];
+      const bi = ls.findIndex(l => l.type === 'fill-extrusion' && l.id !== 'route');
+      if (bi < 0) return;
+      const bid = ls[bi].id;
+      const late = ls.slice(bi + 1).filter(l => SINK.test(l.id)).map(l => l.id);
+      late.forEach(id => { try { map.moveLayer(id, bid); } catch (_) {} });
+    }
+    map.on('styledata', sink);
+  })();
 
   // 載入畫面的進度條：照真的進度走
   //   網頁本身 5% → 地圖樣式(字型、圖示) 35% → 地圖圖磚(已載入/要載入的張數) 35~95% → 地圖全部畫好 100%
@@ -2741,7 +2772,7 @@ function _flipCell(cell, from, to) {
       const btn = document.createElement('button');
       const isSelected = _selectedVoiceName ? v.name === _selectedVoiceName : v.lang === 'zh-TW' && /enhanced|premium/i.test(v.name);
       btn.style.cssText = `
-        width:100%;text-align:left;padding:12px 14px;border-radius:12px;border:none;cursor:pointer;
+        width:100%;text-align:left;padding:12px 20px;border-radius:999px;border:none;cursor:pointer;
         font-size:14px;transition:background 0.15s;
         background:${isSelected ? '#EBF3FF' : '#f5f5f7'};
         color:${isSelected ? '#2F80FF' : '#000'};
@@ -4860,7 +4891,7 @@ function _flipCell(cell, from, to) {
         map.addLayer({
           id: 'navWalkLink', type: 'line', source: 'navWalkLink',
           layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: { 'line-color': '#2F80FF', 'line-width': 4, 'line-dasharray': [0.2, 2] }
+          paint: { 'line-color': '#009B65', 'line-width': 4, 'line-dasharray': [0.2, 2] } // 跟導航路線同色(綠框色)
         }, map.getLayer('user-pulse') ? 'user-pulse' : undefined);
       } else {
         map.getSource('navWalkLink').setData(data);
@@ -7445,32 +7476,25 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
       var key='speed-'+lim;
       if(m.hasImage(key)) return;
-      var sz=50, pad=8, tip=10;
-      var W=sz+pad*2, H=sz+pad*2+8+tip;
+      var sz=50;
+      var W=sz, H=sz;
       var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
       var cx=cv.getContext('2d');
-      var r=sz/2, ox=W/2, oy=pad+r;
-      // 陰影 + 白底圓
-      cx.shadowColor='rgba(0,0,0,0.25)'; cx.shadowBlur=4; cx.shadowOffsetX=0; cx.shadowOffsetY=4;
-      cx.beginPath(); cx.arc(ox,oy,r,0,Math.PI*2);
+      var r=sz/2, ox=W/2, oy=r;
+      // 白底圓
+      cx.beginPath(); cx.arc(ox,oy,r-0.5,0,Math.PI*2);
       cx.fillStyle='#FFFFFF'; cx.fill();
-      cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
-      // 外緣細灰框(跟全家等圖示的邊框一樣)
+      // 紅框 5px(貼外緣)
+      cx.beginPath(); cx.arc(ox,oy,r-3.5,0,Math.PI*2);
+      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
+      // 最外面 1px 細灰框(跟全家等圖示一樣)
       cx.beginPath(); cx.arc(ox,oy,r-0.5,0,Math.PI*2);
       cx.strokeStyle='#d9d9d9'; cx.lineWidth=1; cx.stroke();
-      // 紅框 5px(留一圈白邊在灰框裡面)
-      cx.beginPath(); cx.arc(ox,oy,r-5.5,0,Math.PI*2);
-      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
       // 速限文字(粗體)
       var fs=lim>=100?18:20;
       cx.font='800 '+fs+'px "SF Pro Display","SF Pro Text",Arial,sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
       cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy+1);
-      // 底部三角指針
-      cx.fillStyle='#FFFFFF';
-      cx.beginPath();
-      cx.moveTo(ox-8,pad+sz); cx.lineTo(ox+8,pad+sz); cx.lineTo(ox,pad+sz+tip); cx.closePath();
-      cx.fill();
       m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
     });
 
@@ -7507,9 +7531,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     function limitSignUrl(lim){
       var S=104, c=document.createElement('canvas'); c.width=S; c.height=S;
       var x=c.getContext('2d');
-      x.beginPath(); x.arc(S/2,S/2,S/2,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
-      x.beginPath(); x.arc(S/2,S/2,S/2-1,0,Math.PI*2); x.strokeStyle='#d9d9d9'; x.lineWidth=2; x.stroke(); // 細灰框(跟全家等一樣)
-      x.beginPath(); x.arc(S/2,S/2,S/2-13,0,Math.PI*2); x.strokeStyle='#FF0000'; x.lineWidth=11; x.stroke();
+      x.beginPath(); x.arc(S/2,S/2,S/2-1,0,Math.PI*2); x.fillStyle='#FFFFFF'; x.fill();
+      x.beginPath(); x.arc(S/2,S/2,S/2-7.5,0,Math.PI*2); x.strokeStyle='#FF0000'; x.lineWidth=11; x.stroke(); // 紅框貼外緣
+      x.beginPath(); x.arc(S/2,S/2,S/2-1,0,Math.PI*2); x.strokeStyle='#d9d9d9'; x.lineWidth=2; x.stroke(); // 最外面細灰框(跟全家等一樣)
       x.fillStyle='#000'; x.font='800 '+(String(lim).length>2?34:40)+'px "SF Pro Display","SF Pro Text",Arial,sans-serif';
       x.textAlign='center'; x.textBaseline='middle'; x.fillText(String(lim||'?'),S/2,S/2+2);
       return c.toDataURL('image/png');
@@ -7655,7 +7679,18 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function initSignals(m){
     if(!window.SIGNAL_DATA) return;
     if(m.getSource(SOURCE)) return;
-    makeEmojiImage(m, 'signal-icon', '🚦', 48);
+    // 直立圓角長方形(40×60，畫面上 20×30，跟全家 30px 一樣高)、白底、1px 細灰框，裡面 🚦
+    if(!m.hasImage('signal-icon')){
+      var sw=40, sh=60, sc=document.createElement('canvas'); sc.width=sw; sc.height=sh;
+      var sx=sc.getContext('2d');
+      snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.fillStyle='#FFFFFF'; sx.fill();
+      sx.save(); snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.clip();
+      sx.font='50px serif'; sx.textAlign='center'; sx.textBaseline='middle';
+      sx.fillText('🚦', sw/2, sh/2+3);
+      sx.restore();
+      snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.lineWidth=1; sx.strokeStyle='#d9d9d9'; sx.stroke();
+      m.addImage('signal-icon', sx.getImageData(0,0,sw,sh), { pixelRatio: 2 });
+    }
 
     m.addSource(SOURCE, {
       type: 'geojson',
@@ -7700,7 +7735,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       filter: ['!',['has','point_count']],
       layout: {
         'icon-image': 'signal-icon',
-        'icon-size': 0.6,
+        'icon-size': 1, // 跟全家等圖示一樣大
         'icon-allow-overlap': false
       }
     });
