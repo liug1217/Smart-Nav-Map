@@ -1,4 +1,4 @@
-// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、蝦皮店到店、城市車旅、醫院、大樹藥局、CoCo都可，
+// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、蝦皮店到店、城市車旅、醫院、CoCo都可，
 // 跟手動加的店(tools/stores-manual.json)合併，產生各品牌的 *_data.js。
 // 之後要更新店家：node tools/update-stores.js
 // 只更新某幾個品牌：node tools/update-stores.js --only shopee,mcd(檔名開頭；其他品牌的檔案不動、也不去抓它們的資料)
@@ -6,7 +6,7 @@
 //
 // 手動的店：用分店名(1 公里內)或 60 公尺內同品牌、沒寫分店名的店比對；
 //   對到 → 用 OpenStreetMap 的位置、保留手動的店名；對不到 → 照手動的位置保留。
-// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json / osm_food.json / osm_shopee.json / osm_cityparking.json / osm_hospital.json / osm_greattree.json / osm_coco.json(不用再連網)
+// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json / osm_food.json / osm_shopee.json / osm_cityparking.json / osm_hospital.json / osm_coco.json(不用再連網)
 // 某一類資料抓不到時(伺服器太忙)，那幾個品牌的檔案維持原樣，其他照常更新
 
 const fs = require('fs');
@@ -32,7 +32,6 @@ const QUERIES = {
   // 停車場全部抓很大(parking)，只要城市車旅時用這個小查詢
   cityparking: `[out:json][timeout:180];nwr[~"^(brand|name|name:zh|name:en|operator)$"~"城市車旅|City ?Parking",i]${BBOX};out center tags;`,
   hospital: `[out:json][timeout:180];nwr[amenity=hospital]${BBOX};out center tags;`,
-  greattree: `[out:json][timeout:180];nwr[~"^(brand|name|name:zh|name:en|operator)$"~"大樹"]${BBOX};out center tags;`,
   coco: `[out:json][timeout:180];nwr[~"^(brand|name|name:zh|name:en|operator)$"~"都可|CoCo",i]${BBOX};out center tags;`,
 };
 const MATCH_NEAR_M = 60, MATCH_NAME_M = 1000, DEDUPE_M = 15, DEDUPE_NAMED_M = 300;
@@ -171,9 +170,6 @@ async function main() {
   const isCityParking = e => /^(motorcycle_)?parking$/.test(e.t.amenity || '') && /城市車旅|City ?Parking/i.test(txt(e)) && !/Big City/i.test(txt(e));
   // OpenStreetMap 上有些診所、衛生所、健康中心、醫院裡的急診室也標成醫院，排除；分院、院區、療養院保留
   const isHospital = e => !/動物|寵物|獸醫|診所|衛生所|健康服務中心|健康管理中心|健康促進中心|急診室|仁愛之家|萊爾富/.test(txt(e));
-  // 「大樹」也會對到地名、公園：只要藥局(shop=chemist / amenity=pharmacy)或名稱有「大樹藥局」的
-  const isGreatTree = e => /大樹藥局|大樹連鎖藥局|GreatTree/i.test(txt(e)) ||
-                           (/大樹/.test(txt(e)) && (/^(chemist|pharmacy)$/.test(e.t.shop || '') || e.t.amenity === 'pharmacy'));
   // 「CoCo」也會對到 CoCo壱番屋(咖哩)、CoCo鬆餅屋、ecoco 回收站等別家：名稱要有「都可」，或名稱就叫「CoCo」的飲料店
   const isCoco = e => !/壹番屋|壱番屋|ichibanya|咖哩/i.test(txt(e)) &&
                       (/都可/.test(txt(e)) || (/^coco$/i.test((e.t.brand || e.t.name || '').trim()) && /^(cafe|beverages)$/.test(e.t.amenity || e.t.shop || '')));
@@ -215,8 +211,7 @@ async function main() {
     // 醫院沒有品牌：名稱整個照原本的(brandRe 把全部去掉 → 沒有分店名 → 用 prefix 的完整名稱)
     { file: 'hospital_data.js', v: 'hospitalData', title: '醫院', osm: ['hospital', isHospital], manual: manual.hospital || [],
       prefix: t => t['name:zh'] || t.name || '醫院', suffix: '', brandRe: /[\s\S]+/g, dedupeM: 300 },
-    { file: 'greattree_data.js', v: 'greatTreeData', title: '大樹藥局', osm: ['greattree', isGreatTree], manual: manual.greattree || [],
-      prefix: () => '大樹藥局', suffix: '店', brandRe: /大樹連鎖藥局|大樹藥局|大樹健康購物網|大樹|GreatTree|藥局|藥妝/gi },
+    // 大樹藥局改用官網門市資料：tools/update-greattree.js
     // 大學眼鏡改用官網門市資料：tools/update-optical.js
     { file: 'coco_data.js', v: 'cocoData', title: 'CoCo都可', osm: ['coco', isCoco], manual: manual.coco || [],
       prefix: () => 'CoCo都可', suffix: '店', brandRe: /CoCo ?都可茶飲|CoCo ?都可|都可茶飲|都可|CoCo ?Fresh ?Tea ?& ?Juice|CoCo/gi },
