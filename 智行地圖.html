@@ -1047,9 +1047,12 @@ body.navigating .coinToast{ top:155px; }
 #splashProgress{
   height:100%;width:0;border-radius:2px;
   background:linear-gradient(90deg,#0a84ff,#30d158);
-  animation:splashBar 2.8s 1.1s cubic-bezier(0.4,0,0.2,1) forwards;
+  transition:width 0.3s ease; /* 寬度由程式照真的載入進度設定 */
 }
-@keyframes splashBar{0%{width:0;}60%{width:72%;}85%{width:88%;}100%{width:95%;}}
+#splashStatus{
+  margin-top:10px;font-size:12px;color:rgba(255,255,255,0.55);min-height:16px;
+  animation:splashFade 1s 1s ease both;
+}
 
 /* 導航中：藍色導航條移到最頂，其他跟著下移 */
 body.navigating .rect8{ top:0; }
@@ -1615,6 +1618,7 @@ html, body {
   <div id="splashTitle">智行地圖</div>
   <div id="splashSub">智慧導航 · 即時路況</div>
   <div id="splashProgressWrap"><div id="splashProgress"></div></div>
+  <div id="splashStatus">準備中…</div>
 </div>
 
 <div id="map"></div>
@@ -2160,6 +2164,37 @@ function _flipCell(cell, from, to) {
   });
   window.map = map;
 
+  // 載入畫面的進度條：照真的進度走
+  //   網頁本身 5% → 地圖樣式(字型、圖示) 35% → 地圖圖磚(已載入/要載入的張數) 35~95% → 地圖全部畫好 100%
+  (function () {
+    const bar = document.getElementById('splashProgress');
+    const txt = document.getElementById('splashStatus');
+    if (!bar) return;
+    let pct = 0, want = 0, got = 0, done = false;
+    const seen = new Set();
+    function set(p, msg) {
+      if (done) return;
+      if (p > pct) { pct = p; bar.style.width = pct + '%'; }
+      if (txt && msg) txt.textContent = msg;
+    }
+    function tiles() {
+      if (!want) return;
+      set(35 + Math.round(60 * Math.min(1, got / want)), '載入地圖 ' + got + ' / ' + want);
+    }
+    set(5, '載入地圖樣式…');
+    map.on('styledata', () => set(35, want ? '' : '載入地圖…'));
+    map.on('dataloading', e => {
+      if (e.dataType !== 'source' || !e.tile || !e.tile.tileID) return;
+      const k = e.sourceId + '/' + e.tile.tileID.key;
+      if (!seen.has(k)) { seen.add(k); want++; tiles(); }
+    });
+    map.on('data', e => {
+      if (e.dataType !== 'source' || !e.tile || !e.tile.tileID) return;
+      if (e.tile.state === 'loaded' || e.tile.state === 'errored') { got = Math.min(want, got + 1); tiles(); }
+    });
+    map.once('load', () => { set(100, '完成'); done = true; });
+  })();
+
   map.on('load', () => {
     map.dragRotate.enable();
     map.touchZoomRotate.enableRotation();
@@ -2170,7 +2205,7 @@ function _flipCell(cell, from, to) {
     const sp = document.getElementById('splashScreen');
     const spBar = document.getElementById('splashProgress');
     if(sp){
-      if(spBar){ spBar.style.transition='width 0.4s ease'; spBar.style.width='100%'; }
+      if(spBar){ spBar.style.width='100%'; }
       setTimeout(()=>{ sp.classList.add('hide'); setTimeout(()=>sp.remove(), 1050); }, 500);
     }
   });
@@ -9207,11 +9242,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     '.snmCmHint{font-size:12px;color:#8e8e93;margin:6px 0 12px}' +
     '.snmCmSend{width:100%;padding:13px 0;border:none;border-radius:10px;background:#007aff;color:#fff;font-size:16px;font-weight:600;cursor:pointer}' +
     '.snmCmSend:disabled{opacity:.4}' +
-    '.snmView{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center}' +
-    '.snmView img{max-width:100%;max-height:100%;object-fit:contain}' +
-    '.snmView .snmPhDates{left:12px;top:calc(12px + env(safe-area-inset-top));font-size:13px;padding:5px 9px}' +
-    '.snmView .x{position:absolute;right:12px;top:calc(12px + env(safe-area-inset-top));width:38px;height:38px;border:none;border-radius:19px;background:rgba(255,255,255,.2);color:#fff;font-size:18px;cursor:pointer}' +
-    '.snmView .rp{position:absolute;right:14px;bottom:calc(18px + env(safe-area-inset-bottom));background:none;border:none;color:#aaa;font-size:13px;text-decoration:underline;cursor:pointer}';
+    '.snmViewBody{padding:12px 20px calc(16px + env(safe-area-inset-bottom));overflow-y:auto}' +
+    '.snmViewImg{position:relative;border-radius:12px;overflow:hidden;background:#000;line-height:0}' +
+    '.snmViewImg img{width:100%;max-height:70vh;object-fit:contain;display:block}' +
+    '.snmViewImg .snmPhDates{left:8px;top:8px;font-size:12px;padding:4px 8px}' +
+    '.snmViewBody .rp{display:block;margin:10px 0 0 auto;background:none;border:none;color:#8e8e93;font-size:13px;text-decoration:underline;cursor:pointer}';
   document.head.appendChild(css);
 
   function base() { return window._snmApiBase || '/api'; }
@@ -9288,13 +9323,25 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   // ── 看大圖 ──────────────────────────────────────────
   function viewPhoto(poi, p, mine) {
-    var v = el('div', 'snmView');
+    var mask = el('div', 'snmCmMask'), sheet = el('div', 'snmCmSheet');
+    mask.style.zIndex = '99999'; // 蓋在留言列表上面
+    sheet.style.height = 'auto'; sheet.style.maxHeight = '94vh';
+    var head = el('div', 'snmCmHead');
+    head.appendChild(el('h3', null, '照片'));
+    head.appendChild(el('div', 'snmCmHint', poi.name || ''));
+    var x = el('button', 'snmCmX', '✕'); head.appendChild(x);
+    var body = el('div', 'snmViewBody');
+    var box = el('div', 'snmViewImg');
     var img = new Image(); img.src = photoUrl(p.id, false); img.alt = '';
-    v.appendChild(img); v.appendChild(datesEl(p));
-    var x = el('button', 'x', '✕'); x.onclick = function () { v.remove(); }; v.appendChild(x);
-    if (!mine) { var rp = el('button', 'rp', '檢舉這張照片'); rp.onclick = function () { report(poi, '照片 ' + p.id); }; v.appendChild(rp); }
-    v.addEventListener('click', function (e) { if (e.target === v) v.remove(); });
-    document.body.appendChild(v);
+    box.appendChild(img); box.appendChild(datesEl(p));
+    body.appendChild(box);
+    if (!mine) { var rp = el('button', 'rp', '檢舉這張照片'); rp.onclick = function () { report(poi, '照片 ' + p.id); }; body.appendChild(rp); }
+    sheet.appendChild(head); sheet.appendChild(body); mask.appendChild(sheet);
+    document.body.appendChild(mask);
+    var close = function () { mask.remove(); };
+    addGrab(sheet, close);
+    x.onclick = close;
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
   }
 
   function addGrab(sheet, close) {
