@@ -1,4 +1,4 @@
-// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、八方雲集、蝦皮店到店，
+// 從 OpenStreetMap 抓全台的全家、全聯、中油、7-ELEVEN、OK、萊爾富、美廉社、Times、嘟嘟房、麥當勞、八方雲集、蝦皮店到店、城市車旅、醫院，
 // 跟手動加的店(tools/stores-manual.json)合併，產生各品牌的 *_data.js。
 // 之後要更新店家：node tools/update-stores.js
 // 只更新某幾個品牌：node tools/update-stores.js --only shopee,mcd(檔名開頭；其他品牌的檔案不動、也不去抓它們的資料)
@@ -6,7 +6,7 @@
 //
 // 手動的店：用分店名(1 公里內)或 60 公尺內同品牌、沒寫分店名的店比對；
 //   對到 → 用 OpenStreetMap 的位置、保留手動的店名；對不到 → 照手動的位置保留。
-// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json / osm_food.json / osm_shopee.json(不用再連網)
+// 加 --cache <資料夾> 可改讀之前下載好的 osm_fm.json / osm_px.json / osm_fuel.json / osm_parking.json / osm_food.json / osm_shopee.json / osm_cityparking.json / osm_hospital.json(不用再連網)
 // 某一類資料抓不到時(伺服器太忙)，那幾個品牌的檔案維持原樣，其他照常更新
 
 const fs = require('fs');
@@ -29,6 +29,9 @@ const QUERIES = {
   food: `[out:json][timeout:180];nwr[amenity][~"^(brand|name|name:zh|name:en|operator)$"~"麥當勞|McDonald|八方雲集",i]${BBOX};out center tags;`,
   // 蝦皮店到店：門市是 shop=convenience，放在美廉社等店裡的取貨點是 amenity=parcel_locker，名稱都寫「蝦皮店到店」
   shopee: `[out:json][timeout:180];nwr[~"^(brand|name|name:zh|name:en|alt_name)$"~"蝦皮|Shopee",i]${BBOX};out center tags;`,
+  // 停車場全部抓很大(parking)，只要城市車旅時用這個小查詢
+  cityparking: `[out:json][timeout:180];nwr[~"^(brand|name|name:zh|name:en|operator)$"~"城市車旅|City ?Parking",i]${BBOX};out center tags;`,
+  hospital: `[out:json][timeout:180];nwr[amenity=hospital]${BBOX};out center tags;`,
 };
 const MATCH_NEAR_M = 60, MATCH_NAME_M = 1000, DEDUPE_M = 15, DEDUPE_NAMED_M = 300;
 
@@ -89,7 +92,7 @@ function branchOf(t, brandRe) {
 const manualBranch = name => name.split(/\s+/).pop();
 const sameBranch = (a, b) => a && b && a.replace(/[店站]$/, '') === b.replace(/[店站]$/, '');
 
-function build({ osm, manual, prefix, brandRe, suffix, plain }) {
+function build({ osm, manual, prefix, brandRe, suffix, plain, dedupeM }) {
   const stores = osm.map(e => {
     let branch = branchOf(e.t, brandRe);
     if (branch && !/(店|站|門市)$/.test(branch) && !branch.endsWith(suffix)) branch += suffix; // 例如「新基隆一」→「新基隆一店」
@@ -98,7 +101,7 @@ function build({ osm, manual, prefix, brandRe, suffix, plain }) {
   // 同一家店有時同時標成點和建築(重複)：有分店名的 300 公尺內同名只留一個，沒分店名的 15 公尺內
   const uniq = [];
   for (const s of stores) {
-    const lim = s.branch ? DEDUPE_NAMED_M : DEDUPE_M;
+    const lim = s.branch ? DEDUPE_NAMED_M : (dedupeM || DEDUPE_M);
     if (!uniq.some(u => u.name === s.name && distM(u.lat, u.lng, s.lat, s.lng) < lim)) uniq.push(s);
   }
   let moved = 0, kept = 0;
@@ -163,6 +166,9 @@ async function main() {
   const isShowba = e => /小北百貨|小北/.test(txt(e));
   // 「請坐」這種名稱沒寫蝦皮的，英文名/別名會寫 Shopee Xpress；只寫「Shopee」的(例如 outpost)不是店到店
   const isShopee = e => /蝦皮店到店|Shopee ?Xpress/i.test([txt(e), e.t.alt_name].filter(Boolean).join(' '));
+  const isCityParking = e => /城市車旅|City ?Parking/i.test(txt(e));
+  // OpenStreetMap 上有些診所、衛生所、健康中心、醫院裡的急診室也標成醫院，排除；分院、院區、療養院保留
+  const isHospital = e => !/動物|寵物|獸醫|診所|衛生所|健康服務中心|健康管理中心|健康促進中心|急診室|仁愛之家|萊爾富/.test(txt(e));
   const isHilife = e => e.t.brand === '萊爾富' || e.t['brand:wikidata'] === 'Q11326216' ||
                         (!e.t.brand && /萊爾富|Hi-?Life/i.test(e.t.name || ''));
 
@@ -197,6 +203,11 @@ async function main() {
       prefix: () => '小北百貨', suffix: '店', brandRe: /小北百貨|小北/gi },
     { file: 'shopee_data.js', v: 'shopeeData', title: '蝦皮店到店', osm: ['shopee', isShopee], manual: manual.shopee || [],
       prefix: () => '蝦皮店到店', suffix: '店', brandRe: /蝦皮店到店|蝦皮|Shopee ?Xpress|Shopee/gi },
+    { file: 'cityparking_data.js', v: 'cityParkingData', title: '城市車旅', osm: ['cityparking', isCityParking], manual: manual.cityparking || [],
+      prefix: () => '城市車旅', plain: '城市車旅停車場', suffix: '停車場', brandRe: /城市車旅股份有限公司|城市車旅|City ?Parking|parking lot/gi },
+    // 醫院沒有品牌：名稱整個照原本的(brandRe 把全部去掉 → 沒有分店名 → 用 prefix 的完整名稱)
+    { file: 'hospital_data.js', v: 'hospitalData', title: '醫院', osm: ['hospital', isHospital], manual: manual.hospital || [],
+      prefix: t => t['name:zh'] || t.name || '醫院', suffix: '', brandRe: /[\s\S]+/g, dedupeM: 300 },
   ];
   const oi = process.argv.indexOf('--only');
   const only = oi > 0 ? process.argv[oi + 1].split(',') : null;

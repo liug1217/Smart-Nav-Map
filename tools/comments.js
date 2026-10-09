@@ -31,7 +31,7 @@ const store = JSON.parse(fs.readFileSync(path.join(dir, 'store.json'), 'utf8'));
 const LAYER = {
   'fm-points': '全家', 'seven-points': '7-ELEVEN', 'okmart-points': 'OK', 'hilife-points': '萊爾富', 'times-points': 'Times',
   'simplemart-points': '美廉社', 'dodohome-points': '嘟嘟房', 'mcd-points': '麥當勞', 'bafang-points': '八方雲集',
-  'wanjiafu-points': '萬家福', 'lejiakang-points': '樂家康', 'showba-points': '小北百貨', 'shopee-points': '蝦皮店到店', 'ntpcpark-points': '新北公有停車場', 'youbike-points': 'YouBike',
+  'wanjiafu-points': '萬家福', 'lejiakang-points': '樂家康', 'showba-points': '小北百貨', 'shopee-points': '蝦皮店到店', 'cityparking-points': '城市車旅', 'hospital-points': '醫院', 'ntpcpark-points': '新北公有停車場', 'youbike-points': 'YouBike',
   'pxmart-points': '全聯', 'cpc-points': '中油', 'toilet-points': '公廁', 'speed-point': '測速', 'cctv-point': '監視器', 'signal-points': '紅綠燈', 'place-points': '地點',
 };
 const rows = [];

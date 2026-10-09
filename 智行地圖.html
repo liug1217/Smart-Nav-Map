@@ -8537,7 +8537,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       // 全台 2 萬多個：放大到 14 級以上才顯示；圖示重疊時自動避開
       // 很多公廁就在店裡(麥當勞、加油站…)，圖示重疊時要讓店家 logo 顯示：放在所有店家圖層下面
       // (公廁資料是背景載入，通常最後才加，不指定位置會疊在最上面把店家擋掉)
-      var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|shopee|ntpcpark|youbike|pxmart|cpc)-points$/;
+      var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|shopee|cityparking|hospital|ntpcpark|youbike|pxmart|cpc)-points$/;
       var below = (m.getStyle().layers || []).find(function(l){ return STORE_LAYERS.test(l.id); });
       m.addLayer({
         id: 'toilet-points',
@@ -8880,6 +8880,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 <script async src="lejiakang_data.js?v=osm1"></script>
 <script async src="showba_data.js?v=osm1"></script>
 <script async src="shopee_data.js?v=osm1"></script>
+<script async src="hospital_data.js?v=osm1"></script>
 <script async src="ntpc_parking_data.js?v=ntpc1"></script>
 <script async src="youbike_data.js?v=yb1"></script>
 <script>
@@ -8907,6 +8908,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       kw: /小北/i },
     { key: 'shopee', data: 'shopeeData', name: '蝦皮店到店', logo: '圖片/shopee.jpg', color: '#ee4d2d', crop: [55, 15, 280, 280],
       kw: /蝦皮|shopee|店到店|智取/i },
+    { key: 'cityparking', data: 'cityParkingData', name: '城市車旅', logo: '圖片/cityparking.png', color: '#0d4c9c',
+      kw: /城市車旅|city ?parking|停車場?/i },
+    { key: 'hospital', data: 'hospitalData', name: '醫院', logo: '圖片/hospital.png', color: '#e41e26',
+      kw: /醫院|hospital|急診|看病/i },
     { key: 'ntpcpark', data: 'ntpcParkingData', name: '新北市公有停車場', logo: '圖片/ntpc_parking.png', color: '#2f6db5',
       kw: /新北.*停車|公有停車|停車場?/i },
     { key: 'mcd', data: 'mcdData', name: '麥當勞', logo: '圖片/mcd.png', color: '#da291c', crop: [60, 60, 327, 327],
@@ -9048,7 +9053,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   // 道路資料(OpenFreeMap 的 transportation_name)：國道路段 class=motorway、ref=編號；交流道的 ref 是出口里程，名稱有「交流道」，要排除
   var FW = { '1': '中山高速公路', '3': '福爾摩沙高速公路', '4': '臺中環線（外環）', '5': '蔣渭水高速公路' };
   var LAYER = 'snm-fw-shields', SRC = 'snm-roads';
-  var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|shopee|ntpcpark|youbike|pxmart|cpc|toilet)-points$/;
+  var STORE_LAYERS = /^(fm|seven|okmart|hilife|times|simplemart|dodohome|mcd|bafang|wanjiafu|lejiakang|showba|shopee|cityparking|hospital|ntpcpark|youbike|pxmart|cpc|toilet)-points$/;
 
   function addIcons(m, done) {
     var keys = Object.keys(FW), left = keys.length;
@@ -9115,7 +9120,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 /* ===== 📝 地標回報：點開地標(超商、加油站、廁所、測速照相…)右下角「回報錯誤」 ===== */
 (function(){
   var LAYERS = ['fm-points', 'seven-points', 'okmart-points', 'hilife-points', 'times-points', 'simplemart-points', 'dodohome-points',
-                'mcd-points', 'bafang-points', 'wanjiafu-points', 'lejiakang-points', 'showba-points', 'shopee-points', 'ntpcpark-points', 'youbike-points', 'pxmart-points',
+                'mcd-points', 'bafang-points', 'wanjiafu-points', 'lejiakang-points', 'showba-points', 'shopee-points', 'cityparking-points', 'hospital-points', 'ntpcpark-points', 'youbike-points', 'pxmart-points',
                 'cpc-points', 'toilet-points', 'speed-point'];
   // (這份只用來在舊的小視窗加「回報錯誤」；地點卡片自己有回報按鈕，監視器、紅綠燈、地點的回報種類寫在伺服器 lib/reports.js)
   var REASONS = [
