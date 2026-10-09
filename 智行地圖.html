@@ -267,6 +267,7 @@ body.ptt-in-room .pttChat{ display:flex; }
 
 
 .rect3{
+  cursor:grab; /* 電腦：滑鼠移上去提示可以拉 */
   position:absolute;
   width:56px;
   height:4px;
@@ -3192,9 +3193,12 @@ function _flipCell(cell, from, to) {
   // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
     let _tsY = 0, _tgtIsBtn = false, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
+    // 手指(touch)、滑鼠都讀得到 Y：電腦也能用滑鼠拉卡片
+    const _evY = e => (e.touches && e.touches[0]) ? e.touches[0].clientY
+      : (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY;
 
     function _onDragStart(e) {
-      _tsY = e.touches[0].clientY;
+      _tsY = _evY(e);
       _moved = false;
       _tgtIsBtn = !!e.target.closest('button, input, select, a, label, .pttModes, .pttMembers');
       if (_tgtIsBtn) return;
@@ -3209,7 +3213,7 @@ function _flipCell(cell, from, to) {
     }
     function _onDragMove(e) {
       if (_tgtIsBtn) return;
-      const dy = _tsY - e.touches[0].clientY;
+      const dy = _tsY - _evY(e);
       if (!_moved && Math.abs(dy) < 5) return;
       e.preventDefault();
       const newH = Math.min(_expandedH, Math.max(RECT1_COMPACT, _curH + dy));
@@ -3231,7 +3235,7 @@ function _flipCell(cell, from, to) {
     function _onDragEnd(e) {
       if (_tgtIsBtn) return;
       if (_rafId) cancelAnimationFrame(_rafId);
-      const dy = _tsY - e.changedTouches[0].clientY;
+      const dy = _tsY - _evY(e);
       if (!_moved || Math.abs(dy) < 8) {
         const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
         if (_drawerOpen) { _closeDrawer(); }
@@ -3249,11 +3253,12 @@ function _flipCell(cell, from, to) {
     if (_rect3Handle) {
       _rect3Handle.addEventListener('touchstart', e => { e.stopPropagation(); _onDragStart(e); }, { passive: true });
       _rect3Handle.addEventListener('touchmove', e => { e.stopPropagation(); _onDragMove(e); }, { passive: false });
-      _rect3Handle.addEventListener('touchend', e => {
-        e.stopPropagation();
+      _rect3Handle.addEventListener('touchend', e => { e.stopPropagation(); _onHandleEnd(e); }, { passive: true });
+    }
+    function _onHandleEnd(e) {
         if (_tgtIsBtn) return;
         if (_rafId) cancelAnimationFrame(_rafId);
-        const dy = _tsY - e.changedTouches[0].clientY;
+        const dy = _tsY - _evY(e);
         if (!_moved || Math.abs(dy) < 8) {
           const isNav = document.body.classList.contains('navigating');
           const curH = parseFloat(_rect1El.style.height) || RECT1_COMPACT;
@@ -3263,8 +3268,28 @@ function _flipCell(cell, from, to) {
           return;
         }
         _snapPanel(dy);
-      }, { passive: true });
     }
+
+    // 滑鼠(電腦)：按住卡片或拉條往上/下拖，跟手指一樣；點一下也跟手機點一下一樣
+    let _mouseDrag = null; // 'card' | 'handle'
+    // 手機點一下之後瀏覽器還會補送一次「模擬滑鼠」事件：剛用手指碰過就不理滑鼠，不然會開了又馬上關
+    let _lastTouchMs = 0;
+    _rect1El.addEventListener('touchstart', () => { _lastTouchMs = Date.now(); }, { passive: true, capture: true });
+    _rect1El.addEventListener('touchend', () => { _lastTouchMs = Date.now(); }, { passive: true, capture: true });
+    _rect1El.addEventListener('mousedown', e => {
+      if (e.button !== 0 || Date.now() - _lastTouchMs < 1000) return;
+      _mouseDrag = (_rect3Handle && e.target === _rect3Handle) ? 'handle' : 'card';
+      _onDragStart(e);
+      if (_tgtIsBtn) { _mouseDrag = null; return; } // 按到按鈕、輸入框：照常點
+      e.preventDefault(); // 拖的時候不要選到文字
+    });
+    window.addEventListener('mousemove', e => { if (_mouseDrag) _onDragMove(e); });
+    window.addEventListener('mouseup', e => {
+      if (!_mouseDrag) return;
+      const k = _mouseDrag;
+      _mouseDrag = null;
+      if (k === 'handle') _onHandleEnd(e); else _onDragEnd(e);
+    });
   }
 
   // ===== iOS audio unlock：第一次使用者互動時解鎖 VP 的 AudioContext =====
