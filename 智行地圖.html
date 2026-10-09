@@ -9255,11 +9255,35 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   }
   function report(poi, note) {
     if (typeof window._snmApiPost !== 'function') return;
-    if (!confirm('要檢舉這則' + (note.indexOf('照片') >= 0 ? '照片' : '留言') + '嗎？')) return;
-    window._snmApiPost('/reports/submit', { sessionId: window._snmSid, layer: poi.layer, name: poi.name,
-      lat: poi.lat, lng: poi.lng, reason: 'comment', note: note })
-      .then(function (r) { toast(r && r.ok ? '已檢舉，我們會盡快處理' : '檢舉失敗，請稍後再試'); })
-      .catch(function () { toast('檢舉失敗，請檢查網路'); });
+    var what = note.indexOf('照片') >= 0 ? '照片' : '留言';
+    var mask = el('div', 'snmCmMask'), sheet = el('div', 'snmCmSheet');
+    mask.style.zIndex = '100000'; // 蓋在看大圖上面
+    sheet.style.height = 'auto';
+    var head = el('div', 'snmCmHead');
+    head.appendChild(el('h3', null, '檢舉' + what));
+    head.appendChild(el('div', 'snmCmHint', poi.name || ''));
+    var x = el('button', 'snmCmX', '✕'); head.appendChild(x);
+    var form = el('div', 'snmCmForm');
+    form.appendChild(el('div', null, '要檢舉這則' + what + '嗎？我們會檢查，違規的內容會移除。'));
+    var row = el('div', 'snmCmBtnRow');
+    var cancel = el('button', null, '取消'), ok = el('button', null, '檢舉');
+    cancel.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:#e5e5ea;color:#1c1c1e';
+    ok.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:#007aff;color:#fff';
+    row.style.cssText = 'display:flex;gap:8px;margin-top:14px;padding-bottom:env(safe-area-inset-bottom)';
+    row.appendChild(cancel); row.appendChild(ok); form.appendChild(row);
+    sheet.appendChild(head); sheet.appendChild(form); mask.appendChild(sheet);
+    document.body.appendChild(mask);
+    var close = function () { mask.remove(); };
+    addGrab(sheet, close);
+    x.onclick = close; cancel.onclick = close;
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+    ok.onclick = function () {
+      close();
+      window._snmApiPost('/reports/submit', { sessionId: window._snmSid, layer: poi.layer, name: poi.name,
+        lat: poi.lat, lng: poi.lng, reason: 'comment', note: note })
+        .then(function (r) { toast(r && r.ok ? '已檢舉，我們會盡快處理' : '檢舉失敗，請稍後再試'); })
+        .catch(function () { toast('檢舉失敗，請檢查網路'); });
+    };
   }
 
   // ── 看大圖 ──────────────────────────────────────────
