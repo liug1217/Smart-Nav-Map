@@ -2191,7 +2191,7 @@ function _flipCell(cell, from, to) {
       /^routeOpt-other-casing$/, /^routeOpt-other$/, /^routeOpt-sel-casing$/, /^routeOpt-sel$/,
       /^navRoute-outline$/, /^navRoute-line$/,
       /^snm-traffic-casing$/, /^snm-traffic-lines$/, /^snm-traffic-points$/,
-      /^navRoute-arrows$/, /^navTurnArrow-casing$/, /^navTurnArrow-line$/, /^navTurnArrow-head$/];
+      /^navRoute-arrows$/, /^navTurnArrow-casing$/, /^navTurnArrow-line$/, /^navTurnArrow-tail$/, /^navTurnArrow-head$/];
     const rank = id => ORDER.findIndex(re => re.test(id));
     function sink() {
       const ls = (map.getStyle() || {}).layers || [];
@@ -4784,7 +4784,7 @@ function _flipCell(cell, from, to) {
     if (!map.hasImage('nav-turn-head')) {
       // 箭頭：白色三角形，尖端朝上(北)，用 icon-rotate 轉到行進方向。
       // 深藍外框三邊都畫(底邊比箭身寬的兩側也要有框)，只有箭身白色穿過的中間那段底邊塗回白色，接縫才不會多一條橫線。
-      // 箭身白色寬度約是箭頭底寬的 41%(各縮放等級都一樣，見下面 line-width / icon-size)
+      // 箭身白色寬度約是箭頭底寬的 45%(見下面 line-width / icon-size)
       const W = 64, H = 58, c = document.createElement('canvas');
       c.width = W; c.height = H;
       const x = c.getContext('2d');
@@ -4795,22 +4795,34 @@ function _flipCell(cell, from, to) {
       x.fillStyle = '#ffffff'; x.fillRect(W / 2 - 13, H - 8, 26, 8);
       map.addImage('nav-turn-head', x.getImageData(0, 0, W, H), { pixelRatio: 2 });
     }
+    if (!map.hasImage('nav-turn-tail')) {
+      // 箭尾的深藍邊：寬 = 箭身外框寬(15px)、厚 = 兩側邊框厚度(3px)
+      const c = document.createElement('canvas');
+      c.width = 30; c.height = 6;
+      const x = c.getContext('2d');
+      x.fillStyle = '#123a7a'; x.fillRect(0, 0, 30, 6);
+      map.addImage('nav-turn-tail', x.getImageData(0, 0, 30, 6), { pixelRatio: 2 });
+    }
     map.addSource('navTurnArrow', { type: 'geojson', data: TURN_ARROW_EMPTY });
     const before = map.getLayer('user-car') ? 'user-car' : undefined; // 在車子下面、路線上面
-    // 寬度隨縮放等比例變(exponential 2)：看起來永遠跟道路差不多寬
-    // 線頭用 square：兩條線各往外多長出自己寬度的一半，深藍比白色多出的那截剛好等於兩側邊框厚度 → 尾巴也有一樣粗的邊框；箭頭那端被三角形蓋住
-    const width = (z14, z16, z18) => ['interpolate', ['exponential', 2], ['zoom'], 14, z14, 16, z16, 18, z18];
-    map.addLayer({ id: 'navTurnArrow-casing', type: 'line', source: 'navTurnArrow', minzoom: 13,
-      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'square' },
-      paint: { 'line-color': '#123a7a', 'line-width': width(6, 14, 30) } }, before);
-    map.addLayer({ id: 'navTurnArrow-line', type: 'line', source: 'navTurnArrow', minzoom: 13,
-      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'square' },
-      paint: { 'line-color': '#ffffff', 'line-width': width(3.5, 9, 20) } }, before);
-    map.addLayer({ id: 'navTurnArrow-head', type: 'symbol', source: 'navTurnArrow', minzoom: 13,
-      filter: ['==', ['geometry-type'], 'Point'],
-      layout: { 'icon-image': 'nav-turn-head', 'icon-size': width(0.27, 0.68, 1.5), 'icon-anchor': 'bottom',
-                'icon-rotate': ['get', 'bearing'], 'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
-                'icon-allow-overlap': true, 'icon-ignore-placement': true } }, before);
+    // 粗細跟導航路線一樣固定(外框 15px，不隨縮放變)；箭身長度是公尺(轉彎前 55m＋後 30m)，
+    // 縮到 16 級以下箭身短到只剩箭頭，乾脆不畫(導航時是 16～17 級)
+    const MINZ = 16;
+    const icon = { 'icon-rotate': ['get', 'bearing'], 'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
+                   'icon-allow-overlap': true, 'icon-ignore-placement': true };
+    map.addLayer({ id: 'navTurnArrow-casing', type: 'line', source: 'navTurnArrow', minzoom: MINZ,
+      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
+      paint: { 'line-color': '#123a7a', 'line-width': 15 } }, before);
+    map.addLayer({ id: 'navTurnArrow-line', type: 'line', source: 'navTurnArrow', minzoom: MINZ,
+      filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
+      paint: { 'line-color': '#ffffff', 'line-width': 9 } }, before);
+    // 箭尾補一條深藍邊(線頭 butt 切齊不會有邊框；square 會讓箭頭那端的外框從三角形兩側露出來)
+    map.addLayer({ id: 'navTurnArrow-tail', type: 'symbol', source: 'navTurnArrow', minzoom: MINZ,
+      filter: ['==', ['get', 'kind'], 'tail'],
+      layout: Object.assign({ 'icon-image': 'nav-turn-tail', 'icon-anchor': 'top' }, icon) }, before);
+    map.addLayer({ id: 'navTurnArrow-head', type: 'symbol', source: 'navTurnArrow', minzoom: MINZ,
+      filter: ['==', ['get', 'kind'], 'head'],
+      layout: Object.assign({ 'icon-image': 'nav-turn-head', 'icon-size': 0.72, 'icon-anchor': 'bottom' }, icon) }, before);
     return true;
   }
   // 每次 GPS 更新呼叫；同一個轉彎只畫一次(換到下一個轉彎、重新規劃、換地圖樣式後才重畫)
@@ -4855,7 +4867,8 @@ function _flipCell(cell, from, to) {
     }
     src.setData({ type: 'FeatureCollection', features: [
       { type: 'Feature', geometry: { type: 'LineString', coordinates: pts.map(p => [p.lng, p.lat]) }, properties: {} },
-      { type: 'Feature', geometry: { type: 'Point', coordinates: [end.lng, end.lat] }, properties: { bearing: end.bearing } },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [end.lng, end.lat] }, properties: { kind: 'head', bearing: end.bearing } },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [pts[0].lng, pts[0].lat] }, properties: { kind: 'tail', bearing: pts[0].bearing } },
     ] });
   }
   window._clearTurnArrow = function () {
@@ -4971,7 +4984,7 @@ function _flipCell(cell, from, to) {
     style.layers.forEach(layer => {
       // 隱藏所有 symbol 類型圖層（包含 POI marker、地名、圖示）
       // 只保留 line（道路）、fill（區域填色）、background，以及車子圖層
-      const isPoiSymbol = layer.type === 'symbol' && layer.id !== 'user-car' && layer.id !== 'navRoute-arrows' && layer.id !== 'navTurnArrow-head';
+      const isPoiSymbol = layer.type === 'symbol' && layer.id !== 'user-car' && layer.id !== 'navRoute-arrows' && !layer.id.startsWith('navTurnArrow-');
       if (isPoiSymbol) {
         try {
           map.setLayoutProperty(layer.id, 'visibility', visibility);
