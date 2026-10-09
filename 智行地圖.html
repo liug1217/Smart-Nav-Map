@@ -4784,7 +4784,7 @@ function _flipCell(cell, from, to) {
     if (!map.hasImage('nav-turn-head')) {
       // 箭頭：白色三角形，尖端朝上(北)，用 icon-rotate 轉到行進方向。
       // 深藍外框三邊都畫(底邊比箭身寬的兩側也要有框)，只有箭身白色穿過的中間那段底邊塗回白色，接縫才不會多一條橫線。
-      // 箭身白色寬度約是箭頭底寬的 45%(見下面 line-width / icon-size)
+      // 箭身白色寬度約是箭頭底寬的 41%(見下面 line-width / icon-size)
       const W = 64, H = 58, c = document.createElement('canvas');
       c.width = W; c.height = H;
       const x = c.getContext('2d');
@@ -4796,23 +4796,22 @@ function _flipCell(cell, from, to) {
       map.addImage('nav-turn-head', x.getImageData(0, 0, W, H), { pixelRatio: 2 });
     }
     if (!map.hasImage('nav-turn-tail')) {
-      // 箭尾的深藍邊：寬 = 箭身外框寬(15px)、厚 = 兩側邊框厚度(3px)
+      // 箭尾的深藍邊：寬 = 箭身外框寬(14px)、厚 = 兩側邊框厚度(2.5px)
       const c = document.createElement('canvas');
-      c.width = 30; c.height = 6;
+      c.width = 28; c.height = 5;
       const x = c.getContext('2d');
-      x.fillStyle = '#123a7a'; x.fillRect(0, 0, 30, 6);
-      map.addImage('nav-turn-tail', x.getImageData(0, 0, 30, 6), { pixelRatio: 2 });
+      x.fillStyle = '#123a7a'; x.fillRect(0, 0, 28, 5);
+      map.addImage('nav-turn-tail', x.getImageData(0, 0, 28, 5), { pixelRatio: 2 });
     }
     map.addSource('navTurnArrow', { type: 'geojson', data: TURN_ARROW_EMPTY });
     const before = map.getLayer('user-car') ? 'user-car' : undefined; // 在車子下面、路線上面
-    // 粗細跟導航路線一樣固定(外框 15px，不隨縮放變)；箭身長度是公尺(轉彎前 55m＋後 30m)，
-    // 縮到 16 級以下箭身短到只剩箭頭，乾脆不畫(導航時是 16～17 級)
-    const MINZ = 16;
+    // 大小跟以前 16 級(轉彎時的鏡頭)一樣；跟導航路線一樣固定粗細，不隨縮放變大變小
+    const MINZ = 13;
     const icon = { 'icon-rotate': ['get', 'bearing'], 'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map',
                    'icon-allow-overlap': true, 'icon-ignore-placement': true };
     map.addLayer({ id: 'navTurnArrow-casing', type: 'line', source: 'navTurnArrow', minzoom: MINZ,
       filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
-      paint: { 'line-color': '#123a7a', 'line-width': 15 } }, before);
+      paint: { 'line-color': '#123a7a', 'line-width': 14 } }, before);
     map.addLayer({ id: 'navTurnArrow-line', type: 'line', source: 'navTurnArrow', minzoom: MINZ,
       filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: { 'line-color': '#ffffff', 'line-width': 9 } }, before);
@@ -4822,7 +4821,7 @@ function _flipCell(cell, from, to) {
       layout: Object.assign({ 'icon-image': 'nav-turn-tail', 'icon-anchor': 'top' }, icon) }, before);
     map.addLayer({ id: 'navTurnArrow-head', type: 'symbol', source: 'navTurnArrow', minzoom: MINZ,
       filter: ['==', ['get', 'kind'], 'head'],
-      layout: Object.assign({ 'icon-image': 'nav-turn-head', 'icon-size': 0.72, 'icon-anchor': 'bottom' }, icon) }, before);
+      layout: Object.assign({ 'icon-image': 'nav-turn-head', 'icon-size': 0.68, 'icon-anchor': 'bottom' }, icon) }, before);
     return true;
   }
   // 每次 GPS 更新呼叫；同一個轉彎只畫一次(換到下一個轉彎、重新規劃、換地圖樣式後才重畫)
