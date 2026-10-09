@@ -177,9 +177,9 @@ async function main() {
   const isGreatTree = e => /大樹藥局|大樹連鎖藥局|GreatTree/i.test(txt(e)) ||
                            (/大樹/.test(txt(e)) && (/^(chemist|pharmacy)$/.test(e.t.shop || '') || e.t.amenity === 'pharmacy'));
   const isOptical = e => /大學眼鏡/.test(txt(e));
-  // 「CoCo」也會對到 CoCo 壹番屋(咖哩)等別家：要寫「都可」，或 CoCo 開頭的飲料店
-  const isCoco = e => !/壹番屋|ichibanya|咖哩/i.test(txt(e)) &&
-                      (/都可/.test(txt(e)) || (/^CoCo/i.test(e.t.brand || e.t.name || '') && /cafe|bubble_tea|beverages|fast_food/.test([e.t.amenity, e.t.shop, e.t.cuisine].join(' '))));
+  // 「CoCo」也會對到 CoCo壱番屋(咖哩)、CoCo鬆餅屋、ecoco 回收站等別家：名稱要有「都可」，或名稱就叫「CoCo」的飲料店
+  const isCoco = e => !/壹番屋|壱番屋|ichibanya|咖哩/i.test(txt(e)) &&
+                      (/都可/.test(txt(e)) || (/^coco$/i.test((e.t.brand || e.t.name || '').trim()) && /^(cafe|beverages)$/.test(e.t.amenity || e.t.shop || '')));
   const isHilife = e => e.t.brand === '萊爾富' || e.t['brand:wikidata'] === 'Q11326216' ||
                         (!e.t.brand && /萊爾富|Hi-?Life/i.test(e.t.name || ''));
 
