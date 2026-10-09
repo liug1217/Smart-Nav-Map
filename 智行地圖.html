@@ -621,7 +621,7 @@ body.searchOpen .searchResultsList{
 
 /* ── 路線選擇面板(A/B/C) ── */
 .routePanel{
-  padding:14px 16px 18px;
+  padding:0 16px 18px; /* 上面是拉條(18px)，跟地點卡片一樣 */
   display:none;
   max-height:60vh;
   flex-direction:column;
@@ -636,6 +636,10 @@ body.searchOpen .searchResultsList{
 .rpModes button{ flex:1 0 auto; border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:16px; padding:6px 10px;
   font-size:13px; font-family:inherit; white-space:nowrap; cursor:pointer; }
 .rpModes button.on{ background:#E6F7F1; border-color:#009B65; color:#00764D; font-weight:700; }
+.rpGrab{ flex-shrink:0; margin:0 -16px; }
+/* 收起來：只留標題和開始導航 */
+.routePanel.rpMin .rpModes, .routePanel.rpMin .rpList{ display:none; }
+.routePanel.rpMin .rpHead{ margin-bottom:10px; }
 .rpLoading{ padding:16px 4px; font-size:13px; color:#888; text-align:center; }
 .rpItem{ display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:10px; border:2px solid transparent; cursor:pointer; }
 .rpItem.sel{ border-color:#16E098; background:#F0FBF7; }
@@ -1650,6 +1654,7 @@ html, body {
 
 <!-- 🛣️ 路線選擇(A/B/C)：選好地點後先列出幾條路線，選一條再開始導航 -->
 <div class="routePanel" id="routePanel">
+  <div class="psGrab rpGrab" id="rpGrab"><div class="psHandle"></div></div>
   <div class="rpHead">
     <div class="rpTitle" id="rpTitle">選擇路線</div>
     <button type="button" class="rpClose" id="rpClose" aria-label="取消">✕</button>
@@ -5034,6 +5039,20 @@ function _flipCell(cell, from, to) {
   const rpStart = document.getElementById('rpStart');
   const rpClose = document.getElementById('rpClose');
   let _routeChoice = null; // { routes, delays, sel, origin, dest }
+  (function () {
+    const grab = document.getElementById('rpGrab');
+    if (!grab) return;
+    let y0 = null;
+    grab.addEventListener('pointerdown', e => { y0 = e.clientY; try { grab.setPointerCapture(e.pointerId); } catch (_) {} });
+    grab.addEventListener('pointerup', e => {
+      if (y0 === null) return;
+      const dy = e.clientY - y0; y0 = null;
+      if (dy > 30) routePanel.classList.add('rpMin');
+      else if (dy < -30) routePanel.classList.remove('rpMin');
+      else routePanel.classList.toggle('rpMin');
+    });
+    grab.addEventListener('pointercancel', () => { y0 = null; });
+  })();
   const RP_SRC = 'routeOptions';
   function rpEnsureLayers() {
     if (map.getSource(RP_SRC)) return;
@@ -5147,6 +5166,7 @@ function _flipCell(cell, from, to) {
     destPanel.style.display = 'none';
     const toName = (selectedDest && selectedDest.name) || '目的地';
     rpTitle.textContent = (opts.fromName ? opts.fromName + ' → ' + toName : '到 ' + toName) + (routes.length > 1 ? '：' + routes.length + ' 條路線' : '');
+    routePanel.classList.remove('rpMin');
     routePanel.classList.add('open');
     rpRender(); rpDraw();
     // 所有路線都看得到；下面留給路線面板
@@ -9519,11 +9539,11 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var x = el('button', 'psClose', '✕'); x.setAttribute('aria-label', '關閉'); x.onclick = close;
     head.appendChild(x);
     body.appendChild(head);
-    // extraTop：額外內容(監視器影像)放在名稱下面最上面
-    if (p.extraEl && p.extraTop) { var exT = el('div', 'psExtra'); exT.appendChild(p.extraEl); body.appendChild(exT); }
     // 地址
     var addr = el('div', 'psAddr', p.addr ? '📍 ' + p.addr : '📍 查詢地址中…');
     body.appendChild(addr);
+    // extraTop：額外內容(監視器影像)放在地址下面、按鈕上面
+    if (p.extraEl && p.extraTop) { var exT = el('div', 'psExtra'); exT.appendChild(p.extraEl); body.appendChild(exT); }
     if (!p.addr) {
       fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + p.lat + '&lon=' + p.lng + '&accept-language=zh-TW')
         .then(function (r) { return r.json(); })
