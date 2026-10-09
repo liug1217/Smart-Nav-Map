@@ -647,7 +647,7 @@ body.searchOpen .searchResultsList{
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
 .rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#009B65; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.rpStart{ width:100%; flex:none; }
+.navigateBtn.rpStart{ width:100%; flex:none; background:#009B65; } /* 跟選中的導航路線同樣是綠色 */
 
 .searchResultsEmpty{
   padding:14px;
@@ -5426,6 +5426,10 @@ function _flipCell(cell, from, to) {
     // closeOnClick=false:觸控長按放開時手機可能補發一次 click,不能讓它把剛跳出的視窗關掉
     function showNavHerePopup(lngLat, closeOnClick) {
       var lat = lngLat.lat, lon = lngLat.lng;
+      if (window._snmOpenPlace) {
+        window._snmOpenPlace({ layer: 'place-points', name: '地圖上選的位置', kind: lat.toFixed(5) + ', ' + lon.toFixed(5), logo: '📍', lat: lat, lng: lon });
+        return null;
+      }
       if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
       // 同時關閉其他所有 popup（全家等）
       document.querySelectorAll('.maplibregl-popup').forEach(function(el){ el.remove(); });
@@ -7289,7 +7293,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         load();
         var tick=setInterval(load,8000);
         window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:(window._snmCctvIconUrl||'📹'),
-          lat:coords[1], lng:coords[0], extraEl:wrap, noReport:true,
+          lat:coords[1], lng:coords[0], extraEl:wrap, extraTop:true, fitPeek:true,
           onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); live.removeAttribute('src'); } });
         return;
       }
@@ -7636,6 +7640,14 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     _onceOn(m,'click','signal-single',function(e){
       var p = e.features[0].properties;
       var coord = e.features[0].geometry.coordinates.slice();
+      if(window._snmOpenPlace){
+        var link = null;
+        if (p.url) { link = document.createElement('a'); link.href = p.url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = '📄 查看時制報表(紅綠燈秒數)'; link.style.color = '#1A73E8'; }
+        window._snmOpenPlace({ layer:'signal-points', name:p.name || '號誌路口', kind:'號誌路口(紅綠燈)', logo:'🚦', lat:coord[1], lng:coord[0],
+          info:[p.dev ? '設備：' + p.dev : '', p.icid ? '路口 ID：' + p.icid : '', p.grp ? '群組：' + p.grp : '', '資料來源：臺北市交通局'].filter(Boolean),
+          extraEl: link });
+        return;
+      }
       if(_popup) _popup.remove();
       var urlRow = p.url ? `<tr><td colspan="2"><a href="${p.url}" target="_blank" style="color:#3b82f6">📄 時制報表</a></td></tr>` : '';
       var html = `<div style="font-size:13px;min-width:180px"><b>🚦 ${p.name||'號誌路口'}</b><table style="border-collapse:collapse;margin-top:6px;width:100%"><tr><td style="color:#888;padding:1px 4px">設備</td><td>${p.dev}</td></tr><tr><td style="color:#888;padding:1px 4px">路口ID</td><td>${p.icid}</td></tr><tr><td style="color:#888;padding:1px 4px">群組</td><td>${p.grp}</td></tr>${urlRow}</table></div>`;
@@ -8963,6 +8975,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var LAYERS = ['fm-points', 'seven-points', 'okmart-points', 'hilife-points', 'times-points', 'simplemart-points', 'dodohome-points',
                 'mcd-points', 'bafang-points', 'wanjiafu-points', 'lejiakang-points', 'showba-points', 'ntpcpark-points', 'youbike-points', 'pxmart-points',
                 'cpc-points', 'toilet-points', 'speed-point'];
+  // (這份只用來在舊的小視窗加「回報錯誤」；地點卡片自己有回報按鈕，監視器、紅綠燈、地點的回報種類寫在伺服器 lib/reports.js)
   var REASONS = [
     ['gone',      '這裡已經沒有了'],
     ['duplicate', '重複了(多一個)'],
@@ -9466,7 +9479,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   if (!sheet) return;
   var cur = null, gen = 0;
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  function peekH() { return Math.min(Math.round(window.innerHeight * 0.48), 420); }
+  var _peekFit = null; // 這張卡片自己算出來的半高(例如監視器要剛好看到整個影像)
+  function peekH() { return _peekFit || Math.min(Math.round(window.innerHeight * 0.48), 420); }
   function fullH() { return Math.round(window.innerHeight * 0.88); }
   function setH(h) { sheet.style.height = h + 'px'; }
   function distTxt(lat, lng) {
@@ -9505,6 +9519,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var x = el('button', 'psClose', '✕'); x.setAttribute('aria-label', '關閉'); x.onclick = close;
     head.appendChild(x);
     body.appendChild(head);
+    // extraTop：額外內容(監視器影像)放在名稱下面最上面
+    if (p.extraEl && p.extraTop) { var exT = el('div', 'psExtra'); exT.appendChild(p.extraEl); body.appendChild(exT); }
     // 地址
     var addr = el('div', 'psAddr', p.addr ? '📍 ' + p.addr : '📍 查詢地址中…');
     body.appendChild(addr);
@@ -9537,7 +9553,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     body.appendChild(acts);
     // 額外資訊(YouBike 即時車數、廁所類型…)
     if (p.info && p.info.length) { var inf = el('div', 'psExtra'); p.info.forEach(function (t) { inf.appendChild(el('div', null, t)); }); body.appendChild(inf); }
-    if (p.extraEl) { var ex = el('div', 'psExtra'); ex.appendChild(p.extraEl); body.appendChild(ex); }
+    if (p.extraEl && !p.extraTop) { var ex = el('div', 'psExtra'); ex.appendChild(p.extraEl); body.appendChild(ex); }
     // 照片、貼文
     var phSec = el('div', 'psSec'); phSec.style.display = 'none';
     phSec.appendChild(el('div', 'psSecT', '照片'));
@@ -9618,6 +9634,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     body.scrollTop = 0;
     sheet.classList.add('open');
     sheet.setAttribute('aria-hidden', 'false');
+    // fitPeek：半高剛好放得下到按鈕列為止(監視器影像不會被切掉)
+    _peekFit = null;
+    if (p.fitPeek) {
+      var actsEl = body.querySelector('.psActions');
+      if (actsEl) _peekFit = Math.min(Math.round(window.innerHeight * 0.85), actsEl.offsetTop + actsEl.offsetHeight + 18 + 26);
+    }
     requestAnimationFrame(function () { setH(peekH()); });
   };
 
