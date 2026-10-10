@@ -64,7 +64,7 @@ test('full approach: intro, every 100m multiple once, then chime + 您已通過 
   const h = createHarness([camera('A', 1, 60)]);
   driveThrough(h, 1100, -100, 50);
   assert.deepEqual(h.texts(), [
-    '1公里後有固定測速照相，限速60公里。|當前速度50公里',
+    '前方1公里後有固定式測速照相，限速60公里。|當前速度50公里',
     '900公尺', '800公尺', '700公尺', '600公尺', '500公尺', '400公尺', '300公尺', '200公尺', '100公尺',
     '<chime>|您已通過',
   ]);
@@ -76,7 +76,7 @@ test('full approach: intro, every 100m multiple once, then chime + 您已通過 
 test('section speed cameras (區間測速) are announced as 區間測速照相', () => {
   const h = createHarness([camera('Z', 1, 70, '南北雙向(區間測速)')]);
   h.run(0, 0.02, 60);
-  assert.deepEqual(h.texts(), ['1公里後有區間測速照相，限速70公里。|當前速度60公里']);
+  assert.deepEqual(h.texts(), ['前方1公里後有區間測速照相，限速70公里。|當前速度60公里']);
 });
 
 test('never announces non-multiples of 100 such as 960/850/750', () => {
@@ -91,7 +91,7 @@ test('over the limit: 您已超速 is added to the intro only, not repeated on e
   h.run(0, 0.02, 75); // 980m
   h.run(0, 0.11, 75); // 890m
   h.run(0, 0.21, 75); // 790m
-  assert.deepEqual(h.texts(), ['1公里後有固定測速照相，限速60公里。|當前速度75公里|您已超速', '900公尺', '800公尺']);
+  assert.deepEqual(h.texts(), ['前方1公里後有固定式測速照相，限速60公里。|當前速度75公里|您已超速', '900公尺', '800公尺']);
 });
 
 test('GPS drift cannot replay a completed 900m stage', () => {
@@ -115,7 +115,7 @@ test('navigation starting near a camera announces the current stage, not 1公里
   h.run(0, 0.58, 40);
   h.run(0, 0.61, 40); // 390m：400 已經在首次提醒念過，不重念
   h.run(0, 0.71, 40); // 290m
-  assert.deepEqual(h.texts(), ['400公尺後有固定測速照相，限速50公里。|當前速度40公里', '300公尺']);
+  assert.deepEqual(h.texts(), ['前方400公尺後有固定式測速照相，限速50公里。|當前速度40公里', '300公尺']);
 });
 
 test('pass is detected when GPS skips over the 30m circle at speed', () => {
@@ -137,7 +137,7 @@ test('distance and pass announcements share a key so a stale distance is replace
 test('intro text is preloaded before entering 1km', () => {
   const h = createHarness([camera('A', 1.5, 70)]);
   h.run(0, 0, 60); // 1500m
-  assert.deepEqual(h.preloaded, ['1公里後有固定測速照相，限速70公里。']);
+  assert.deepEqual(h.preloaded, ['前方1公里後有固定式測速照相，限速70公里。']);
   assert.equal(h.events.length, 0);
 });
 
@@ -157,7 +157,7 @@ test('reported sequence: speeding from 300m gives intro+您已超速, then only 
   const h = createHarness([camera('A', 1, 100)]);
   driveThrough(h, 300, -60, 120, 10); // 一路超速(120 > 100)開過照相機
   assert.deepEqual(h.texts(), [
-    '300公尺後有固定測速照相，限速100公里。|當前速度120公里|您已超速',
+    '前方300公尺後有固定式測速照相，限速100公里。|當前速度120公里|您已超速',
     '200公尺',
     '100公尺',
     '<chime>|您已通過',
@@ -171,7 +171,7 @@ test('starting to speed after the intro: the countdown still says only the dista
   h.run(0, 0.31, 80);  // 690m 開始超速
   h.run(0, 0.41, 85);  // 590m 還是超速
   h.run(0, 0.51, 90);  // 490m
-  assert.deepEqual(h.texts(), ['1公里後有固定測速照相，限速60公里。|當前速度50公里', '700公尺', '600公尺', '500公尺']);
+  assert.deepEqual(h.texts(), ['前方1公里後有固定式測速照相，限速60公里。|當前速度50公里', '700公尺', '600公尺', '500公尺']);
 });
 
 test('never says the bare word 通過, and GPS drift after passing does not replay 您已通過', () => {
@@ -217,7 +217,7 @@ test('opposite-direction camera is ignored; same-direction one is announced', ()
   assert.deepEqual(opp.texts(), []);
   const same = createHarness([camera('same', 1, 60, '南向北')]);
   driveThrough(same, 1100, -100, 50);
-  assert.equal(same.texts()[0], '1公里後有固定測速照相，限速60公里。|當前速度50公里');
+  assert.equal(same.texts()[0], '前方1公里後有固定式測速照相，限速60公里。|當前速度50公里');
 });
 
 test('locked camera is kept while a side-road camera comes within 50 m straight-line', () => {
@@ -251,7 +251,7 @@ test('direction data that contradicts the road (e.g. 往南 on an east-west road
   // 我們往北開；照相機資料寫「往東」，跟這條南北向的路不同向 → 方向資料不可信，照樣播
   const h = createHarness([camera('bad', 1, 50, '往東')]);
   driveThrough(h, 1100, -100, 40);
-  assert.equal(h.texts()[0], '1公里後有固定測速照相，限速50公里。|當前速度40公里');
+  assert.equal(h.texts()[0], '前方1公里後有固定式測速照相，限速50公里。|當前速度40公里');
   // 但方向跟道路同向、只是相反(真正的對向車道)時還是不播
   const opp = createHarness([camera('opp', 1, 50, '往南')]);
   driveThrough(opp, 1100, -100, 40);
@@ -261,13 +261,13 @@ test('direction data that contradicts the road (e.g. 往南 on an east-west road
 test('current speed is always spoken after the intro; over the limit adds 您已超速 after it', () => {
   const under = createHarness([camera('A', 1, 100)]);
   under.run(0, 0.02, 95);
-  assert.deepEqual(under.texts(), ['1公里後有固定測速照相，限速100公里。|當前速度95公里']);
+  assert.deepEqual(under.texts(), ['前方1公里後有固定式測速照相，限速100公里。|當前速度95公里']);
   const exact = createHarness([camera('B', 1, 100)]);
   exact.run(0, 0.02, 100); // 剛好等於速限：不算超速
-  assert.deepEqual(exact.texts(), ['1公里後有固定測速照相，限速100公里。|當前速度100公里']);
+  assert.deepEqual(exact.texts(), ['前方1公里後有固定式測速照相，限速100公里。|當前速度100公里']);
   const over = createHarness([camera('C', 1, 100)]);
   over.run(0, 0.02, 112.4);
-  assert.deepEqual(over.texts(), ['1公里後有固定測速照相，限速100公里。|當前速度112公里|您已超速']);
+  assert.deepEqual(over.texts(), ['前方1公里後有固定式測速照相，限速100公里。|當前速度112公里|您已超速']);
 });
 
 // ── 播報 3.0 ─────────────────────────────────────────────────────────────
@@ -275,7 +275,7 @@ test('播報 3.0：當前速度無效時不念速度也不判斷超速(不念虛
   const h = createHarness([camera('A', 1, 60)]);
   h.run(0, -0.5, 50);  // 1.5 公里外：速度正常，找到前方道路與照相機
   h.run(0, 0.02, null); // 980 公尺：速度資料無效
-  assert.deepEqual(h.texts(), ['1公里後有固定測速照相，限速60公里。']);
+  assert.deepEqual(h.texts(), ['前方1公里後有固定式測速照相，限速60公里。']);
 });
 
 test('播報 3.0：區間測速的點不說「您已通過」，改說請保持速限', () => {
@@ -288,13 +288,13 @@ test('播報 3.0：區間測速的點不說「您已通過」，改說請保持�
 test('播報 3.0：區間測速寫在地址欄、科技執法、兼闖紅燈都分得出來', () => {
   const sec = createHarness([Object.assign(camera('S', 1, 40), { properties: { limit: 40, addr: '臺9戊線3.94K至9.92K區間測速', dir: '雙向測速科技執法' } })]);
   sec.run(0, 0.02, 30);
-  assert.match(sec.texts()[0], /^1公里後有區間測速照相，限速40公里。/);
+  assert.match(sec.texts()[0], /^前方1公里後有區間測速照相，限速40公里。/);
   const tech = createHarness([Object.assign(camera('T', 1, 90), { properties: { limit: 90, addr: '國道五號南向16.9公里(雪山隧道科技執法)' } })]);
   tech.run(0, 0.02, 80);
-  assert.match(tech.texts()[0], /^1公里後有科技執法測速照相，限速90公里。/);
+  assert.match(tech.texts()[0], /^前方1公里後有科技執法測速照相，限速90公里。/);
   const red = createHarness([camera('R', 1, 50, '南北雙向兼闖紅燈')]);
   red.run(0, 0.02, 40);
-  assert.match(red.texts()[0], /^1公里後有固定測速照相兼闖紅燈照相，限速50公里。/);
+  assert.match(red.texts()[0], /^前方1公里後有固定式測速照相兼闖紅燈照相，限速50公里。/);
 });
 
 test('播報 3.0：測速播報帶執法優先順序與事件代號(同一提醒不會被佇列重播)', () => {

@@ -526,11 +526,11 @@ body.searchOpen .searchBarWrap{
   background:rgba(255,255,255,0.8); /* 全螢幕搜尋頁：同樣毛玻璃 */
   backdrop-filter:blur(20px);
   -webkit-backdrop-filter:blur(20px);
-  padding:8px 8px 0;
+  padding:0 8px; /* 跟沒點開時一樣：左右 8px、貼齊上方 */
   display:flex;
   flex-direction:column;
 }
-body.searchOpen .searchBar{ box-shadow:none; }
+body.searchOpen .searchBar{ flex-shrink:0; } /* 大小、圓角、陰影都跟沒點開時一樣 */
 body.searchOpen .searchBackBtn{ display:block; }
 body.searchOpen .searchChips{
   display:flex;
@@ -624,7 +624,7 @@ body.searchOpen .searchResultsList{
 .psAddr{ font-size:13px; color:#555; margin-top:8px; line-height:1.45; }
 .psActions{ display:flex; gap:8px; margin:14px 0 4px; overflow-x:auto; scrollbar-width:none; }
 .psActions::-webkit-scrollbar{ display:none; }
-.psActions button{ flex:1 0 auto; border:1px solid #DADCE0; background:rgba(255,255,255,0.9); color:#000; border-radius:20px; padding:8px 14px;
+.psActions button{ flex:1 0 auto; border:1px solid #DADCE0; background:rgba(255,255,255,0.9); color:#007AFF; /* 跟 AI 按鈕同一個藍 */ border-radius:20px; padding:8px 14px;
   font-size:14px; font-weight:600; font-family:inherit; white-space:nowrap; cursor:pointer; }
 .psActions button.main{ background:#009B65; border-color:#009B65; color:#fff; }
 .psActions button.route{ background:#2F80FF; border-color:#2F80FF; color:#fff; }
@@ -661,21 +661,21 @@ body.searchOpen .searchResultsList{
 .rpModes::-webkit-scrollbar{ display:none; }
 .rpModes button{ flex:1 0 auto; border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:16px; padding:6px 10px;
   font-size:13px; font-family:inherit; white-space:nowrap; cursor:pointer; }
-.rpModes button.on{ background:#E6F7F1; border-color:#009B65; color:#00764D; font-weight:700; }
+.rpModes button.on{ background:#EAF2FF; border-color:#2F80FF; color:#1B5FC9; font-weight:700; }
 .rpGrab{ flex-shrink:0; margin:0 -16px; }
 /* 收起來：只留標題和開始導航 */
 .routePanel.rpMin .rpModes, .routePanel.rpMin .rpList{ display:none; }
 .routePanel.rpMin .rpHead{ margin-bottom:10px; }
 .rpLoading{ padding:16px 4px; font-size:13px; color:#888; text-align:center; }
 .rpItem{ display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:10px; border:2px solid transparent; cursor:pointer; }
-.rpItem.sel{ border-color:#16E098; background:#F0FBF7; }
+.rpItem.sel{ border-color:#2F80FF; background:#EEF4FF; }
 .rpBadge{ width:28px; height:28px; border-radius:50%; background:#9AA0A6; color:#fff; font-weight:800; font-size:14px;
   display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.rpItem.sel .rpBadge{ background:#009B65; }
+.rpItem.sel .rpBadge{ background:#2F80FF; }
 .rpMain{ flex:1; min-width:0; }
 .rpTime{ font-size:17px; font-weight:800; color:#000; }
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
-.rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#009B65; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
+.rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#2F80FF; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rpStart{ width:100%; flex:none; }
 
@@ -2119,6 +2119,10 @@ const SNM_ICO_SOLID = {"coins":"<path d=\"M184,89.57V84c0-25.08-37.83-44-88-44S8
 const SNM_ICO_COLOR = { coins: '#F5B400', trophy: '#F5B400', crown: '#F5B400', gem: '#1BC0D8', flame: '#FF5A1F',
   'party-popper': '#FF9500', octagon: '#FF3B30' }; // 回報的三角形(triangle-alert)本身就是黃底黑字，不用上色
 // color：不給 = 跟文字同色(currentColor)
+// 正向的導航箭頭：實心導航箭頭本來朝左上 45 度，轉正成朝上
+SNM_ICO_SOLID['navigation-up'] = '<g transform="rotate(45 128 128)">' + SNM_ICO_SOLID.navigation + '</g>';
+// 路線：起點、終點兩個圓，中間一條彎曲的路(Lucide route)
+SNM_ICO.route = '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>';
 function snmIco(name, size, color) {
   const z = size || '1em', st = color ? ' style="color:' + color + '"' : '';
   const head = '<svg xmlns="http://www.w3.org/2000/svg" width="' + z + '" height="' + z + '" aria-hidden="true"' + st;
@@ -2693,7 +2697,7 @@ function _flipCell(cell, from, to) {
   }
 
   // ===== 🔊 測速照相語音播報 =====
-  // 流程：進入 1 公里 → 「1公里後有固定測速照相，限速XX公里。當前速度XX公里」(超速再加「您已超速」；區間測速念「區間測速照相」)
+  // 流程：進入 1 公里 → 「前方1公里後有固定式測速照相，限速XX公里。當前速度XX公里」(超速再加「您已超速」；區間測速念「區間測速照相」)
   //       → 每跨進一個 100 公尺整數倍區間念一次「900公尺」…「100公尺」(只念整百，不念 960/850 這種實際距離)
   //       → 抵達測速照相位置：專用提示音 → 「您已通過」
   //       「您已超速」同一支測速照相只念一次(首次提醒時已超速就跟在首次提醒後；之後才超速就跟在下一個距離後)
@@ -2707,7 +2711,7 @@ function _flipCell(cell, from, to) {
   function speedCamInfo(p) {
     if (window.NavVoice) return window.NavVoice.classifyEnforcement(p);
     const sec = /區間/.test(((p && p.dir) || '') + ((p && p.addr) || ''));
-    return { kind: sec ? 'section' : 'fixed', label: (sec ? '區間' : '固定') + '測速照相', limit: p && p.limit };
+    return { kind: sec ? 'section' : 'fixed', label: sec ? '區間測速照相' : '固定式測速照相', limit: p && p.limit };
   }
   const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
   // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」；距離倒數只念距離
@@ -2747,7 +2751,7 @@ function _flipCell(cell, from, to) {
   function speedCamIntroMeters(meters) { return Math.max(100, Math.round(meters / 100) * 100); }
   // 首次提醒。meters > 900 念「1公里後」；導航開始時已經比較近，就念最接近的整百距離(例如 300 公尺 →「300公尺後」)
   function speedCamIntroText(p, meters) {
-    const lead = meters > 900 ? '1公里後' : speedCamIntroMeters(meters) + '公尺後';
+    const lead = meters > 900 ? '前方1公里後' : '前方' + speedCamIntroMeters(meters) + '公尺後';
     const info = speedCamInfo(p);
     return lead + '有' + info.label + (info.limit ? '，限速' + info.limit + '公里' : '') + '。';
   }
@@ -2798,7 +2802,7 @@ function _flipCell(cell, from, to) {
       SPEED_CAM_STAGES.forEach(stage => { if (distanceMeters <= stage) state.stages.add(stage); });
       // 首次提醒已經念了「300公尺後」，300 這個距離就算念過，不會馬上又念一次「300公尺」
       if (distanceMeters <= 900) { const said = speedCamIntroMeters(distanceMeters); SPEED_CAM_STAGES.forEach(s => { if (s >= said) state.stages.add(s); }); }
-      // 「1公里後有固定測速照相，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
+      // 「前方1公里後有固定式測速照相，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
       speakQueue([speedCamIntroText(p, distanceMeters), speedOk ? speedCamSpeedText(currentSpeedKmh) : null, overSpeed ? '您已超速' : null],
                  { key: 'speedcam-intro:' + cameraId, priority: VOICE_PRI.ENFORCE, eventId: ev + ':intro', maxAgeMs: 20000 });
       return;
@@ -3940,6 +3944,21 @@ function _flipCell(cell, from, to) {
     }
   }
 
+  // 地圖上的圖示 → <img>(跟地圖完全同一張：圓角白底＋細灰框，顯示 30px)；地圖圖示還沒畫好就用原本的圖
+  const _mapLogoCache = {};
+  function mapLogoHtml(iconId, fallbackHtml) {
+    if (!_mapLogoCache[iconId]) {
+      const im = map.style && map.style.getImage(iconId);
+      if (!im) return fallbackHtml;
+      const c = document.createElement('canvas');
+      c.width = im.data.width; c.height = im.data.height;
+      c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(im.data.data), im.data.width, im.data.height), 0, 0);
+      _mapLogoCache[iconId] = { url: c.toDataURL('image/png'), w: im.data.width / (im.pixelRatio || 1), h: im.data.height / (im.pixelRatio || 1) };
+    }
+    const L = _mapLogoCache[iconId];
+    return '<img src="' + L.url + '" alt="" style="width:' + L.w + 'px;height:' + L.h + 'px;flex-shrink:0;display:block">';
+  }
+
   function _makeLocalItem(item, iconHtml, nameColor, clickCb) {
     const el = document.createElement('div');
     el.className = 'searchResultItem';
@@ -3979,7 +3998,7 @@ function _flipCell(cell, from, to) {
       fmMatches.forEach(function(item) {
         const { el, addrId } = _makeLocalItem(
           item,
-          '<img src="圖片/fm_app.png" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">',
+          mapLogoHtml('fm-icon', '<img src="圖片/fm_app.png" style="width:28px;height:28px;object-fit:contain;flex-shrink:0" onerror="this.style.display=\'none\'">'),
           '#5ac8fa',
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '全家便利商店', '圖片/fm_app.png'); }
         );
@@ -3995,7 +4014,7 @@ function _flipCell(cell, from, to) {
         const pb = window._pxBrand ? window._pxBrand(item.name) : { logo: '圖片/pxmart.jpg', color: '#e60012', label: '大全聯' };
         const { el, addrId } = _makeLocalItem(
           item,
-          '<img src="' + pb.logo + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff" onerror="this.style.display=\'none\'">',
+          mapLogoHtml(/大全聯/.test(item.name || '') ? 'pxmart-icon' : 'pxmart-fc-icon', '<img src="' + pb.logo + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff" onerror="this.style.display=\'none\'">'),
           pb.color,
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || pb.label, pb.logo); }
         );
@@ -4010,7 +4029,7 @@ function _flipCell(cell, from, to) {
       cpcMatches.forEach(function(item) {
         const { el, addrId } = _makeLocalItem(
           item,
-          '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff;padding:2px;box-sizing:border-box" onerror="this.style.display=\'none\'">',
+          mapLogoHtml('cpc-icon', '<img src="圖片/cpc.svg" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff;padding:2px;box-sizing:border-box" onerror="this.style.display=\'none\'">'),
           '#134e8b',
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '中油加油站', '圖片/cpc.svg'); }
         );
@@ -4025,7 +4044,7 @@ function _flipCell(cell, from, to) {
       g.items.forEach(function (item) {
         const { el, addrId } = _makeLocalItem(
           item,
-          '<img src="' + g.b.logo + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff" onerror="this.style.display=\'none\'">',
+          mapLogoHtml(g.b.key + '-icon', '<img src="' + g.b.logo + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;background:#fff" onerror="this.style.display=\'none\'">'),
           g.b.color,
           function() { selectDestination(item.lat, item.lon, item.name, item.addr || _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || g.b.name, g.b.logo); }
         );
@@ -4041,7 +4060,7 @@ function _flipCell(cell, from, to) {
       toiMatches.forEach(function(item) {
         const { el, addrId } = _makeLocalItem(
           item,
-          '<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚾</span>',
+          mapLogoHtml('toilet-icon', '<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚾</span>'),
           '#1a4fa0',
           function() { selectDestination(item.lat, item.lon, item.name, _revCache[item.lat.toFixed(4)+','+item.lon.toFixed(4)] || '公共廁所', '🚾'); }
         );
@@ -5161,8 +5180,8 @@ function _flipCell(cell, from, to) {
     const lay = { 'line-join': 'round', 'line-cap': 'butt' };
     map.addLayer({ id: 'routeOpt-other-casing', type: 'line', source: RP_SRC, filter: other, layout: lay, paint: { 'line-color': '#6B7280', 'line-width': 13 } }, before);
     map.addLayer({ id: 'routeOpt-other', type: 'line', source: RP_SRC, filter: other, layout: lay, paint: { 'line-color': '#BDC1C6', 'line-width': 9 } }, before);
-    map.addLayer({ id: 'routeOpt-sel-casing', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#009B65', 'line-width': 15 } }, before);
-    map.addLayer({ id: 'routeOpt-sel', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#16E098', 'line-width': 11 } }, before);
+    map.addLayer({ id: 'routeOpt-sel-casing', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#1B5FC9', 'line-width': 15 } }, before); // 選中的路線：藍色(跟開始導航同色)
+    map.addLayer({ id: 'routeOpt-sel', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#2F80FF', 'line-width': 11 } }, before);
     if (!map._snmRpClickBound) { // 點地圖上灰色的路線也能換選(換地圖樣式後圖層會重建，事件只綁一次)
       map._snmRpClickBound = true;
       const pick = (e) => { const i = e.features && e.features[0] && e.features[0].properties.idx; if (i != null) rpSelect(Number(i)); };
@@ -9863,10 +9882,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     // 動作：路線(主)、寫留言、回報
     var acts = el('div', 'psActions');
     // 導航：不用選路線，直接用最快的路線開始導航
-    var bNav = el('button', null, '▶ 導航');
+    var bNav = el('button', null); bNav.innerHTML = '<span class="snmIco">' + snmIco('navigation-up') + '</span> 導航';
     bNav.onclick = function () { close(); if (window._navigateNow) window._navigateNow(p.lat, p.lng, p.name, p.logo); };
     acts.appendChild(bNav);
-    var bRoute = el('button', 'route', '🧭 路線');
+    var bRoute = el('button', 'route'); bRoute.innerHTML = '<span class="snmIco">' + snmIco('route') + '</span> 路線';
     bRoute.onclick = function () { close(); if (window._navigateToCoord) window._navigateToCoord(p.lat, p.lng, p.name, p.logo); };
     acts.appendChild(bRoute);
     var poi = { layer: p.layer || 'place-points', name: p.name || '', lat: p.lat, lng: p.lng };

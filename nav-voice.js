@@ -388,7 +388,7 @@
     var redLight = /闖紅燈/.test(text);
     var tech = /科技執法/.test(text);
     var kind = mobile ? 'mobile' : section ? 'section' : 'fixed';
-    var label = mobile ? '移動式測速' : section ? '區間測速照相' : tech ? '科技執法測速照相' : '固定測速照相';
+    var label = mobile ? '移動式測速' : section ? '區間測速照相' : tech ? '科技執法測速照相' : '固定式測速照相';
     if (redLight) label += '兼闖紅燈照相';
     return { kind: kind, label: label, redLight: redLight, tech: tech, limit: validLimit(p.limit), speedEnforced: true };
   }

@@ -158,11 +158,11 @@ test('距離念法不會出現 150、437 這種數字', () => {
 
 // ═════════════ 執法分類 ═════════════
 test('執法類型：固定、區間、闖紅燈、科技執法、移動式分開', () => {
-  assert.equal(NV.classifyEnforcement({ limit: 60, dir: '南向北' }).label, '固定測速照相');
+  assert.equal(NV.classifyEnforcement({ limit: 60, dir: '南向北' }).label, '固定式測速照相');
   assert.equal(NV.classifyEnforcement({ limit: 70, dir: '南北雙向(區間測速)' }).kind, 'section');
   // 區間測速寫在地址欄(資料實際有這種)
   assert.equal(NV.classifyEnforcement({ limit: 40, addr: '臺9戊線3.94K至9.92K區間測速', dir: '雙向測速科技執法' }).label, '區間測速照相');
-  assert.equal(NV.classifyEnforcement({ limit: 50, dir: '南北雙向兼闖紅燈' }).label, '固定測速照相兼闖紅燈照相');
+  assert.equal(NV.classifyEnforcement({ limit: 50, dir: '南北雙向兼闖紅燈' }).label, '固定式測速照相兼闖紅燈照相');
   assert.equal(NV.classifyEnforcement({ limit: 90, addr: '國道五號南向16.9公里(雪山隧道科技執法)' }).label, '科技執法測速照相');
   assert.equal(NV.classifyEnforcement({ limit: 80, kind: 'mobile' }).label, '移動式測速');
   assert.equal(NV.classifyEnforcement({ limit: 0 }).limit, null);
@@ -240,11 +240,11 @@ test('佇列：實際轉彎指令可打斷正在播的測速，被打斷的測�
   const p = fakePlayer();
   let t = 0;
   const q = NV.createVoiceQueue({ play: p.play, stop: p.stop, now: () => t });
-  q.speak('1公里後有固定測速照相', { priority: NV.PRI.ENFORCE, key: 'cam', maxAgeMs: 20000 });
+  q.speak('1公里後有固定式測速照相', { priority: NV.PRI.ENFORCE, key: 'cam', maxAgeMs: 20000 });
   q.speak('請右轉。', { priority: NV.PRI.CRITICAL, key: 'turn' });
   await new Promise(r => setImmediate(r));
   await p.finish(); await p.finish();
-  assert.deepEqual(p.played, ['1公里後有固定測速照相', '請右轉。', '1公里後有固定測速照相']);
+  assert.deepEqual(p.played, ['1公里後有固定式測速照相', '請右轉。', '1公里後有固定式測速照相']);
   const statuses = q.logs().map(l => l.status);
   assert.ok(statuses.includes('interrupted'));
 });
