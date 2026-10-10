@@ -2692,17 +2692,15 @@ function _flipCell(cell, from, to) {
   }
 
   // ===== 🔊 測速照相語音播報 =====
-  // 流程：進入 1 公里 → 「1公里後有測速照相，固定式，限速XX公里。當前速度XX公里」(超速再加「您已超速」)
-  //       → 每跨進一個 100 公尺整數倍區間念一次「900公尺」…「100公尺」(只念整百，不念 960/850 這種實際距離)
+  // 流程：進入 1 公里 → 「1公里後有固定測速照相，限速XX公里。當前速度XX公里」(超速再加「您已超速」；區間測速念「區間測速照相」)
   //       → 抵達測速照相位置：專用提示音 → 「您已通過」
-  //       「您已超速」同一支測速照相只念一次(首次提醒時已超速就跟在首次提醒後；之後才超速就跟在下一個距離後)
+  //       (以前每 100 公尺倒數一次「900公尺」…「100公尺」，太吵，拿掉了)
   const SPEED_CAM_WARN_KM = 1.0;    // 1 公里：首次完整語音
   const SPEED_CAM_PRELOAD_KM = 1.6; // 進入 1.6 公里先在背景合成首次提醒，播報時不用等
   const SPEED_CAM_PASS_KM = 0.03;   // 30 公尺內：視為抵達測速照相位置
-  const SPEED_CAM_STAGES = [900,800,700,600,500,400,300,200,100];
-  const SPEED_CAM_TYPE = '固定式';  // 目前資料都當固定式，之後擴充類型再從 properties 帶入
-  const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
-  // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」；距離倒數只念距離
+  // 種類：資料的方向欄寫「區間測速」的是區間測速，其他都是固定式
+  function speedCamType(p) { return /區間/.test((p && p.dir) || '') ? '區間' : '固定'; }
+  // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」
   function speedCamSpeedText(speedKmh) { return '當前速度' + Math.round(speedKmh) + '公里'; }
   // 僅存在於本次導航。每支測速照相依穩定 cameraId 個別保存已播報階段。
   const speedCameraVoiceState = new Map();
@@ -2721,7 +2719,7 @@ function _flipCell(cell, from, to) {
   function getSpeedCameraState(cameraId) {
     let state = speedCameraVoiceState.get(cameraId);
     if (!state) {
-      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false };
+      state = { announced: false, passed: false, minMeters: Infinity, preloaded: false, coinHinted: false };
       speedCameraVoiceState.set(cameraId, state);
     }
     return state;
@@ -2739,7 +2737,7 @@ function _flipCell(cell, from, to) {
   // 首次提醒。meters > 900 念「1公里後」；導航開始時已經比較近，就念最接近的整百距離(例如 300 公尺 →「300公尺後」)
   function speedCamIntroText(p, meters) {
     const lead = meters > 900 ? '1公里後' : speedCamIntroMeters(meters) + '公尺後';
-    return lead + '有測速照相，' + SPEED_CAM_TYPE + (p.limit ? '，限速' + p.limit + '公里' : '') + '。';
+    return lead + '有' + speedCamType(p) + '測速照相' + (p.limit ? '，限速' + p.limit + '公里' : '') + '。';
   }
 
   // 單一支測速照相的播報狀態機(每次 GPS 更新呼叫，只會給目前鎖定的那支)。distanceMeters 為沿路線/道路的剩餘距離
@@ -2779,24 +2777,16 @@ function _flipCell(cell, from, to) {
     // 首次進入 1km 範圍只完整播報一次，速限取該照相機的實際資料。
     if (!state.announced) {
       state.announced = true;
-      // GPS 第一次更新就已在較近區間：目前與更遠的整百距離都算念過，不補念舊距離
-      SPEED_CAM_STAGES.forEach(stage => { if (distanceMeters <= stage) state.stages.add(stage); });
-      // 首次提醒已經念了「300公尺後」，300 這個距離就算念過，不會馬上又念一次「300公尺」
-      if (distanceMeters <= 900) { const said = speedCamIntroMeters(distanceMeters); SPEED_CAM_STAGES.forEach(s => { if (s >= said) state.stages.add(s); }); }
-      // 「1公里後有測速照相，固定式，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
+      // 「1公里後有固定測速照相，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
       speakQueue([speedCamIntroText(p, distanceMeters), speedCamSpeedText(currentSpeedKmh), overSpeed ? '您已超速' : null],
                  { key: 'speedcam-intro:' + cameraId });
       return;
     }
 
-    // 跨進新的整百區間才念，且只念「目前所在」那一個(GPS 一次跳過好幾個區間時，較遠的直接標記念過)
-    const crossed = SPEED_CAM_STAGES.filter(stage => distanceMeters <= stage && !state.stages.has(stage));
-    const stage = crossed[crossed.length - 1];
-    if (stage != null) {
-      SPEED_CAM_STAGES.forEach(s => { if (s >= stage) state.stages.add(s); });
-      // 距離倒數只念距離(不念當前速度、不念您已超速)：句子短，高速時 100 公尺一段也念得完
-      speakQueue([stage + '公尺'], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
-      if (stage <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
+    // 不倒數距離；剩 100 公尺內提示一次守法金幣
+    if (distanceMeters <= 100 && !state.coinHinted) {
+      state.coinHinted = true;
+      if (typeof window._hintCoinCam === 'function') window._hintCoinCam();
     }
   }
 
@@ -3665,7 +3655,7 @@ function _flipCell(cell, from, to) {
   });
   NavTTS.init();
   // 固定會用到的播報先在背景合成好(測速照相距離、通過、超速、抵達)，播報時不用等
-  NavTTS.preload(SPEED_CAM_STAGES.map(m => m + '公尺').concat(['您已通過', '您已超速', '已到達目的地。']));
+  NavTTS.preload(['您已通過', '您已超速', '已到達目的地。']);
 
   // 頁面載入後背景預載所有錄音音檔，消除首次播放的載入延遲
   VP.prefetch(['1','2','3','4','5','6','7','8','9',
@@ -4339,8 +4329,7 @@ function _flipCell(cell, from, to) {
   // 把動態門檻取整到導航 App 慣用的整數距離
   function roundToNatural(m) {
     if (m >= 1000) return Math.round(m / 500) * 500;  // → 1公里, 1.5公里, 2公里…
-    if (m >= 200)  return Math.round(m / 100) * 100;  // → 200, 300, 400, 500…
-    if (m >= 100)  return Math.round(m / 50) * 50;    // → 100, 150
+    if (m >= 100)  return Math.round(m / 100) * 100;  // → 100, 200, 300…(不念 150 這種數字)
     return Math.max(10, Math.round(m / 10) * 10);     // → 10, 20 … 90(路口很近時不要唸成 0 或 100)
   }
 
@@ -4754,7 +4743,7 @@ function _flipCell(cell, from, to) {
           if (!isStraight || (ns.distance||0) < 300) return;
           const road = ns.name || '';
           const km = (ns.distance / 1000).toFixed(1);
-          const distTxt = ns.distance >= 1000 ? '約' + km + '公里' : '約' + Math.round(ns.distance) + '公尺';
+          const distTxt = ns.distance >= 1000 ? '約' + km + '公里' : '約' + Math.round(ns.distance / 100) * 100 + '公尺'; // 整百
           setTimeout(()=> speakText('繼續行駛' + (road ? road+'，' : '') + distTxt), 800);
         })();
       }
@@ -7616,30 +7605,82 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var data = window.speedCameraData;
     if(!data) return;
 
-    // 為每個速限值畫紅框白底圓形圖示（50×50px、跟速度計旁的限速牌同樣式：#FF0000 紅框、粗體黑字；底部三角指針）
+    // 測速照相圖示(照台灣固定式測速照相照片)：白色方箱(薄頂蓋凸出)、正面上方兩個深色正方形窗(左邊窗裡有圓形鏡頭)、下方米黃銘牌，
+    // 灰色接頭架在整根黃黑斜紋的方柱上；右上疊速限牌(C 排法)、速限牌下面白色圓形紅字「固」(zone = 區間測速時寫「區」)。邏輯 56×62，2 倍解析度；柱子底部中央 = 測速照相位置
+    function drawSpeedIcon(lim, zone) {
+      var W = 56, H = 62, cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2;
+      var c = cv.getContext('2d'); c.scale(2, 2); c.lineJoin = 'round';
+      function rr(x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+      var EDGE = '#5F6368', cx = 15;
+    
+      // 地面陰影
+      c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(cx, 59.8, 8, 2, 0, 0, Math.PI * 2); c.fill();
+    
+      // ── 黃黑斜紋方柱 ──
+      var px = cx - 4.8, pw = 9.6, py = 32.5, ph = 27;
+      c.save(); c.beginPath(); c.rect(px, py, pw, ph); c.clip();
+      c.fillStyle = '#FFC400'; c.fillRect(px, py, pw, ph);
+      c.fillStyle = '#17181A';
+      var band = 3.6, gap = 7.2; // 斜紋：黑 3.6、間距 7.2，往右上斜
+      for (var y0 = py - pw; y0 < py + ph + pw; y0 += gap) {
+        c.beginPath(); c.moveTo(px, y0 + pw * 0.75); c.lineTo(px + pw, y0); c.lineTo(px + pw, y0 + band); c.lineTo(px, y0 + pw * 0.75 + band); c.closePath(); c.fill();
+      }
+      var sg = c.createLinearGradient(px, 0, px + pw, 0); // 方柱：左亮右暗
+      sg.addColorStop(0, 'rgba(255,255,255,0.18)'); sg.addColorStop(0.55, 'rgba(255,255,255,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.22)');
+      c.fillStyle = sg; c.fillRect(px, py, pw, ph);
+      c.restore();
+      c.lineWidth = 0.9; c.strokeStyle = '#17181A'; c.strokeRect(px, py, pw, ph);
+      // 柱頂蓋
+      c.fillStyle = '#C9CDD1'; c.fillRect(px - 0.6, py - 1.4, pw + 1.2, 1.8); c.strokeStyle = EDGE; c.lineWidth = 0.6; c.strokeRect(px - 0.6, py - 1.4, pw + 1.2, 1.8);
+    
+      // ── 灰色接頭 ──
+      var ng = c.createLinearGradient(cx - 2.5, 0, cx + 2.5, 0);
+      ng.addColorStop(0, '#8A9096'); ng.addColorStop(0.45, '#D7DADD'); ng.addColorStop(1, '#7B8187');
+      c.fillStyle = ng; c.fillRect(cx - 2.5, 27.5, 5, 4); c.strokeStyle = EDGE; c.lineWidth = 0.6; c.strokeRect(cx - 2.5, 27.5, 5, 4);
+    
+      // ── 白色方箱 ──
+      var bx = cx - 12, by = 4.5, bw = 24, bh = 23.5;
+      var bg = c.createLinearGradient(bx, 0, bx + bw, 0);
+      bg.addColorStop(0, '#FFFFFF'); bg.addColorStop(0.7, '#F1F2F2'); bg.addColorStop(1, '#D9DCDE');
+      c.fillStyle = bg; c.fillRect(bx, by, bw, bh);
+      c.lineWidth = 0.9; c.strokeStyle = EDGE; c.strokeRect(bx, by, bw, bh);
+      // 薄頂蓋(兩側凸出一點)
+      rr(bx - 1.4, by - 2.2, bw + 2.8, 2.6, 0.8); c.fillStyle = '#E3E5E7'; c.fill(); c.lineWidth = 0.8; c.strokeStyle = EDGE; c.stroke();
+      var gl = function (x, y, w, h) { var g = c.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5B6B78'); g.addColorStop(0.55, '#26313A'); g.addColorStop(1, '#141A20'); return g; };
+      // 左：正方形窗，裡面是圓形鏡頭(淺灰鏡框＋深色玻璃＋反光)
+      c.fillStyle = gl(bx + 2.4, by + 3.4, 8.4, 8.4); c.fillRect(bx + 2.4, by + 3.4, 8.4, 8.4); c.lineWidth = 0.9; c.strokeStyle = '#3C4043'; c.strokeRect(bx + 2.4, by + 3.4, 8.4, 8.4);
+      c.beginPath(); c.arc(bx + 6.6, by + 7.6, 3.4, 0, Math.PI * 2); c.fillStyle = '#AEB4BA'; c.fill();
+      c.beginPath(); c.arc(bx + 6.6, by + 7.6, 2.4, 0, Math.PI * 2); c.fillStyle = '#0B0F13'; c.fill();
+      c.beginPath(); c.arc(bx + 5.8, by + 6.8, 0.8, 0, Math.PI * 2); c.fillStyle = 'rgba(255,255,255,0.85)'; c.fill();
+      // 右：正方形窗(直角)
+      c.fillStyle = gl(bx + 13.6, by + 3.4, 8.4, 8.4); c.fillRect(bx + 13.6, by + 3.4, 8.4, 8.4); c.lineWidth = 0.9; c.strokeStyle = '#3C4043'; c.strokeRect(bx + 13.6, by + 3.4, 8.4, 8.4);
+      c.beginPath(); c.moveTo(bx + 14.6, by + 10.6); c.lineTo(bx + 17.8, by + 4.4); c.lineTo(bx + 19.4, by + 4.4); c.lineTo(bx + 16.2, by + 10.6); c.closePath(); c.fillStyle = 'rgba(255,255,255,0.28)'; c.fill();
+      // 下：米黃銘牌
+      c.fillStyle = '#EADFB8'; c.fillRect(bx + 3.4, by + 14.6, bw - 6.8, 5.6); c.lineWidth = 0.6; c.strokeStyle = '#A99A6A'; c.strokeRect(bx + 3.4, by + 14.6, bw - 6.8, 5.6);
+    
+      // ── 速限牌(右上) ──
+      var ox = 41.5, oy = 15, r = 14.5;
+      c.beginPath(); c.arc(ox, oy, r - 0.5, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill();
+      c.beginPath(); c.arc(ox, oy, r - 2.5, 0, Math.PI * 2); c.strokeStyle = '#FF0000'; c.lineWidth = 3.4; c.stroke();
+      c.beginPath(); c.arc(ox, oy, r - 0.5, 0, Math.PI * 2); c.strokeStyle = '#cfcfcf'; c.lineWidth = 1; c.stroke();
+      c.font = '800 ' + (lim >= 100 ? 10.5 : 12.8) + 'px "SF Pro Display",Arial,sans-serif';
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText(String(lim), ox, oy + 0.8);
+    
+      // ── 速限牌下面：白色圓形、紅色「固」(固定式)／「區」(區間測速) ──
+      var gy = 39.5, gr = 7.5;
+      c.beginPath(); c.arc(ox, gy, gr, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); c.lineWidth = 1; c.strokeStyle = '#cfcfcf'; c.stroke();
+      c.font = '900 10.5px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif';
+      c.fillStyle = '#E00000'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(zone ? '區' : '固', ox, gy + 0.6);
+      return cv;
+    }
+    // 每個速限值畫兩種：speed-60(固定式，寫「固」)、speed-60-z(區間測速，寫「區」)
     [25,30,40,50,60,70,80,90,100,110].forEach(function(lim){
-      var key='speed-'+lim;
-      if(m.hasImage(key)) return;
-      var sz=50;
-      var W=sz, H=sz;
-      var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-      var cx=cv.getContext('2d');
-      var r=sz/2, ox=W/2, oy=r;
-      // 白底圓
-      cx.beginPath(); cx.arc(ox,oy,r-0.5,0,Math.PI*2);
-      cx.fillStyle='#FFFFFF'; cx.fill();
-      // 紅框 5px(貼外緣)
-      cx.beginPath(); cx.arc(ox,oy,r-3.5,0,Math.PI*2);
-      cx.strokeStyle='#FF0000'; cx.lineWidth=5; cx.stroke();
-      // 最外面 1px 細灰框(跟全家等圖示一樣)
-      cx.beginPath(); cx.arc(ox,oy,r-0.5,0,Math.PI*2);
-      cx.strokeStyle='#d9d9d9'; cx.lineWidth=1; cx.stroke();
-      // 速限文字(粗體)
-      var fs=lim>=100?18:20;
-      cx.font='800 '+fs+'px "SF Pro Display","SF Pro Text",Arial,sans-serif';
-      cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillStyle='#000000'; cx.fillText(String(lim),ox,oy+1);
-      m.addImage(key,{width:W,height:H,data:cx.getImageData(0,0,W,H).data});
+      ['', '-z'].forEach(function(sfx){
+        var key='speed-'+lim+sfx;
+        if(m.hasImage(key)) return;
+        var cv=drawSpeedIcon(lim, !!sfx);
+        m.addImage(key, cv.getContext('2d').getImageData(0,0,cv.width,cv.height), { pixelRatio: 2 });
+      });
     });
 
     m.addSource('speed-cam',{type:'geojson',data:data,cluster:true,clusterMaxZoom:13,clusterRadius:50});
@@ -7680,7 +7721,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       id:'speed-point',type:'symbol',source:'speed-cam',
       filter:['!',['has','point_count']],
       layout:{
-        'icon-image':['concat','speed-',['to-string',['get','limit']]],
+        // 方向欄寫「區間測速」的用「區」的圖示，其他是固定式
+        'icon-image':['concat','speed-',['to-string',['get','limit']],['case',['in','區間',['coalesce',['get','dir'],'']],'-z','']],
+        'icon-anchor':'bottom','icon-offset':[13,0], // 柱子在圖的左邊：底部錨點往右移，柱子底部才會對準測速照相的位置
         'icon-size':['interpolate',['linear'],['zoom'],12,0.4,15,0.65,17,0.9,19,1.2],
         'icon-allow-overlap':true,'icon-ignore-placement':true
       }
@@ -11330,7 +11373,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       _lastAnnounceTime  = now;
 
       var distTxt = distM < 1000
-        ? Math.round(distM / 50) * 50 + '公尺'
+        ? Math.max(100, Math.round(distM / 100) * 100) + '公尺' // 整百(不念 150、437 這種數字)
         : (distM / 1000).toFixed(1) + '公里';
       var msg = '前方約' + distTxt + '路況' + (f.properties.label || '壅塞') + '。';
 
