@@ -7678,10 +7678,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText(String(lim), ox, oy + 0.8);
     
       // ── 速限牌下面：白色圓形、紅色「固」(固定式)／「區」(區間測速) ──
-      var gy = 39.5, gr = 7.5;
+      var gy = 46.5, gr = r - 0.5; // 跟上面紅框速限牌一樣大(圖高 62，剛好放得下)
       c.beginPath(); c.arc(ox, gy, gr, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); c.lineWidth = 1; c.strokeStyle = '#cfcfcf'; c.stroke();
-      c.font = '900 10.5px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif';
-      c.fillStyle = '#E00000'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(zone ? '區' : '固', ox, gy + 0.6);
+      c.font = '900 16px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif';
+      c.fillStyle = '#E00000'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(zone ? '區' : '固', ox, gy + 0.8);
       return cv;
     }
     // 每個速限值畫兩種：speed-60(固定式，寫「固」)、speed-60-z(區間測速，寫「區」)
