@@ -1936,7 +1936,7 @@ html, body {
   </button>
   <!-- 定位 -->
   <button class="mapCtrlBtn" id="locateBtn" title="定位">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2F80FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="4"/>
       <line x1="12" y1="2" x2="12" y2="6"/>
       <line x1="12" y1="18" x2="12" y2="22"/>
@@ -7664,6 +7664,17 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       },
       paint:{ 'text-color':'#fff' }
     });
+    // 數字畫在最上面(監視器群集等之後才加的圖層不會蓋住)，只放在車子底下；換地圖樣式、之後加圖層也會自動再搬
+    if(!m._snmSpeedCountTop){
+      m._snmSpeedCountTop=true;
+      m.on('styledata',function(){
+        if(!m.getLayer('speed-cluster-count')) return;
+        var ls=m.getStyle().layers, before=m.getLayer('user-pulse')?'user-pulse':(m.getLayer('user-car')?'user-car':null);
+        var i=ls.findIndex(function(l){ return l.id==='speed-cluster-count'; });
+        var want=before ? ls.findIndex(function(l){ return l.id===before; })-1 : ls.length-1;
+        if(i!==want){ try{ m.moveLayer('speed-cluster-count', before||undefined); }catch(_){} }
+      });
+    }
     m.addLayer({
       id:'speed-point',type:'symbol',source:'speed-cam',
       filter:['!',['has','point_count']],
