@@ -554,6 +554,8 @@ body.searchOpen .searchChips::-webkit-scrollbar{ display:none; }
   cursor:pointer;
 }
 .searchChips button:active{ background:#F1F3F4; }
+.searchChips button{ display:inline-flex; align-items:center; gap:6px; }
+.searchChips .chipLogo{ width:20px; height:20px; display:block; flex-shrink:0; } /* 跟地圖上的店家圖示同一張圖 */
 body.searchOpen .searchResultsList{
   display:block !important;
   flex:1;
@@ -4180,6 +4182,31 @@ function _flipCell(cell, from, to) {
   window._closeSearchPage = closeSearchPage;
   window.addEventListener('popstate', () => { if (document.body.classList.contains('searchOpen')) closeSearchPage(true); });
   if (searchBackBtn) searchBackBtn.addEventListener('click', () => closeSearchPage());
+  // 每個按鈕用地圖上那個圖層的圖示(地圖圖示畫好之後才拿得到，還沒好就等地圖下次閒下來再試)
+  const CHIP_ICON = { '加油站': 'cpc-icon', '7-11': 'seven-icon', '全家': 'fm-icon', '廁所': 'toilet-icon',
+    '停車場': 'ntpcpark-icon', 'YouBike': 'youbike-icon', '麥當勞': 'mcd-icon', '全聯': 'pxmart-fc-icon' };
+  function fillChipLogos() {
+    if (!searchChips || !map.style) return true;
+    let left = 0;
+    searchChips.querySelectorAll('button[data-q]').forEach(b => {
+      if (b.querySelector('.chipLogo')) return;
+      const id = CHIP_ICON[b.dataset.q];
+      const im = id && map.style.getImage(id);
+      if (!im) { if (id) left++; return; }
+      const c = document.createElement('canvas');
+      c.width = im.data.width; c.height = im.data.height;
+      c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(im.data.data), im.data.width, im.data.height), 0, 0);
+      const img = new Image(); img.className = 'chipLogo'; img.alt = ''; img.src = c.toDataURL('image/png');
+      const old = b.querySelector('.snmIco'); // 原本的線條圖示換成招牌
+      if (old) old.replaceWith(img); else b.prepend(img);
+    });
+    return left === 0;
+  }
+  if (searchChips) {
+    const tryChips = () => { if (!fillChipLogos()) map.once('idle', tryChips); };
+    map.once('idle', tryChips);
+  }
+
   if (searchChips) searchChips.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-q]');
     if (!b) return;
