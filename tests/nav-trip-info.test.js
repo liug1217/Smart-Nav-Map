@@ -30,9 +30,11 @@ function createHarness() {
       body: { classList: { remove() {} } },
     },
     calculateDistance,
-    updateRect8Display() {}, checkOffRoute() {}, speakText() {}, stopNavigation() {},
-    maneuverToChinese: () => '', buildImmediateNavVoice: () => '', buildNavVoice: () => '',
-    getActiveThresholds: () => [500, 100], _setPanelState() {}, togglePoiLayers() {},
+    updateRect8Display() {}, checkOffRoute() {}, speakText() {}, speakQueue() {}, stopNavigation() {},
+    maneuverToChinese: () => '', _setPanelState() {}, togglePoiLayers() {},
+    // 播報 3.0：這裡只測行程資訊，轉彎播報另有 nav-voice.test.js
+    _turnAnnouncer: { update: () => [] }, _navRouteVersion: 1, _voiceSpeedOrNull: () => null,
+    VOICE_PRI: { CRITICAL: 0, TURN: 1, ENFORCE: 2, INFO: 3 },
     NAV_TURN_VIEW_M: 200, NAV_TURN_HOLD_MS: 3000, localStorage: { getItem: () => 0 },
     setTimeout() {},
     // 畫面上是翻牌效果；測試只看寫進去的文字

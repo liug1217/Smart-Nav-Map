@@ -2080,7 +2080,8 @@ html, body {
   </div><!-- /rect1 -->
 
 <script src="audio-manager.js?v=chat1"></script>
-<script src="tts/nav-tts.js?v=sys1"></script>
+<script src="tts/nav-tts.js?v=v3"></script>
+<script src="nav-voice.js?v=v3"></script>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
@@ -2460,7 +2461,7 @@ function _flipCell(cell, from, to) {
     navSteps = [];
     currentStepIndex = 0;
     offRouteCount = 0;
-    Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
+    _turnAnnouncer.reset();
     clearSpeedCameraVoiceState();
     document.body.classList.remove('navigating');
     _setPanelState(232, true);
@@ -2700,8 +2701,14 @@ function _flipCell(cell, from, to) {
   const SPEED_CAM_PRELOAD_KM = 1.6; // 進入 1.6 公里先在背景合成首次提醒，播報時不用等
   const SPEED_CAM_PASS_KM = 0.03;   // 30 公尺內：視為抵達測速照相位置
   const SPEED_CAM_STAGES = [900,800,700,600,500,400,300,200,100];
-  // 種類：資料的方向欄寫「區間測速」的是區間測速，其他都是固定式
-  function speedCamType(p) { return /區間/.test((p && p.dir) || '') ? '區間' : '固定'; }
+  // 種類：交給播報 3.0 的執法分類(固定、區間、科技執法、兼闖紅燈；區間測速也可能寫在地址欄)
+  // 資料只有 limit/addr/city/dir 四個欄位，沒有類型代碼，只能從文字判斷(見 nav-voice.js classifyEnforcement)
+  const VOICE_PRI = (window.NavVoice && window.NavVoice.PRI) || { CRITICAL: 0, TURN: 1, ENFORCE: 2, INFO: 3 };
+  function speedCamInfo(p) {
+    if (window.NavVoice) return window.NavVoice.classifyEnforcement(p);
+    const sec = /區間/.test(((p && p.dir) || '') + ((p && p.addr) || ''));
+    return { kind: sec ? 'section' : 'fixed', label: (sec ? '區間' : '固定') + '測速照相', limit: p && p.limit };
+  }
   const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
   // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」；距離倒數只念距離
   function speedCamSpeedText(speedKmh) { return '當前速度' + Math.round(speedKmh) + '公里'; }
@@ -2722,7 +2729,8 @@ function _flipCell(cell, from, to) {
   function getSpeedCameraState(cameraId) {
     let state = speedCameraVoiceState.get(cameraId);
     if (!state) {
-      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false };
+      // token：這次導航這支照相機的事件代號，語音佇列用來防止同一提醒重播
+      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false, token: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) };
       speedCameraVoiceState.set(cameraId, state);
     }
     return state;
@@ -2740,7 +2748,8 @@ function _flipCell(cell, from, to) {
   // 首次提醒。meters > 900 念「1公里後」；導航開始時已經比較近，就念最接近的整百距離(例如 300 公尺 →「300公尺後」)
   function speedCamIntroText(p, meters) {
     const lead = meters > 900 ? '1公里後' : speedCamIntroMeters(meters) + '公尺後';
-    return lead + '有' + speedCamType(p) + '測速照相' + (p.limit ? '，限速' + p.limit + '公里' : '') + '。';
+    const info = speedCamInfo(p);
+    return lead + '有' + info.label + (info.limit ? '，限速' + info.limit + '公里' : '') + '。';
   }
 
   // 單一支測速照相的播報狀態機(每次 GPS 更新呼叫，只會給目前鎖定的那支)。distanceMeters 為沿路線/道路的剩餘距離
@@ -2748,7 +2757,10 @@ function _flipCell(cell, from, to) {
     const state = getSpeedCameraState(cameraId);
     if (state.passed) return;
     const key = 'speedcam:' + cameraId;
-    const overSpeed = !!(p.limit && currentSpeedKmh > Number(p.limit));
+    const ev = key + ':' + state.token;
+    // 當前速度無效(GPS 沒速度、跳點、過期)：不念速度、不判斷超速，不念虛構的數字
+    const speedOk = typeof currentSpeedKmh === 'number' && isFinite(currentSpeedKmh);
+    const overSpeed = !!(speedOk && p.limit && currentSpeedKmh > Number(p.limit));
     state.minMeters = Math.min(state.minMeters, distanceMeters);
 
     // 抵達：進入 30 公尺，或曾經靠近到 60 公尺內後距離明顯變大(高速時 GPS 一秒跳 30 公尺，可能量不到 30 公尺內)
@@ -2756,7 +2768,7 @@ function _flipCell(cell, from, to) {
     const leaving = state.minMeters <= 60 && distanceMeters > state.minMeters + 30;
     if (reached || leaving) {
       state.passed = true; // 先標記，提示音與「通過」只會觸發一次
-      const passedClean = !p.limit || currentSpeedKmh <= p.limit;
+      const passedClean = !p.limit || (speedOk && currentSpeedKmh <= p.limit);
       if (passedClean && typeof window.earnCoin === 'function') {
         window.earnCoin(5, '📷 守法通過測速照相');
         if (window._navStats) window._navStats.cleanCams++;
@@ -2765,7 +2777,9 @@ function _flipCell(cell, from, to) {
       // 沒預告過(導航開始時就在照相機旁)就不念，避免突然冒出一句「通過」
       // 同一個 key：還沒念的距離播報會被取代，不會在通過後才念「100公尺」
       // 提示音播完才念「您已通過」；state.passed 已先設好，之後 GPS 在附近漂移也不會再念
-      if (state.announced) speakQueue([playSpeedCameraPassBeep, '您已通過'], { key, maxAgeMs: 6000 });
+      // 區間測速：這個點不一定是終點，不能說「您已通過」
+      const passText = speedCamInfo(p).kind === 'section' ? '區間測速路段，請保持速限' : '您已通過';
+      if (state.announced) speakQueue([playSpeedCameraPassBeep, passText], { key, maxAgeMs: 6000, priority: VOICE_PRI.ENFORCE, eventId: ev + ':pass' });
       return;
     }
 
@@ -2785,8 +2799,8 @@ function _flipCell(cell, from, to) {
       // 首次提醒已經念了「300公尺後」，300 這個距離就算念過，不會馬上又念一次「300公尺」
       if (distanceMeters <= 900) { const said = speedCamIntroMeters(distanceMeters); SPEED_CAM_STAGES.forEach(s => { if (s >= said) state.stages.add(s); }); }
       // 「1公里後有固定測速照相，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
-      speakQueue([speedCamIntroText(p, distanceMeters), speedCamSpeedText(currentSpeedKmh), overSpeed ? '您已超速' : null],
-                 { key: 'speedcam-intro:' + cameraId });
+      speakQueue([speedCamIntroText(p, distanceMeters), speedOk ? speedCamSpeedText(currentSpeedKmh) : null, overSpeed ? '您已超速' : null],
+                 { key: 'speedcam-intro:' + cameraId, priority: VOICE_PRI.ENFORCE, eventId: ev + ':intro', maxAgeMs: 20000 });
       return;
     }
 
@@ -2796,7 +2810,8 @@ function _flipCell(cell, from, to) {
     if (stage != null) {
       SPEED_CAM_STAGES.forEach(s => { if (s >= stage) state.stages.add(s); });
       // 距離倒數只念距離(不念當前速度、不念您已超速)：句子短，高速時 100 公尺一段也念得完
-      speakQueue([stage + '公尺'], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
+      // retries: 0 — 倒數距離被實際轉彎指令打斷就不重播(那時距離已經變了，重播舊距離會誤導)
+      speakQueue([stage + '公尺'], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS, priority: VOICE_PRI.ENFORCE, eventId: ev + ':' + stage, retries: 0 });
       if (stage <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
     }
   }
@@ -2918,7 +2933,7 @@ function _flipCell(cell, from, to) {
   // 試聽按鈕
   const _voiceTestBtn = document.getElementById('voiceTestBtn');
   if (_voiceTestBtn) {
-    _voiceTestBtn.addEventListener('click', () => speakText('前方200公尺，請右轉，進入忠孝東路'));
+    _voiceTestBtn.addEventListener('click', () => speakText('前方200公尺，請右轉進入忠孝東路。'));
   }
 
   // ===== 🎚 AudioManager 音量滑桿 =====
@@ -3470,22 +3485,33 @@ function _flipCell(cell, from, to) {
     });
   }
 
-  // ===== iOS audio unlock：第一次使用者互動時解鎖 VP 的 AudioContext =====
+  // ===== 音訊解鎖(播報 3.0) =====
+  // iPhone/iPad：AudioContext 只能在使用者觸控時恢復；鎖螢幕、切到別的 App、來電後會再被暫停(suspended/interrupted)。
+  // 以前只在第一次觸控時 resume 一次，之後被暫停就一直沒聲音。現在每次觸控都檢查，沒在跑就恢復；
+  // 同時在觸控裡：播一段無聲的音訊(iOS 要求)、解鎖提示音的 <audio>、念一句無聲的系統語音(iOS 第一次 speak 要在觸控裡)。
   (function() {
-    let unlocked = false;
+    let ttsPrimed = false;
     const unlock = () => {
-      if (unlocked) return;
-      unlocked = true;
-      // 用 VP 的共享 AudioContext resume，同時觸發背景預載
-      const ctx = VP._getCtx();
-      ctx.resume();
-      document.removeEventListener('touchstart', unlock, true);
-      document.removeEventListener('touchend',   unlock, true);
-      document.removeEventListener('click',      unlock, true);
+      try {
+        const ctx = VP._getCtx();
+        if (ctx.state !== 'running') {
+          ctx.resume().catch(() => {});
+          const b = ctx.createBuffer(1, 1, 22050), src = ctx.createBufferSource();
+          src.buffer = b; src.connect(ctx.destination); src.start(0);
+        }
+      } catch (e) {}
+      if (window._snmChime) window._snmChime.unlock();
+      if (!ttsPrimed && 'speechSynthesis' in window) {
+        ttsPrimed = true;
+        try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) {}
+      }
     };
-    document.addEventListener('touchstart', unlock, true);
-    document.addEventListener('touchend',   unlock, true);
-    document.addEventListener('click',      unlock, true);
+    document.addEventListener('touchend', unlock, true);
+    document.addEventListener('click', unlock, true);
+    // 回到前景時試著恢復(iOS 可能不允許，會等下一次觸控)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && VP._ctx && VP._ctx.state !== 'running') VP._ctx.resume().catch(() => {});
+    });
   })();
 
   // ===== 語音包（錄音 m4a + TTS fallback）=====
@@ -3640,6 +3666,7 @@ function _flipCell(cell, from, to) {
       NavTTS.stop();
     },
 
+    // 回傳 { ok, reason }：語音佇列用來區分「播完」與「失敗」
     async run(text) {
       const { clips, tts } = this.parse(text);
       let clipsOk = false;
@@ -3652,7 +3679,9 @@ function _flipCell(cell, from, to) {
       }
       // 音檔不存在時用 TTS 念整句(NavTTS：Piper 本機語音，未就緒時自動改用系統語音)
       const ttsFinal = clipsOk ? tts : text;
-      if (ttsFinal) await NavTTS.speak(ttsFinal);
+      if (!ttsFinal) return { ok: true };
+      const r = await NavTTS.speak(ttsFinal);
+      return (r && typeof r === 'object') ? r : { ok: true };
     },
   };
   window.VP = VP; // 讓其他 <script> 區塊（如金幣音效）共用同一個 AudioContext
@@ -3679,18 +3708,19 @@ function _flipCell(cell, from, to) {
     speakQueue([text]);
   }
 
-  // 測速照相「通過」提示音：專業導航風格的柔和雙音(上行四度，像木琴/鐘聲)，約 0.45 秒。
-  // 沿用 VP 共用的 AudioContext，音量跟著導航音量走；放在語音佇列裡播，播完才念「通過」，不會蓋過導航語音。
-  function playSpeedCameraPassBeep() {
-    return new Promise(resolve => {
+  // 測速照相「通過」提示音：柔和雙音(G5 → C6)，約 0.5 秒。
+  // 播報 3.0：主要用 <audio> 播預先合成的 WAV(見 nav-voice.js createChime 的說明)；
+  // 回傳 { ok, stage, reason }，失敗會記錄在播報紀錄裡，不會再「看起來有觸發其實沒聲音」
+  function playChimeWebAudio() {
+    return new Promise(async resolve => {
       try {
         const ctx = VP._getCtx();
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        if (ctx.state !== 'running') { try { await ctx.resume(); } catch (e) {} }
+        if (ctx.state !== 'running') { resolve({ ok: false, reason: 'AudioContext ' + ctx.state + '(需要觸控螢幕恢復)' }); return; }
         const vol = Math.max(0, Math.min(1, window.AudioManager ? window.AudioManager.vol.nav : 1));
         const out = ctx.createGain();
         out.gain.value = 0.5 * vol;
         out.connect(ctx.destination);
-        // 基音 + 很小的泛音，快速起音、指數衰減：短、清楚、不刺耳
         function note(freq, start, dur) {
           [[1, 0.42], [2, 0.10], [3, 0.04]].forEach(([mult, amp]) => {
             const o = ctx.createOscillator();
@@ -3705,59 +3735,49 @@ function _flipCell(cell, from, to) {
           });
         }
         const t0 = ctx.currentTime + 0.02;
-        note(784, t0, 0.30);        // G5
-        note(1046.5, t0 + 0.12, 0.34); // C6
-        setTimeout(resolve, 520);   // 提示音結束後再接「您已通過」
-      } catch (e) { resolve(); /* 瀏覽器不支援則靜音 */ }
+        note(784, t0, 0.30);
+        note(1046.5, t0 + 0.12, 0.34);
+        setTimeout(() => resolve({ ok: true, via: 'webaudio' }), 520);
+      } catch (e) { resolve({ ok: false, reason: 'Web Audio 不支援：' + (e && e.message) }); }
     });
   }
+  const _snmChime = window._snmChime = NavVoice.createChime({
+    getVolume: () => (window.AudioManager ? window.AudioManager.vol.nav : 1),
+    fallback: playChimeWebAudio
+  });
+  function playSpeedCameraPassBeep() { return _snmChime.play(); }
 
-  // 依序播放多段語音（序列化：同時只跑一個，新的等舊的跑完再播）
-  // items 每一段可以是文字，或回傳 Promise 的函式(例如提示音)，會等它結束才播下一段。
-  // opts.key：同一個 key 的舊排隊會被新的取代(預設 'nav'，維持原本「最新的覆蓋舊的」行為)；
-  //           不同 key 的排隊互不覆蓋，所以測速照相播報不會把轉彎指示擠掉。
-  // opts.maxAgeMs：排隊太久就丟掉(例如測速照相距離，過期了再念反而誤導)。
-  let _sqBusy = false;
-  let _sqPending = [];
-  let _sqGen = 0; // stopNavVoice() 時 +1,讓正在跑的佇列在下一段之前停下
+  // ===== 播報 3.0：統一語音佇列 =====
+  // 所有播報(轉彎、測速、重新規劃、路況、測試)都經過這裡，同時只播一段：
+  //  opts.priority：0 實際轉彎指令 / 1 轉彎預告 / 2 測速執法 / 3 一般資訊(預設)；選下一段時先挑優先的
+  //  opts.key：同一個 key 的舊排隊會被新的取代(沿用舊行為)
+  //  opts.maxAgeMs：排隊太久就丟掉(過期的提醒念出來反而誤導)
+  //  opts.eventId：同一事件播完不會再排入
+  //  opts.routeVersion：重新規劃路線後，舊路線的排隊會被取消
+  // 實際轉彎指令可以打斷正在念的測速/一般資訊(被打斷的會在之後重念一次)，其他情況不打斷正在念的句子。
+  // 每段的狀態(排隊、播放中、播完、失敗、過期、取消)都記在紀錄裡：主控台 NavVoiceLog()
+  const _voiceQueue = NavVoice.createVoiceQueue({
+    play: async (item) => {
+      if (typeof item === 'function') { const r = await item(); return (r && typeof r === 'object') ? r : { ok: true }; }
+      return VP.run(item);
+    },
+    stop: () => VP.stopAll(),
+    onBusy: busy => { if (busy) _duckRadio(); else _unduckRadio(); },
+    onLog: rec => {
+      if (window._voiceDebug) console.log('[播報]', rec.status, rec.text, rec.reason || '');
+      else if (rec.status === 'failed') console.warn('[播報] 播放失敗：', rec.text, rec.reason);
+    }
+  });
+  window.NavVoiceLog = () => { const l = _voiceQueue.logs().slice(-40); console.table(l); return l; };
+  window._voiceQueue = _voiceQueue;
 
   // 退出導航時呼叫:丟掉排隊中的語音,並中斷正在播放的錄音片段/TTS
   function stopNavVoice(){
-    _sqGen++;
-    _sqPending = [];
-    VP.stopAll();
+    _voiceQueue.stopAll('退出導航');
   }
 
   function speakQueue(items, opts){
-    if (typeof items === 'string') items = [items];
-    if (!Array.isArray(items) || !items.length) return;
-    opts = (opts && typeof opts === 'object') ? opts : {};
-    const entry = { items, key: opts.key || 'nav', maxAgeMs: opts.maxAgeMs || 0, ts: Date.now() };
-    if (_sqBusy) {
-      _sqPending = _sqPending.filter(e => e.key !== entry.key); // 同類的舊排隊直接丟棄
-      _sqPending.push(entry);
-      return;
-    }
-    _sqBusy = true;
-    _duckRadio();
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel(); // 清掉任何卡住的 TTS queue
-    const gen = _sqGen;
-    (async () => {
-      try {
-        for (const item of entry.items) {
-          if (gen !== _sqGen) break;
-          if (typeof item === 'function') await item();
-          else if (item) await VP.run(item);
-        }
-      } finally {
-        _sqBusy = false;
-        _unduckRadio();
-        const now = Date.now();
-        _sqPending = _sqPending.filter(e => !e.maxAgeMs || now - e.ts <= e.maxAgeMs);
-        const next = _sqPending.shift();
-        if (next) speakQueue(next.items, { key: next.key, maxAgeMs: next.maxAgeMs && Math.max(1, next.maxAgeMs - (now - next.ts)) });
-      }
-    })();
+    return _voiceQueue.speak(items, opts);
   }
 
 // ===== 🔍 搜尋地點(地理編碼,用OpenStreetMap的Nominatim服務,免費不用API金鑰)=====
@@ -4265,8 +4285,18 @@ function _flipCell(cell, from, to) {
   let isNavigating = false;
   let navSteps = [];
   let currentStepIndex = 0;
-  const navStepVoiceState = {}; // key: 步驟索引, value: idle/w1000/w900/.../w100
-  let _lastNavAnnounceMs = 0;   // 上次轉彎播報的時間戳（毫秒），用於最小間隔保護
+  // 播報 3.0：轉彎播報(nav-voice.js createTurnAnnouncer)
+  // 每個轉彎是一個事件(路線版本 + 步驟 + 位置)，遠距離預告/接近提醒/實際指令各只念一次；
+  // 通過後鎖定，GPS 回跳不重念；重新規劃路線 → 路線版本 +1，舊事件和排隊中的舊提醒都作廢。
+  // 以前是「兩次轉彎播報至少隔 8 秒」的全域計時器，會把很近的下一個轉彎提醒整個吃掉，已拿掉。
+  const _turnAnnouncer = NavVoice.createTurnAnnouncer({ log: r => { if (window._voiceDebug) console.log('[轉彎]', r); } });
+  let _navRouteVersion = 0;
+  function _newNavRouteVersion() {
+    _navRouteVersion++;
+    _turnAnnouncer.setRoute(_navRouteVersion);
+    _voiceQueue.cancelWhere(e => e.routeVersion != null && e.routeVersion !== _navRouteVersion, '路線已重新規劃');
+  }
+  function _voiceSpeedOrNull() { return window.currentSpeedValid === false ? null : (window.currentSpeedKmh || null); }
   // 導航狀態機：'idle'|'planning'|'navigating'|'rerouting'|'arriving'|'completed'
   let _navState = 'idle';
   window._getNavState = () => _navState;
@@ -4280,20 +4310,6 @@ function _flipCell(cell, from, to) {
   window.NAV_CAM = { normal: { zoom: 17, pitch: 60 }, turn: { zoom: 16, pitch: 0 } };
   // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
   // 回傳陣列由遠到近，最多 3 個值
-  function getActiveThresholds(speedKmh) {
-    const ms = Math.max(1, speedKmh / 3.6);
-    const far  = Math.min(3500, Math.max(400, Math.round(ms * 115 / 50) * 50));
-    const mid  = Math.min(700,  Math.max(150, Math.round(ms * 22  / 25) * 25));
-    const near = Math.min(200,  Math.max(60,  Math.round(ms * 6.7 / 10) * 10));
-    // 去重並過濾太接近的值（差距 < 50m 不重複播報）
-    const raw = [far, mid, near];
-    const out = [raw[0]];
-    for (let i = 1; i < raw.length; i++) {
-      if (raw[i] < out[out.length - 1] - 49) out.push(raw[i]);
-    }
-    return out;
-  }
-
   const rect8 = document.getElementById('rect8');
   const rect8Icon = document.getElementById('rect8Icon');
   const rect8Instruction = document.getElementById('rect8Instruction');
@@ -4335,96 +4351,6 @@ function _flipCell(cell, from, to) {
     if (maneuver.type === 'notification') return '注意前方路況';
     if (maneuver.modifier && modMap[maneuver.modifier]) return modMap[maneuver.modifier];
     return '繼續前進';
-  }
-
-  // 把動態門檻取整到導航 App 慣用的整數距離
-  function roundToNatural(m) {
-    if (m >= 1000) return Math.round(m / 500) * 500;  // → 1公里, 1.5公里, 2公里…
-    if (m >= 100)  return Math.round(m / 100) * 100;  // → 100, 200, 300…(不念 150 這種數字)
-    return Math.max(10, Math.round(m / 10) * 10);     // → 10, 20 … 90(路口很近時不要唸成 0 或 100)
-  }
-
-  // 依門檻與步驟產生符合規格的語音字串
-  function buildNavVoice(step, threshold, isPrepare) {
-    const m = step.maneuver;
-    if (m.type === 'depart') return null;
-    const r = roundToNatural(threshold);
-    const d = r >= 1000
-      ? (r / 1000 % 1 === 0 ? (r / 1000) : (r / 1000).toFixed(1)) + ' 公里'
-      : r + ' 公尺';
-    // 還沒到:唸距離;真正到達時由完成流程播報「已到達目的地」
-    if (m.type === 'arrive') return isPrepare ? ('前方' + d + '即將到達目的地。') : (d + '後到達目的地。');
-    const sn = step.name || null;
-    const into = sn ? ('進入' + sn) : '';
-    if (m.type === 'roundabout' || m.type === 'rotary') {
-      const exitNum = m.exit ? ('進入圓環後，從第' + m.exit + '個出口離開。') : '';
-      return isPrepare ? ('前方' + d + '準備進入圓環。' + exitNum) : (d + '後進入圓環。' + exitNum);
-    }
-    if (m.type === 'merge') return isPrepare ? ('前方' + d + '準備匯入主線。') : (d + '後匯入主線。');
-    if (m.type === 'off ramp') {
-      return isPrepare
-        ? ('前方' + d + '準備靠右下交流道' + (sn ? '，' + sn : '') + '。')
-        : (d + '後請靠右下交流道' + (sn ? '，' + sn : '') + '。');
-    }
-    if (m.type === 'on ramp') {
-      const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
-      // 跟下交流道一樣的說法，有路名就接在後面(例如「…上交流道，福爾摩沙高速公路。」)
-      return isPrepare
-        ? ('前方' + d + '準備' + side + '上交流道' + (sn ? '，' + sn : '') + '。')
-        : (d + '後請' + side + '上交流道' + (sn ? '，' + sn : '') + '。');
-    }
-    if (m.type === 'fork') {
-      const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
-      return isPrepare ? ('前方' + d + '準備' + side + '行駛。') : (d + '後請' + side + '行駛。');
-    }
-    const mod = m.modifier || '';
-    if (mod === 'left' || mod === 'sharp left') {
-      return isPrepare ? ('前方' + d + '準備左轉' + (into ? into : '') + '。') : (d + '後請左轉' + (into ? into : '') + '。');
-    }
-    if (mod === 'right' || mod === 'sharp right') {
-      return isPrepare ? ('前方' + d + '準備右轉' + (into ? into : '') + '。') : (d + '後請右轉' + (into ? into : '') + '。');
-    }
-    if (mod === 'slight left') {
-      return isPrepare ? ('前方' + d + '準備靠左' + (into ? into : '') + '。') : (d + '後請靠左' + (into ? into : (sn ? '' : '行駛')) + '。');
-    }
-    if (mod === 'slight right') {
-      return isPrepare ? ('前方' + d + '準備靠右' + (into ? into : '') + '。') : (d + '後請靠右' + (into ? into : (sn ? '' : '行駛')) + '。');
-    }
-    if (mod === 'uturn') return d + '後迴轉。';
-    // 只是路名改變/沿同一條路直走(例如忠孝東路三段→四段)：不倒數「幾公尺後直行」，太吵；路口直行(turn+straight)照念
-    if (m.type === 'continue' || m.type === 'new name') return null;
-    if (mod === 'straight') return d + '後直行。';
-    return d + '後' + maneuverToChinese(m) + '。';
-  }
-
-  function buildImmediateNavVoice(step) {
-    const m = step.maneuver;
-    if (m.type === 'depart') return null;
-    if (m.type === 'arrive') return '已到達目的地。';
-    const sn = step.name || null;
-    const into = sn ? ('進入' + sn) : '';
-    if (m.type === 'roundabout' || m.type === 'rotary') {
-      return m.exit ? ('請進入圓環，從第' + m.exit + '個出口離開。') : '請進入圓環。';
-    }
-    if (m.type === 'merge') return '請匯入主線。';
-    if (m.type === 'off ramp') {
-      return sn ? ('請靠右下交流道，' + sn + '。') : '請靠右下交流道。';
-    }
-    if (m.type === 'on ramp') {
-      const side = (m.modifier && m.modifier.includes('left')) ? '靠左' : '靠右';
-      return '請' + side + '上交流道' + (sn ? '，' + sn : '') + '。';
-    }
-    if (m.type === 'fork') {
-      return (m.modifier && m.modifier.includes('left')) ? '請靠左行駛。' : '請靠右行駛。';
-    }
-    const mod = m.modifier || '';
-    if (mod === 'left'  || mod === 'sharp left')  return '請左轉' + into + '。';
-    if (mod === 'right' || mod === 'sharp right') return '請右轉' + into + '。';
-    if (mod === 'slight left')  return sn ? ('請靠左' + into + '。') : '請靠左行駛。';
-    if (mod === 'slight right') return sn ? ('請靠右' + into + '。') : '請靠右行駛。';
-    if (mod === 'uturn') return '請迴轉。';
-    if (mod === 'straight' || m.type === 'continue' || m.type === 'new name') return null;
-    return '請' + maneuverToChinese(m) + '。';
   }
 
   // 轉彎方向對應的箭頭圖示
@@ -4632,14 +4558,10 @@ function _flipCell(cell, from, to) {
     const key = _navSession + ':' + currentStepIndex;
     if (key === _navVoicePreloadKey || !window.NavTTS) return;
     _navVoicePreloadKey = key;
-    const speedKmh = window.currentSpeedKmh || 50;
-    const active = getActiveThresholds(speedKmh);
+    const speedKmh = _voiceSpeedOrNull();
     const texts = [];
     for (let i = currentStepIndex; i < Math.min(navSteps.length, currentStepIndex + 2); i++) {
-      const step = navSteps[i];
-      if (!step || step.maneuver.type === 'depart') continue;
-      active.forEach((th, idx) => texts.push(buildNavVoice(step, th - speedKmh / 3.6, idx === 0 && active.length > 1)));
-      if (step.maneuver.type !== 'arrive') texts.push(buildImmediateNavVoice(step));
+      texts.push(..._turnAnnouncer.preview(navSteps, i, speedKmh));
     }
     NavTTS.preload(texts.filter(Boolean), { replace: true });
   }
@@ -4683,32 +4605,18 @@ function _flipCell(cell, from, to) {
     // ===== 🚨 偏航偵測 =====
     checkOffRoute(lat, lon);
 
-    const state = navStepVoiceState[currentStepIndex] || 'idle';
-    const text = maneuverToChinese(step.maneuver);
-    const roadPart = step.name ? ('進入' + step.name) : '';
-
+    // 播報 3.0：依道路情境與車速決定遠距離預告/接近提醒/實際指令(請右轉)，每個階段只念一次
+    const turnAnns = _turnAnnouncer.update({
+      routeVersion: _navRouteVersion, steps: navSteps, index: currentStepIndex,
+      meters, passed, speedKmh: _voiceSpeedOrNull(), accuracy: window._lastGpsAccuracy
+    });
+    turnAnns.forEach(a => speakQueue([a.text], { key: 'turn', priority: a.priority, eventId: a.eventId, maxAgeMs: a.maxAgeMs, routeVersion: _navRouteVersion }));
 
     if (meters <= 15 || passed) {
-      const already = navStepVoiceState[currentStepIndex];
-      if (!isDepart && !passed && already !== 'immediate') { // 已經開過頭就不要再唸「現在轉彎」
-        // 到達由下方完成流程統一播報「已到達目的地」,這裡不重複唸
-        let v = step.maneuver.type === 'arrive' ? null : buildImmediateNavVoice(step);
-        // 下一個轉彎就在 150 公尺內:一起唸出來。不然兩次播報的 8 秒最小間隔會把下一個轉彎整個吃掉
-        const next = navSteps[currentStepIndex + 1];
-        if (v && next && (step.distance || 0) < NAV_CHAIN_TURN_M) {
-          const nv = buildImmediateNavVoice(next);
-          if (nv && next.maneuver.type !== 'arrive') {
-            v = v.replace(/。$/, '') + '，隨後' + nv.replace(/^請/, '');
-            navStepVoiceState[currentStepIndex + 1] = 'w0'; // 已預告過,不再唸「幾公尺後」;到了路口仍會唸「請左轉」
-          }
-        }
-        if (v) { speakText(v); navStepVoiceState[currentStepIndex] = 'immediate'; }
-      }
       if (window._navTurnView) window._navTurnHoldUntil = Date.now() + NAV_TURN_HOLD_MS; // 轉完再維持平面幾秒才回 3D
       currentStepIndex++;
       if (window._navStats) window._navStats.turns++;
       if (typeof window.earnCoin === 'function') window.earnCoin(2, '✅ 轉彎完成');
-      navStepVoiceState[currentStepIndex] = navStepVoiceState[currentStepIndex] || 'idle';
       if (currentStepIndex >= navSteps.length) {
         _navSession++; // 到達後同樣作廢還在路上的重新規劃
         isNavigating = false;
@@ -4723,7 +4631,7 @@ function _flipCell(cell, from, to) {
         togglePoiLayers(true);
         if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; }
         // isNavigating 已設為 false，之後的 GPS 更新(含漂移)不會再進 checkTurnByTurn，所以只會念這一次
-        speakText('已到達目的地。');
+        speakQueue(['已到達目的地。'], { key: 'arrive', priority: VOICE_PRI.TURN });
         if (typeof window.earnCoin === 'function') window.earnCoin(15, '完成導航');
         (function(){
           const s = window._navStats;
@@ -4753,32 +4661,10 @@ function _flipCell(cell, from, to) {
           const isStraight = t==='continue'||t==='new name'||t==='depart';
           if (!isStraight || (ns.distance||0) < 300) return;
           const road = ns.name || '';
-          const km = (ns.distance / 1000).toFixed(1);
+          const km = (ns.distance / 1000).toFixed(1).replace(/\.0$/, ''); // 1.0 → 1
           const distTxt = ns.distance >= 1000 ? '約' + km + '公里' : '約' + Math.round(ns.distance / 100) * 100 + '公尺'; // 整百
-          setTimeout(()=> speakText('繼續行駛' + (road ? road+'，' : '') + distTxt), 800);
+          setTimeout(()=> speakQueue(['繼續行駛' + (road ? road+'，' : '') + distTxt], { key: 'info', priority: VOICE_PRI.INFO, maxAgeMs: 8000 }), 800);
         })();
-      }
-    } else if (!isDepart) {
-      // 最小間隔保護：兩次轉彎播報至少間隔 8 秒，避免唸完馬上接下一句
-      if (Date.now() - _lastNavAnnounceMs < 8000) return;
-
-      const curState = navStepVoiceState[currentStepIndex] || 'idle';
-      const lastDist = curState === 'idle' ? Infinity : parseInt(curState.slice(1));
-      const active = getActiveThresholds(window.currentSpeedKmh || 50); // [遠→近]
-      const nearTh = active[active.length - 1];
-      const speedMs = Math.max((window.currentSpeedKmh || 50) / 3.6, 1);
-
-      for (let _i = 0; _i < active.length; _i++) {
-        const th = active[_i];
-        if (meters > th) continue;     // 還沒到這個距離
-        if (th >= lastDist) continue;  // 已播報過此距離以上的提示
-        // 仿 OsmAnd：中/遠段播報若距轉彎剩不到 15 秒，跳過（讓 near 來念）
-        if (th > nearTh && meters / speedMs < 15) continue;
-        navStepVoiceState[currentStepIndex] = 'w' + th;
-        const isPrepare = (_i === 0 && active.length > 1);
-        const voiceText = buildNavVoice(step, meters, isPrepare); // 唸實際距離:這段一開始就比門檻近時,門檻值(例如 2 公里)會差很多
-        if (voiceText) { speakText(voiceText); _lastNavAnnounceMs = Date.now(); }
-        break;
       }
     }
   }
@@ -5049,7 +4935,7 @@ function _flipCell(cell, from, to) {
     isRerouting = true;
     _navState = 'rerouting';
 
-    speakText('正在重新規劃路線。');
+    speakQueue(['正在重新規劃路線。'], { key: 'reroute', priority: VOICE_PRI.TURN });
 
     if (rect8) {
       rect8Instruction.innerText = '重新規劃路線中...';
@@ -5063,7 +4949,7 @@ function _flipCell(cell, from, to) {
       if (mySession !== _navSession) return; // 重新規劃期間已退出導航:不要改狀態、不要播報
       _navState = 'navigating';
       if (ok) {
-        speakText('路線已重新規劃。');
+        speakQueue(['路線已重新規劃。'], { key: 'reroute', priority: VOICE_PRI.TURN });
       } else {
         speakText('重新規劃失敗，請手動搜尋目的地');
       }
@@ -5081,14 +4967,14 @@ function _flipCell(cell, from, to) {
   window.testTurnByTurnVoice = function(){
     if (!navSteps.length) {
       // 還沒有規劃路線時,先用假資料測試語音機制本身有沒有作用
-      speakText('前方一百公尺,請左轉,進入測試路');
+      speakText('前方100公尺，請左轉進入測試路。');
       console.log('[轉彎語音測試] 目前沒有規劃中的路線,改用假資料測試語音機制本身');
       return;
     }
-    const step = navSteps[Math.min(1, navSteps.length - 1)]; // 抓第一個真正的轉彎(跳過出發點)
-    const text = maneuverToChinese(step.maneuver);
-    const roadPart = step.name ? ('進入' + step.name) : '';
-    speakText('前方100公尺' + text + roadPart);
+    // 用播報 3.0 的說法念下一個轉彎的接近提醒(不影響導航中的播報狀態)
+    const idx = Math.min(Math.max(currentStepIndex, 1), navSteps.length - 1);
+    const texts = _turnAnnouncer.preview(navSteps, idx, _voiceSpeedOrNull());
+    speakText(texts[1] || texts[0] || '目前沒有要轉彎的路口');
   };
   bindTurnByTurnTestButton();
 
@@ -5528,7 +5414,7 @@ function _flipCell(cell, from, to) {
       navSteps = (route.legs && route.legs[0] && route.legs[0].steps) ? route.legs[0].steps : [];
       currentStepIndex = 0;
       offRouteCount = 0;
-      Object.keys(navStepVoiceState).forEach(k => delete navStepVoiceState[k]);
+      _newNavRouteVersion(); // 新路線：舊路線的轉彎事件與排隊中的提醒作廢
       if (!fromPosition) clearSpeedCameraVoiceState();
       isNavigating = true;
       _navState = 'navigating';
@@ -5559,16 +5445,16 @@ function _flipCell(cell, from, to) {
         const firstStepDistanceMeters = prevStep ? prevStep.distance : null;
         // 以出發距離作為「上次播報」基準，自動跳過比出發點更遠的門檻
         currentStepIndex = firstTurnIndex;
-        navStepVoiceState[firstTurnIndex] = 'w' + (firstStepDistanceMeters || 1200);
+        // 第一句念實際距離，比它遠的提醒階段算念過(播報 3.0)
+        const firstIntro = () => firstStepDistanceMeters != null ? _turnAnnouncer.intro({
+          routeVersion: _navRouteVersion, steps: navSteps, index: firstTurnIndex,
+          meters: firstStepDistanceMeters, speedKmh: _voiceSpeedOrNull(), accuracy: window._lastGpsAccuracy }) : null;
         updateRect8Display(firstStepDistanceMeters);
 
         if (fromPosition) {
           // 重新規劃：只播報下一個轉彎指示
-          if (firstStepDistanceMeters != null) {
-            const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            const initVoice = buildNavVoice(firstStep, initMeters);
-            if (initVoice) speakText(initVoice);
-          }
+          const initVoice = firstIntro();
+          if (initVoice) speakQueue([initVoice], { key: 'turn', priority: VOICE_PRI.TURN, routeVersion: _navRouteVersion });
         } else {
           // 初始導航：依序播報各段
           const startH = Math.floor(durationMin / 60);
@@ -5580,14 +5466,10 @@ function _flipCell(cell, from, to) {
           const durText = '大約需要' + (startH > 0 ? startH + '小時' : '') + startM + '分鐘';
           const etaText = '預計' + etaH + '點' + (etaM < 10 ? '零' : '') + etaM + '分到達';
           const items = ['開始導航', '全程' + distKmInt + '公里', durText, etaText];
-          if (firstStepDistanceMeters != null) {
-            const initMeters = Math.max(10, Math.round(firstStepDistanceMeters / 10) * 10);
-            const initVoice = buildNavVoice(firstStep, initMeters);
-            if (initVoice) items.push(initVoice);
-          } else if (firstText) {
-            items.push(firstText + firstRoadPart);
-          }
-          speakQueue(items);
+          const initVoice = firstIntro();
+          if (initVoice) items.push(initVoice);
+          else if (firstStepDistanceMeters == null && firstText) items.push(firstText + firstRoadPart);
+          speakQueue(items, { key: 'nav-start', priority: VOICE_PRI.TURN, routeVersion: _navRouteVersion });
         }
       } else if (!fromPosition) {
         // 沒有轉彎步驟的初始導航，仍播報全程摘要
@@ -5856,7 +5738,7 @@ function _flipCell(cell, from, to) {
   function checkSpeedCameraVoice(lat, lon, currentSpeedKmh){
     const data = window.speedCameraData;
     if (!data || !data.features) return;
-    const ctx = camContext(lat, lon, currentSpeedKmh);
+    const ctx = camContext(lat, lon, currentSpeedKmh || 0);
     // 只看前方：照相機位置 - 車子位置 > -20 公尺(剛過去一點點的也還算，讓「通過」能播出)
     // 換了一條線(重新規劃路線、導航↔沒導航)：鎖定的照相機不在新的線上就立刻放掉，不等 3 次
     const key = ctx ? (ctx.mode === 'route' ? _camRouteList : _camPath) : null;
@@ -6063,12 +5945,18 @@ function _flipCell(cell, from, to) {
     let _lastRawFix = null;  // 上一個用來算行進方向的原始 GPS 點(移動 8 公尺以上才更新)
     let _flipVotes = 0;      // 連續幾次判斷要掉頭(防止 GPS 雜訊讓畫面突然逆向)
     let _headingTrusted = false; // 車頭方向是否已被可靠的行進方向確認過(剛開始或 GPS 跳點後還沒有)
+    const _speedValidator = window._speedValidator = NavVoice.createSpeedValidator();
     const onGpsPosition = (pos) => {
       if (window._kbDriving) return; // 試開模式(鍵盤 WASD / 手機觸控)中暫停真實 GPS，避免兩邊搶位置
       const now = Date.now();
       const currentLat = pos.coords.latitude;
       const currentLon = pos.coords.longitude;
       const currentSpeed = pos.coords.speed || 0;
+      // 播報 3.0：當前速度先驗證(跳點、缺值、過期)，畫面與語音都用這個值，不再各算各的
+      const _sv = _speedValidator.update({ lat: currentLat, lon: currentLon, t: now, speedMs: pos.coords.speed, acc: pos.coords.accuracy });
+      window.currentSpeedValid = _sv.valid;
+      window.currentSpeedKmh = _sv.valid ? _sv.kmh : 0;
+      window._lastGpsAccuracy = pos.coords.accuracy;
 
       if (!startTime) {
         startTime = now;
@@ -6202,8 +6090,7 @@ function _flipCell(cell, from, to) {
       }
 
       const elapsedMs = now - startTime;
-      const speedKmh = currentSpeed * 3.6;
-      window.currentSpeedKmh = speedKmh; // 讓測試面板可以讀取目前真實車速
+      const speedKmh = window.currentSpeedKmh; // 已驗證的當前速度(無效時為 0)
       window.currentLat = currentLat; // 讓搜尋導航功能可以取得目前位置
       window.currentLon = currentLon;
 
@@ -6214,7 +6101,7 @@ function _flipCell(cell, from, to) {
       checkCctvProximity(currentLat, currentLon);
 
       // 測速照相語音播報(接近100公尺預告、超速警示、通過播報)
-      checkSpeedCameraVoice(currentLat, currentLon, speedKmh);
+      checkSpeedCameraVoice(currentLat, currentLon, window.currentSpeedValid ? speedKmh : null);
 
     };
     window._simulateGpsFix = onGpsPosition;
@@ -8517,6 +8404,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
     var kmh = Math.round(speed*3.6);
     window.currentSpeedKmh = kmh;
+    window.currentSpeedValid = true; // 試開模式的速度是程式算的，一定有效
 
     // HUD 速度
     if(kbSpeedEl) kbSpeedEl.textContent = kmh;

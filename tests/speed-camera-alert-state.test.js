@@ -25,6 +25,7 @@ function createHarness(features) {
   function playSpeedCameraPassBeep() { return Promise.resolve(); }
   const context = {
     window: {
+      NavVoice: require('../nav-voice.js'), // 播報 3.0：執法分類、優先順序
       speedCameraData: { features }, NavTTS: { preload: t => preloaded.push(...t) },
       // 沒導航模式：前方的路 = 從車子往北的直線
       _roadPathAhead: (lng, lat, _b, maxM) => [[lng, lat], [lng, lat + maxM / 110540]],
@@ -267,4 +268,47 @@ test('current speed is always spoken after the intro; over the limit adds 您已
   const over = createHarness([camera('C', 1, 100)]);
   over.run(0, 0.02, 112.4);
   assert.deepEqual(over.texts(), ['1公里後有固定測速照相，限速100公里。|當前速度112公里|您已超速']);
+});
+
+// ── 播報 3.0 ─────────────────────────────────────────────────────────────
+test('播報 3.0：當前速度無效時不念速度也不判斷超速(不念虛構數字)', () => {
+  const h = createHarness([camera('A', 1, 60)]);
+  h.run(0, -0.5, 50);  // 1.5 公里外：速度正常，找到前方道路與照相機
+  h.run(0, 0.02, null); // 980 公尺：速度資料無效
+  assert.deepEqual(h.texts(), ['1公里後有固定測速照相，限速60公里。']);
+});
+
+test('播報 3.0：區間測速的點不說「您已通過」，改說請保持速限', () => {
+  const h = createHarness([camera('Z', 1, 70, '南北雙向(區間測速)')]);
+  driveThrough(h, 300, -60, 60, 10);
+  assert.equal(h.texts().filter(t => /您已通過/.test(t)).length, 0);
+  assert.ok(h.texts().includes('<chime>|區間測速路段，請保持速限'));
+});
+
+test('播報 3.0：區間測速寫在地址欄、科技執法、兼闖紅燈都分得出來', () => {
+  const sec = createHarness([Object.assign(camera('S', 1, 40), { properties: { limit: 40, addr: '臺9戊線3.94K至9.92K區間測速', dir: '雙向測速科技執法' } })]);
+  sec.run(0, 0.02, 30);
+  assert.match(sec.texts()[0], /^1公里後有區間測速照相，限速40公里。/);
+  const tech = createHarness([Object.assign(camera('T', 1, 90), { properties: { limit: 90, addr: '國道五號南向16.9公里(雪山隧道科技執法)' } })]);
+  tech.run(0, 0.02, 80);
+  assert.match(tech.texts()[0], /^1公里後有科技執法測速照相，限速90公里。/);
+  const red = createHarness([camera('R', 1, 50, '南北雙向兼闖紅燈')]);
+  red.run(0, 0.02, 40);
+  assert.match(red.texts()[0], /^1公里後有固定測速照相兼闖紅燈照相，限速50公里。/);
+});
+
+test('播報 3.0：測速播報帶執法優先順序與事件代號(同一提醒不會被佇列重播)', () => {
+  const h = createHarness([camera('A', 1, 60)]);
+  driveThrough(h, 1000, 800, 50);
+  assert.ok(h.events.every(e => e.opts.priority === 2));
+  const ids = h.events.map(e => e.opts.eventId);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('播報 3.0：倒數距離被打斷不重播(retries 0)；首次提醒可以重播一次', () => {
+  const h = createHarness([camera('A', 1, 60)]);
+  driveThrough(h, 1000, 800, 50);
+  const stage = h.events.find(e => e.text === '900公尺');
+  assert.equal(stage.opts.retries, 0);
+  assert.notEqual(h.events[0].opts.retries, 0);
 });

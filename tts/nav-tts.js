@@ -42,13 +42,22 @@
   // ── system：瀏覽器內建語音(與原本行為相同，8 秒保險逾時) ─────────────────
   var SystemEngine = {
     isReady: function () { return 'speechSynthesis' in window; },
+    // 回傳 { ok, started, reason }：播報 3.0 的語音佇列用來區分「真的念完」與「失敗/沒開始」
     speak: function (text) {
       return new Promise(function (resolve) {
-        if (!('speechSynthesis' in window)) { resolve(); return; }
+        if (!('speechSynthesis' in window)) { resolve({ ok: false, reason: '瀏覽器不支援系統語音' }); return; }
         var u = hooks.makeUtterance(text);
-        var t = setTimeout(done, 8000);
-        function done() { clearTimeout(t); resolve(); }
-        u.onend = done; u.onerror = done;
+        var started = false;
+        var t = setTimeout(function () {
+          // 8 秒保險：有開始念就當念完(有些瀏覽器不觸發 onend)；根本沒開始 = 失敗(例如 iOS 沒在觸控後解鎖)
+          done(started ? { ok: true, started: true, reason: 'onend 逾時' } : { ok: false, started: false, reason: '系統語音 8 秒內沒開始' });
+        }, 8000);
+        function done(r) { clearTimeout(t); resolve(r); }
+        u.onstart = function () { started = true; };
+        u.onend = function () { done({ ok: true, started: true }); };
+        u.onerror = function (e) { done({ ok: false, started: started, reason: '系統語音錯誤：' + ((e && e.error) || 'unknown') }); };
+        // 卡住的系統語音佇列先清掉(iOS 偶爾會卡著不念)
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
       });
     },
