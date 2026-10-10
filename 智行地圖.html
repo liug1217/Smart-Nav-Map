@@ -7652,6 +7652,18 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         'circle-opacity':0.9,'circle-stroke-width':2,'circle-stroke-color':'#fff'
       }
     });
+    // 圓圈中間顯示有幾支測速照相
+    m.addLayer({
+      id:'speed-cluster-count',type:'symbol',source:'speed-cam',
+      filter:['has','point_count'],
+      layout:{
+        'text-field':['get','point_count_abbreviated'],
+        'text-font':['Noto Sans Bold'],
+        'text-size':['step',['get','point_count'],12,10,14,50,16],
+        'text-allow-overlap':true,'text-ignore-placement':true
+      },
+      paint:{ 'text-color':'#fff' }
+    });
     m.addLayer({
       id:'speed-point',type:'symbol',source:'speed-cam',
       filter:['!',['has','point_count']],
