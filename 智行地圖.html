@@ -2693,14 +2693,17 @@ function _flipCell(cell, from, to) {
 
   // ===== 🔊 測速照相語音播報 =====
   // 流程：進入 1 公里 → 「1公里後有固定測速照相，限速XX公里。當前速度XX公里」(超速再加「您已超速」；區間測速念「區間測速照相」)
+  //       → 每跨進一個 100 公尺整數倍區間念一次「900公尺」…「100公尺」(只念整百，不念 960/850 這種實際距離)
   //       → 抵達測速照相位置：專用提示音 → 「您已通過」
-  //       (以前每 100 公尺倒數一次「900公尺」…「100公尺」，太吵，拿掉了)
+  //       「您已超速」同一支測速照相只念一次(首次提醒時已超速就跟在首次提醒後；之後才超速就跟在下一個距離後)
   const SPEED_CAM_WARN_KM = 1.0;    // 1 公里：首次完整語音
   const SPEED_CAM_PRELOAD_KM = 1.6; // 進入 1.6 公里先在背景合成首次提醒，播報時不用等
   const SPEED_CAM_PASS_KM = 0.03;   // 30 公尺內：視為抵達測速照相位置
+  const SPEED_CAM_STAGES = [900,800,700,600,500,400,300,200,100];
   // 種類：資料的方向欄寫「區間測速」的是區間測速，其他都是固定式
   function speedCamType(p) { return /區間/.test((p && p.dir) || '') ? '區間' : '固定'; }
-  // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」
+  const SPEED_CAM_STAGE_MAX_AGE_MS = 3000; // 距離播報排隊超過 3 秒就過期不念
+  // 當前速度：只在首次提醒念(不管有沒有超速)，超速時後面接「您已超速」；距離倒數只念距離
   function speedCamSpeedText(speedKmh) { return '當前速度' + Math.round(speedKmh) + '公里'; }
   // 僅存在於本次導航。每支測速照相依穩定 cameraId 個別保存已播報階段。
   const speedCameraVoiceState = new Map();
@@ -2719,7 +2722,7 @@ function _flipCell(cell, from, to) {
   function getSpeedCameraState(cameraId) {
     let state = speedCameraVoiceState.get(cameraId);
     if (!state) {
-      state = { announced: false, passed: false, minMeters: Infinity, preloaded: false, coinHinted: false };
+      state = { announced: false, passed: false, stages: new Set(), minMeters: Infinity, preloaded: false };
       speedCameraVoiceState.set(cameraId, state);
     }
     return state;
@@ -2777,16 +2780,24 @@ function _flipCell(cell, from, to) {
     // 首次進入 1km 範圍只完整播報一次，速限取該照相機的實際資料。
     if (!state.announced) {
       state.announced = true;
+      // GPS 第一次更新就已在較近區間：目前與更遠的整百距離都算念過，不補念舊距離
+      SPEED_CAM_STAGES.forEach(stage => { if (distanceMeters <= stage) state.stages.add(stage); });
+      // 首次提醒已經念了「300公尺後」，300 這個距離就算念過，不會馬上又念一次「300公尺」
+      if (distanceMeters <= 900) { const said = speedCamIntroMeters(distanceMeters); SPEED_CAM_STAGES.forEach(s => { if (s >= said) state.stages.add(s); }); }
       // 「1公里後有固定測速照相，限速100公里。」→「當前速度112公里」→(超速)「您已超速」
       speakQueue([speedCamIntroText(p, distanceMeters), speedCamSpeedText(currentSpeedKmh), overSpeed ? '您已超速' : null],
                  { key: 'speedcam-intro:' + cameraId });
       return;
     }
 
-    // 不倒數距離；剩 100 公尺內提示一次守法金幣
-    if (distanceMeters <= 100 && !state.coinHinted) {
-      state.coinHinted = true;
-      if (typeof window._hintCoinCam === 'function') window._hintCoinCam();
+    // 跨進新的整百區間才念，且只念「目前所在」那一個(GPS 一次跳過好幾個區間時，較遠的直接標記念過)
+    const crossed = SPEED_CAM_STAGES.filter(stage => distanceMeters <= stage && !state.stages.has(stage));
+    const stage = crossed[crossed.length - 1];
+    if (stage != null) {
+      SPEED_CAM_STAGES.forEach(s => { if (s >= stage) state.stages.add(s); });
+      // 距離倒數只念距離(不念當前速度、不念您已超速)：句子短，高速時 100 公尺一段也念得完
+      speakQueue([stage + '公尺'], { key, maxAgeMs: SPEED_CAM_STAGE_MAX_AGE_MS });
+      if (stage <= 100 && typeof window._hintCoinCam === 'function') window._hintCoinCam();
     }
   }
 
@@ -3655,7 +3666,7 @@ function _flipCell(cell, from, to) {
   });
   NavTTS.init();
   // 固定會用到的播報先在背景合成好(測速照相距離、通過、超速、抵達)，播報時不用等
-  NavTTS.preload(['您已通過', '您已超速', '已到達目的地。']);
+  NavTTS.preload(SPEED_CAM_STAGES.map(m => m + '公尺').concat(['您已通過', '您已超速', '已到達目的地。']));
 
   // 頁面載入後背景預載所有錄音音檔，消除首次播放的載入延遲
   VP.prefetch(['1','2','3','4','5','6','7','8','9',
