@@ -616,11 +616,12 @@ body.searchOpen .searchResultsList{
 .psLogo.tall{ width:36px; height:52px; border-radius:12px; margin:0 8px; box-sizing:border-box; border:0.5px solid #d9d9d9; font-size:42px; } /* 直立長方形(紅綠燈 emoji)，左右補空讓文字對齊 */
 .psTitleBox{ flex:1; min-width:0; }
 .psName{ font-size:19px; font-weight:800; color:#000; line-height:1.25; }
-.psKind{ font-size:13px; color:#555; margin-top:2px; }
-.psClose{ border:none; background:rgba(0,0,0,0.06); border-radius:50%; width:32px; height:32px; font-size:15px; cursor:pointer; flex-shrink:0; }
-.psRating{ display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:#333; cursor:pointer; }
+.psKind{ font-size:13px; color:#000; margin-top:2px; }
+.psClose{ border:none; background:rgba(0,0,0,0.06); color:#000; border-radius:50%; width:32px; height:32px; font-size:15px; cursor:pointer; flex-shrink:0; }
+.psRating{ display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:#000; cursor:pointer; }
 .psRating .snmStars{ font-size:15px; }
-.psAddr{ font-size:13px; color:#555; margin-top:8px; line-height:1.45; }
+.psRating .snmStars .off{ color:#000; } /* 卡片上沒評分的空星星也是純黑 */
+.psAddr{ font-size:13px; color:#000; margin-top:8px; line-height:1.45; }
 .psActions{ display:flex; gap:8px; margin:14px 0 4px; overflow-x:auto; scrollbar-width:none; }
 .psActions::-webkit-scrollbar{ display:none; }
 .psActions button{ flex:1 0 auto; border:1px solid #DADCE0; background:rgba(255,255,255,0.9); color:#000; border-radius:20px; padding:8px 14px;
