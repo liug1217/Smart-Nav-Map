@@ -5298,8 +5298,6 @@ function _flipCell(cell, from, to) {
   function rpHide() {
     routePanel.classList.remove('open');
     document.body.classList.remove('choosingRoute');
-    if (!isNavigating) togglePoiLayers(true);
-    rpToggleCircles(true);
     const src = map.getSource(RP_SRC);
     if (src) src.setData({ type: 'FeatureCollection', features: [] });
     _routeChoice = null;
@@ -5333,10 +5331,8 @@ function _flipCell(cell, from, to) {
     rpPaintModes();
     _navState = 'idle';
     if (window._snmClosePlace) window._snmClosePlace(); // 地點卡片收起來
-    // 選路線時只留路線：綠色道路底圖、店家圖示先收起來(跟導航中一樣)
+    // 選路線時：綠色道路底圖先收起來(不然看不出選中的路線)；店家圖示、地名、群集照常顯示、照常可以點
     document.body.classList.add('choosingRoute');
-    togglePoiLayers(false);
-    rpToggleCircles(false);
     destPanel.style.display = 'none';
     const toName = (selectedDest && selectedDest.name) || '目的地';
     rpTitle.textContent = (opts.fromName ? opts.fromName + ' → ' + toName : '到 ' + toName) + (routes.length > 1 ? '：' + routes.length + ' 條路線' : '');
@@ -9936,7 +9932,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var d = distTxt(p.lat, p.lng);
     tb.appendChild(el('div', 'psKind', [p.kind !== p.name ? p.kind : '', d ? '距離 ' + d : ''].filter(Boolean).join(' · '))); // 名稱就是品牌名(沒分店名)時不重複
     var rating = el('div', 'psRating', '💬 載入評分…');
-    tb.appendChild(rating);
+    if (!p.noSocial) tb.appendChild(rating);
     head.appendChild(tb);
     var x = el('button', 'psClose', '✕'); x.setAttribute('aria-label', '關閉'); x.onclick = close;
     head.appendChild(x);
@@ -9970,7 +9966,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var cm = window._snmCm;
     var bWrite = el('button', null, '✏️ 寫留言');
     bWrite.onclick = function () { if (cm) cm.openComposer(poi, function () { loadPosts(); }); };
-    acts.appendChild(bWrite);
+    if (!p.noSocial) acts.appendChild(bWrite);
     if (p.layer && !p.noReport && window._snmReportOpen) {
       var bRpt = el('button', null, '⚠️ 回報');
       bRpt.onclick = function () { window._snmReportOpen(poi); };
@@ -9984,13 +9980,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var phSec = el('div', 'psSec'); phSec.style.display = 'none';
     phSec.appendChild(el('div', 'psSecT', '照片'));
     var phRow = el('div', 'psPhotos'); phSec.appendChild(phRow);
-    body.appendChild(phSec);
+    if (!p.noSocial) body.appendChild(phSec);
     var postSec = el('div', 'psSec');
     var postT = el('div', 'psSecT'); postT.appendChild(el('span', null, '評論'));
     var all = el('button', null, '查看全部'); all.onclick = function () { if (cm) cm.openList(poi, loadPosts); }; postT.appendChild(all);
     postSec.appendChild(postT);
     var posts = el('div'); postSec.appendChild(posts);
-    body.appendChild(postSec);
+    if (!p.noSocial) body.appendChild(postSec);
 
     function loadPosts() {
       if (!cm) { rating.textContent = ''; posts.appendChild(el('div', 'psEmpty', '留言功能載入中')); return; }
@@ -10050,11 +10046,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         posts.innerHTML = ''; posts.appendChild(el('div', 'psEmpty', '留言載入失敗，請檢查網路'));
       });
     }
-    loadPosts();
+    if (!p.noSocial) loadPosts();
   }
 
   window._snmOpenPlace = function (p) {
-    if (document.body.classList.contains('navigating')) return; // 導航中不跳卡片
     if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
     document.querySelectorAll('.maplibregl-popup').forEach(function (e) { e.remove(); });
     runOnClose(); // 換到另一個地點：前一張卡片的收尾(停影像)
@@ -10101,9 +10096,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var h = sheet.getBoundingClientRect().height;
     setH(h < fullH() - 20 ? fullH() : peekH());
   });
-  // 開始導航時收起來
-  new MutationObserver(function () { if (document.body.classList.contains('navigating')) close(); })
-    .observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  // 開始導航「那一刻」收起來；導航中再點開的卡片照常顯示(以前 body 任何 class 變化都會把卡片關掉，導航中等於點不開)
+  var _wasNav = document.body.classList.contains('navigating');
+  new MutationObserver(function () {
+    var nav = document.body.classList.contains('navigating');
+    if (nav && !_wasNav) close();
+    _wasNav = nav;
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 })();
 </script>
 
@@ -10777,11 +10776,39 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     try { moving.forEach(function (id) { m.moveLayer(id, anchor); }); } catch (e) {}
   }
 
+  // 路況顏色標記(跟路線顏色一樣)：圓角方塊填滿該路況顏色，畫一條白色道路
+  function trafficLogo(color) {
+    var c = snmRoundTile(function (x) {
+      x.strokeStyle = '#FFFFFF'; x.lineCap = 'round'; x.lineWidth = 7;
+      x.beginPath(); x.moveTo(18, 48); x.bezierCurveTo(26, 34, 34, 30, 42, 12); x.stroke();
+    }, 60, color || '#16E098');
+    return c.toDataURL('image/png');
+  }
   function showTrafficPopup(e) {
     var hit = shownTrafficFeature(e);
     if (!hit) return;
     var p = hit.properties;
     var OFFICIAL_SRC = { freeway: '高速公路局即時路況', taipei: '臺北市交通局即時路況', taoyuan: '桃園市交通局即時路況' };
+    // 跟監視器、全家一樣用地點卡片(從下面拉上來)；不是店家，所以不放評分、留言、回報
+    if (window._snmOpenPlace) {
+      var info;
+      if (OFFICIAL_SRC[p.source]) {
+        info = [
+          p.sectionName ? '路段：' + p.sectionName : '',
+          '目前平均車速：' + p.averageSpeed + ' km/h' + (p.baselineSpeed && p.baselineSpeed !== 'null' ? '（速限 ' + p.baselineSpeed + '）' : ''),
+          '資料來源：' + OFFICIAL_SRC[p.source] + '，每分鐘更新'
+        ];
+      } else {
+        var srcTxt0 = { learned: '實際車速學到的', limit: '依速限', 'class': '依道路等級推估' }[p.baselineSource] || '';
+        var base0 = (p.baselineSpeed == null || p.baselineSpeed === 'null')
+          ? '學習中（資料累積後自動判斷）'
+          : p.baselineSpeed + ' km/h' + (srcTxt0 ? '（' + srcTxt0 + '）' : '');
+        info = ['目前車速：' + p.averageSpeed + ' km/h', '這段路順暢時：' + base0, '樣本數：' + p.sampleCount + '（' + p.uniqueContributors + ' 人）'];
+      }
+      window._snmOpenPlace({ layer: 'traffic', name: p.label || '路況', kind: p.sectionName || '即時路況', logo: trafficLogo(p.color),
+        lat: e.lngLat.lat, lng: e.lngLat.lng, info: info.filter(Boolean), noSocial: true, noReport: true });
+      return;
+    }
     if (OFFICIAL_SRC[p.source]) { // 官方即時路況(國道、臺北市區，每分鐘更新)
       new maplibregl.Popup({ offset: 12, closeButton: true })
         .setLngLat(e.lngLat)
