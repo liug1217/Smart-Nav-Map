@@ -616,7 +616,7 @@ body.searchOpen .searchResultsList{
   display:flex; align-items:center; justify-content:center; font-size:28px; overflow:hidden; }
 .psLogo img{ width:100%; height:100%; object-fit:contain; }
 .psLogo.circle{ border-radius:50%; }                                                  /* 圓形圖案(限速牌) */
-.psLogo.tall{ width:36px; height:52px; border-radius:12px; margin:0 8px; box-sizing:border-box; border:0.5px solid #d9d9d9; font-size:42px; } /* 直立長方形(紅綠燈 emoji)，左右補空讓文字對齊 */
+.psLogo.tall{ width:36px; height:52px; margin:0 8px; font-size:42px; background:transparent; box-shadow:none; border:none; border-radius:0; } /* 紅綠燈 emoji：不加白底和框，左右補空讓文字對齊 */
 .psTitleBox{ flex:1; min-width:0; }
 .psName{ font-size:19px; font-weight:800; color:#000; line-height:1.25; }
 .psKind{ font-size:13px; color:#555; margin-top:2px; }
@@ -7882,16 +7882,12 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function initSignals(m){
     if(!window.SIGNAL_DATA) return;
     if(m.getSource(SOURCE)) return;
-    // 直立圓角長方形(40×60，畫面上 20×30，跟全家 30px 一樣高)、白底、1px 細灰框，裡面 🚦
+    // 只有 🚦 本身(40×60，畫面上 20×30)，不加白底和框
     if(!m.hasImage('signal-icon')){
       var SK=SNM_ICON_K, sw=40, sh=60, sc=document.createElement('canvas'); sc.width=Math.round(sw*SK); sc.height=Math.round(sh*SK);
       var sx=sc.getContext('2d'); sx.scale(SK,SK); // 依螢幕解析度畫
-      snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.fillStyle='#FFFFFF'; sx.fill();
-      sx.save(); snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.clip();
       sx.font='50px serif'; sx.textAlign='center'; sx.textBaseline='middle';
       sx.fillText('🚦', sw/2, sh/2+3); // 紅綠燈用原本的 emoji
-      sx.restore();
-      snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.lineWidth=1; sx.strokeStyle='#d9d9d9'; sx.stroke();
       m.addImage('signal-icon', sx.getImageData(0,0,sc.width,sc.height), { pixelRatio: 2*SK });
     }
 
