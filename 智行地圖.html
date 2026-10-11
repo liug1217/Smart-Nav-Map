@@ -7652,13 +7652,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       var ox = 41.5, oy = 15, r = 14.5;
       c.beginPath(); c.arc(ox, oy, r - 0.5, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill();
       c.beginPath(); c.arc(ox, oy, r - 2.5, 0, Math.PI * 2); c.strokeStyle = '#FF0000'; c.lineWidth = 3.4; c.stroke();
-      c.beginPath(); c.arc(ox, oy, r - 0.5, 0, Math.PI * 2); c.strokeStyle = '#cfcfcf'; c.lineWidth = 1; c.stroke();
+      // 外框跟全家等店家圖示一樣：#d9d9d9、畫面上 0.5px(這張圖的座標是畫面像素，所以 lineWidth 0.5)；外緣位置不變
+      c.beginPath(); c.arc(ox, oy, r - 0.25, 0, Math.PI * 2); c.strokeStyle = '#d9d9d9'; c.lineWidth = 0.5; c.stroke();
       c.font = '800 ' + (lim >= 100 ? 10.5 : 12.8) + 'px "SF Pro Display",Arial,sans-serif';
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText(String(lim), ox, oy + 0.8);
     
       // ── 速限牌下面：白色圓形、紅色「固」(固定式)／「區」(區間測速) ──
       var gy = 46.5, gr = r - 0.5; // 跟上面紅框速限牌一樣大(圖高 62，剛好放得下)
-      c.beginPath(); c.arc(ox, gy, gr, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); c.lineWidth = 1; c.strokeStyle = '#cfcfcf'; c.stroke();
+      c.beginPath(); c.arc(ox, gy, gr, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill();
+      c.beginPath(); c.arc(ox, gy, gr + 0.25, 0, Math.PI * 2); c.lineWidth = 0.5; c.strokeStyle = '#d9d9d9'; c.stroke(); // 外框跟全家一樣，外緣位置不變
       c.font = '900 16px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif';
       c.fillStyle = '#E00000'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(zone ? '區' : '固', ox, gy + 0.8);
       return cv;
