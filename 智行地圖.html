@@ -6271,13 +6271,19 @@ map.on('load', function() {
       });
 
       // 北方指針：畫在文字之後，疊到「北」字時箭頭會蓋在文字前面，而不是被文字蓋住
-      g.beginPath();
-      g.moveTo(C, C - CIRCLE_R - 28);
-      g.lineTo(C - 9, C - CIRCLE_R - 14);
-      g.lineTo(C + 9, C - CIRCLE_R - 14);
-      g.closePath();
-      g.fillStyle = '#E53935';
-      g.fill();
+      // 箭頭形狀跟播放器的播放鍵同一個實心圓角三角形(snmIco 'play')，轉成朝上指北；顏色維持紅色
+      {
+        const PLAY = SNM_ICO_SOLID.play.match(/d="([^"]+)"/)[1]; // 256 格，三角形範圍 x 64~240、y 24~232，朝右
+        const sc = 20 / 208;                                       // 寬 20(原本尖角三角形寬 18、高 14)
+        g.save();
+        g.translate(C, C - CIRCLE_R - 21);                         // 跟原本箭頭同一個位置
+        g.rotate(-Math.PI / 2);                                    // 朝右 → 朝上
+        g.scale(sc, sc);
+        g.translate(-152, -128);                                   // 以三角形中心為基準
+        g.fillStyle = '#E53935';
+        g.fill(new Path2D(PLAY));
+        g.restore();
+      }
 
       if (!map.hasImage('compass-icon')) map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
       map.addLayer({
