@@ -2103,9 +2103,14 @@ const SNM_ICO_COLOR = { coins: '#F5B400', trophy: '#F5B400', crown: '#F5B400', g
   'party-popper': '#FF9500', octagon: '#FF3B30' }; // 回報的三角形(triangle-alert)本身就是黃底黑字，不用上色
 // color：不給 = 跟文字同色(currentColor)
 // 音樂播放器：暫停、上一首、下一首(Phosphor fill，跟之前導航按鈕用的 play 同一套實心圓角圖示)
-SNM_ICO_SOLID.pause = '<path d="M216,48V208a16,16,0,0,1-16,16H160a16,16,0,0,1-16-16V48a16,16,0,0,1,16-16h40A16,16,0,0,1,216,48ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Z"/>';
-SNM_ICO_SOLID['skip-back'] = '<path d="M208,47.88V208.12a16,16,0,0,1-24.43,13.43L64,146.77V216a8,8,0,0,1-16,0V40a8,8,0,0,1,16,0v69.23L183.57,34.45A15.95,15.95,0,0,1,208,47.88Z"/>';
-SNM_ICO_SOLID['skip-forward'] = '<path d="M208,40V216a8,8,0,0,1-16,0V146.77L72.43,221.55A15.95,15.95,0,0,1,48,208.12V47.88A15.95,15.95,0,0,1,72.43,34.45L192,109.23V40a8,8,0,0,1,16,0Z"/>';
+// 粗細統一：三角形都用播放鍵那個圓角三角形，直條都是差不多的寬度、全圓角(原本 Phosphor 的上一首/下一首直條很細、暫停很粗)
+(function () {
+  const PLAY = SNM_ICO_SOLID.play.match(/d="([^"]+)"/)[1];
+  const fwd = '<path transform="translate(-20 25.6) scale(0.8)" d="' + PLAY + '"/><rect x="180" y="44" width="48" height="168" rx="24"/>';
+  SNM_ICO_SOLID['skip-forward'] = fwd;
+  SNM_ICO_SOLID['skip-back'] = '<g transform="matrix(-1 0 0 1 256 0)">' + fwd + '</g>'; // 左右鏡像
+  SNM_ICO_SOLID.pause = '<rect x="56" y="36" width="56" height="184" rx="28"/><rect x="144" y="36" width="56" height="184" rx="28"/>';
+})();
 // 正向的導航箭頭：實心導航箭頭本來朝左上 45 度，轉正成朝上
 SNM_ICO_SOLID['navigation-up'] = '<g transform="rotate(45 128 128)">' + SNM_ICO_SOLID.navigation + '</g>';
 // 路線：起點、終點兩個圓，中間一條彎曲的路(Lucide route)
@@ -3374,13 +3379,35 @@ function _flipCell(cell, from, to) {
   let _drawerOpen = false;
   let _expandedH = 0;
 
+  // 卡片最高：螢幕頂端(扣掉瀏海/狀態列的安全區域)再往下 12px。以前直接用「內容有多高就多高」，
+  // 矮的手機(例如高 667)會拉到 853，上緣跑出螢幕外
+  let _safeTopProbe = null;
+  function _maxCardH() {
+    if (!_safeTopProbe) {
+      _safeTopProbe = document.createElement('div');
+      _safeTopProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
+      document.body.appendChild(_safeTopProbe);
+    }
+    const sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
+    return window.innerHeight - _safeTopProbe.offsetHeight - 12 - (8 + sab); // 8 = 卡片離底部的距離
+  }
   function _measureExpanded() {
+    _voiceDrawer.style.maxHeight = ''; _voiceDrawer.style.overflowY = '';
     _voiceDrawer.style.visibility = 'hidden';
     _voiceDrawer.style.display = 'block';
     const dh = _voiceDrawer.offsetHeight;
     _voiceDrawer.style.display = 'none';
     _voiceDrawer.style.visibility = '';
-    return RECT1_COLLAPSED + dh + 8;
+    const full = RECT1_COLLAPSED + dh + 8;
+    const cap = Math.max(RECT1_COLLAPSED + 120, _maxCardH());
+    if (full > cap) {
+      // 放不下：語音設定改成在卡片裡上下捲動
+      _voiceDrawer.style.maxHeight = (cap - RECT1_COLLAPSED - 8) + 'px';
+      _voiceDrawer.style.overflowY = 'auto';
+      _voiceDrawer.style.overscrollBehavior = 'contain';
+      _voiceDrawer.style.webkitOverflowScrolling = 'touch';
+    }
+    return Math.min(full, cap);
   }
 
   function _openNavPanel() {
@@ -3418,6 +3445,9 @@ function _flipCell(cell, from, to) {
       _moved = false;
       _tgtIsBtn = !!e.target.closest('button, input, select, a, label, .pttModes, .pttMembers');
       _allowNative = !!e.target.closest('input, select, textarea, #voiceList, .pttChatList'); // 這些要能拖滑桿、捲清單
+      if (_drawerOpen && e.target.closest('#voiceDrawer') && _voiceDrawer.scrollHeight > _voiceDrawer.clientHeight + 1) {
+        _allowNative = true; _tgtIsBtn = true; // 語音設定放不下、可以捲動
+      }
       if (_tgtIsBtn) return;
       _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || RECT1_COMPACT);
       if (!_drawerOpen) {
@@ -7076,8 +7106,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var prevBtn  = document.getElementById('radioPrev');
   var nextBtn  = document.getElementById('radioNext');
   // 圖示：沿用之前導航按鈕的實心圓角播放三角形(snmIco 'play')，暫停/上一首/下一首用同一套，純黑
-  if (prevBtn) prevBtn.innerHTML = snmIco('skip-back', '18');
-  if (nextBtn) nextBtn.innerHTML = snmIco('skip-forward', '18');
+  if (prevBtn) prevBtn.innerHTML = snmIco('skip-back', '20');
+  if (nextBtn) nextBtn.innerHTML = snmIco('skip-forward', '20');
   if (playBtn) {
     playBtn.querySelector('.play-icon').innerHTML = snmIco('play', '22');
     playBtn.querySelector('.pause-icon').innerHTML = snmIco('pause', '22');
