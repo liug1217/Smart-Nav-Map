@@ -24,7 +24,7 @@ test('市區一般路口：遠距離預告 → 接近提醒 → 實際指令「�
   assert.deepEqual(said.map(s => s.phase), ['far', 'near0', 'now']);
   assert.equal(said[0].text, '前方300公尺，請右轉進入中山路。');
   assert.equal(said[1].text, '前方100公尺，請右轉進入中山路。');
-  assert.equal(said[2].text, '請右轉。'); // 實際指令：不加「前方」、不念距離
+  assert.equal(said[2].text, '請右轉進入中山路。'); // 實際指令：不加「前方」、不念距離，有路名就念
   assert.equal(said[2].priority, NV.PRI.CRITICAL);
 });
 
@@ -142,7 +142,7 @@ test('開始導航的第一句念實際距離，比它遠的階段不再念', ()
   assert.equal(first, '前方300公尺，請左轉進入忠孝東路。');
   const rest = drive(ann, steps, 1, 240, 0, { speed: 40 });
   assert.deepEqual(rest.map(s => s.phase), ['near0', 'now']);
-  assert.equal(rest[1].text, '請左轉。');
+  assert.equal(rest[1].text, '請左轉進入忠孝東路。');
 });
 
 test('沿同一條路直走/改路名不播報', () => {

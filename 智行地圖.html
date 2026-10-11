@@ -5331,7 +5331,7 @@ function _flipCell(cell, from, to) {
     rpPaintModes();
     _navState = 'idle';
     if (window._snmClosePlace) window._snmClosePlace(); // 地點卡片收起來
-    // 選路線時：綠色道路底圖先收起來(不然看不出選中的路線)；店家圖示、地名、群集照常顯示、照常可以點
+    // 選路線時：地圖跟平常一模一樣(綠色道路、路況、店家、地名、群集都照常顯示、照常可以點)
     document.body.classList.add('choosingRoute');
     destPanel.style.display = 'none';
     const toName = (selectedDest && selectedDest.name) || '目的地';
@@ -10719,7 +10719,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     if (!m) return;
     // 導航中、選路線時都把綠色道路底圖藏起來：不然選中的綠色路線跟所有道路混在一起看不出來
-    var roadsVis   = (_trafficOn && !isNavigating() && !document.body.classList.contains('choosingRoute')) ? 'visible' : 'none';
+    var roadsVis   = (_trafficOn && !isNavigating()) ? 'visible' : 'none'; // 規劃路線時跟平常一樣顯示綠色道路和路況
     var trafficVis = _trafficOn ? 'visible' : 'none';
     TRAFFIC_LAYERS.forEach(function (id) {
       if (!m.getLayer(id)) return;

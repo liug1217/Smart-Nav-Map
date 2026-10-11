@@ -266,8 +266,8 @@
       if (t === 'arrive') return phase === 'far' || phase === 'now' ? null : '前方' + distText(meters) + '到達目的地。';
       if (modOf(step) === 'straight' && phase === 'far') return null; // 路口直行：只在接近時提醒一次
       if (phase === 'now') {
-        // 實際指令：「請右轉」，不加「前方」、不念距離；前面都沒念過才加路名
-        var nowTxt = '請' + (e.spoken ? act : withRoad(step, act));
+        // 實際指令：「請左轉進入XX路」(有路名就念)，不加「前方」、不念距離
+        var nowTxt = '請' + withRoad(step, act);
         return nowTxt + chainText(steps, i, th, e) + '。';
       }
       var s = '前方' + distText(meters) + '，請' + withRoad(step, act);
