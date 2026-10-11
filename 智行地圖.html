@@ -34,6 +34,9 @@ html,body{
   padding:0;
   width:100%;
   height:100%;
+  /* 不讓瀏覽器把整頁拉動再彈回(iPhone 橡皮筋回彈、Android 下拉重新整理)：
+     在導航卡片上往上滑時，整個畫面(地圖＋車子)會跟著手指上移、放開又彈下來 */
+  overscroll-behavior:none;
   background:#0a1628;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif;
 }
@@ -160,7 +163,7 @@ a[x-apple-data-detectors]{ color:inherit !important; text-decoration:none !impor
   -webkit-tap-highlight-color:transparent;
 }
 .pttInfoTitle{ font-size:15px; font-weight:600; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pttRow.pttOff .pttInfoTitle{ color:#2F80FF; }
+.pttRow.pttOff .pttInfoTitle{ color:#000000; } /* 「啟用麥克風」：純黑(原本藍色) */
 .pttInfoSub{ font-size:11px; line-height:1.3; color:#6E6E73; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .pttMembers{ grid-column:3; grid-row:1; justify-self:end; display:flex; align-items:center; flex-shrink:0; }
 .pttAvatar{
@@ -1405,7 +1408,7 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
   flex-shrink:0;
   background:none;
   border:none;
-  color:#8E8E93;
+  color:#000000; /* 跟之前導航按鈕的圖示一樣純黑 */
   cursor:pointer;
   padding:0;
   display:flex;
@@ -1415,33 +1418,26 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
   transition:background 0.15s;
 }
 .navInfoCardArrow:active{ background:rgba(0,0,0,0.07); }
+/* 播放鍵：拿掉原本的藍色圓形(漸層背景＋藍色陰影)，只留圖示；點擊範圍維持 36×36 */
 .navInfoCardPlayBtn{
   width:36px;
   height:36px;
-  border-radius:50%;
-  background:linear-gradient(135deg,#3d8ef8,#1a6de8);
+  background:none;
   border:none;
+  padding:0;
+  color:#000000; /* 跟之前導航按鈕的圖示一樣純黑 */
   display:flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
   flex-shrink:0;
-  box-shadow:0 3px 10px rgba(47,128,255,0.45);
-  transition:transform 0.1s,box-shadow 0.1s;
+  transition:transform 0.1s;
 }
-.navInfoCardPlayBtn:active{
-  transform:scale(0.93);
-  box-shadow:0 1px 4px rgba(47,128,255,0.3);
-}
-.navInfoCardPlayBtn .play-icon{ display:flex; align-items:center; justify-content:center; }
-.navInfoCardPlayBtn .pause-icon{ display:none; align-items:center; justify-content:center; gap:3px; }
-.navInfoCardPlayBtn .pause-icon span{
-  display:block;
-  width:3px;
-  height:12px;
-  background:white;
-  border-radius:1.5px;
-}
+.navInfoCardPlayBtn:active{ transform:scale(0.9); }
+.navInfoCardArrow:focus-visible, .navInfoCardPlayBtn:focus-visible{ outline:2px solid #007AFF; outline-offset:2px; border-radius:8px; }
+.navInfoCardPlayBtn .play-icon, .navInfoCardPlayBtn .pause-icon{ align-items:center; justify-content:center; }
+.navInfoCardPlayBtn .play-icon{ display:flex; }
+.navInfoCardPlayBtn .pause-icon{ display:none; }
 .navInfoCardPlayBtn.playing .play-icon{ display:none; }
 .navInfoCardPlayBtn.playing .pause-icon{ display:flex; }
 
@@ -2020,26 +2016,13 @@ html, body {
           <div class="fmTrack" id="fmTrack"></div>
         </div>
         <div class="radioControls">
-          <button class="navInfoCardArrow" id="radioPrev">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="1.5" y="2" width="2.5" height="12" rx="1.25" fill="currentColor"/>
-              <path d="M14 3L6.5 8L14 13V3Z" fill="currentColor"/>
-            </svg>
+          <!-- 圖示由程式填入：沿用之前導航按鈕的實心圓角圖示(snmIco 'play'，Phosphor fill) -->
+          <button class="navInfoCardArrow" id="radioPrev" aria-label="上一個電台"></button>
+          <button class="navInfoCardPlayBtn" id="radioPlayBtn" aria-label="播放／暫停">
+            <span class="play-icon"></span>
+            <span class="pause-icon"></span>
           </button>
-          <button class="navInfoCardPlayBtn" id="radioPlayBtn">
-            <span class="play-icon">
-              <svg width="13" height="15" viewBox="0 0 13 15" fill="none">
-                <path d="M1.5 1.5L11.5 7.5L1.5 13.5V1.5Z" fill="white"/>
-              </svg>
-            </span>
-            <span class="pause-icon"><span></span><span></span></span>
-          </button>
-          <button class="navInfoCardArrow" id="radioNext">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="12" y="2" width="2.5" height="12" rx="1.25" fill="currentColor"/>
-              <path d="M2 3L9.5 8L2 13V3Z" fill="currentColor"/>
-            </svg>
-          </button>
+          <button class="navInfoCardArrow" id="radioNext" aria-label="下一個電台"></button>
         </div>
       </div>
     </div>
@@ -2119,6 +2102,10 @@ const SNM_ICO_SOLID = {"coins":"<path d=\"M184,89.57V84c0-25.08-37.83-44-88-44S8
 const SNM_ICO_COLOR = { coins: '#F5B400', trophy: '#F5B400', crown: '#F5B400', gem: '#1BC0D8', flame: '#FF5A1F',
   'party-popper': '#FF9500', octagon: '#FF3B30' }; // 回報的三角形(triangle-alert)本身就是黃底黑字，不用上色
 // color：不給 = 跟文字同色(currentColor)
+// 音樂播放器：暫停、上一首、下一首(Phosphor fill，跟之前導航按鈕用的 play 同一套實心圓角圖示)
+SNM_ICO_SOLID.pause = '<path d="M216,48V208a16,16,0,0,1-16,16H160a16,16,0,0,1-16-16V48a16,16,0,0,1,16-16h40A16,16,0,0,1,216,48ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Z"/>';
+SNM_ICO_SOLID['skip-back'] = '<path d="M208,47.88V208.12a16,16,0,0,1-24.43,13.43L64,146.77V216a8,8,0,0,1-16,0V40a8,8,0,0,1,16,0v69.23L183.57,34.45A15.95,15.95,0,0,1,208,47.88Z"/>';
+SNM_ICO_SOLID['skip-forward'] = '<path d="M208,40V216a8,8,0,0,1-16,0V146.77L72.43,221.55A15.95,15.95,0,0,1,48,208.12V47.88A15.95,15.95,0,0,1,72.43,34.45L192,109.23V40a8,8,0,0,1,16,0Z"/>';
 // 正向的導航箭頭：實心導航箭頭本來朝左上 45 度，轉正成朝上
 SNM_ICO_SOLID['navigation-up'] = '<g transform="rotate(45 128 128)">' + SNM_ICO_SOLID.navigation + '</g>';
 // 路線：起點、終點兩個圓，中間一條彎曲的路(Lucide route)
@@ -2199,11 +2186,43 @@ function snmRoundPath(x, a, b, w, h, r) {
   x.lineTo(a + r, b + h); x.quadraticCurveTo(a, b + h, a, b + h - r);
   x.lineTo(a, b + r); x.quadraticCurveTo(a, b, a + r, b); x.closePath();
 }
+// ── 地圖圖示畫質 ──
+// 1) 依螢幕解析度畫：原本一律畫成 2 倍圖(60px 顯示 30px)，3 倍螢幕的手機會再放大 1.5 倍 → 模糊。
+//    現在畫成 2×K 倍(K = 螢幕像素比 / 2，介於 1~2)，地圖用同樣的 pixelRatio 顯示，大小不變、像素剛好對上。
+// 2) 大圖縮小分次減半：一次縮很多倍(例如車子 1066px → 80px)瀏覽器只取樣少數像素，邊緣會鋸齒；
+//    每次只縮一半、用高品質取樣，最後一步再縮到目標大小。
+const SNM_ICON_K = Math.max(1, Math.min(2, (window.devicePixelRatio || 1) / 2));
+// 把 img 的 (sx,sy,sw,sh) 區域分次縮小後畫到 ctx 的 (dx,dy,dw,dh)。也接受 (ctx, img, dx, dy, dw, dh)
+function snmDrawHQ(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
+  if (dx === undefined) { dx = sx; dy = sy; dw = sw; dh = sh; sx = 0; sy = 0; sw = img.naturalWidth || img.width; sh = img.naturalHeight || img.height; }
+  const t = ctx.getTransform ? ctx.getTransform() : { a: 1, d: 1 };
+  const tw = Math.max(1, Math.round(dw * Math.abs(t.a))), th = Math.max(1, Math.round(dh * Math.abs(t.d))); // 實際要畫的像素
+  let src = img, ox = sx, oy = sy, cw = sw, ch = sh;
+  if (cw && ch) {
+    while (cw / 2 >= tw && ch / 2 >= th) {
+      const c = document.createElement('canvas');
+      c.width = Math.round(cw / 2); c.height = Math.round(ch / 2);
+      const x = c.getContext('2d');
+      x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+      x.drawImage(src, ox, oy, cw, ch, 0, 0, c.width, c.height);
+      src = c; ox = 0; oy = 0; cw = c.width; ch = c.height;
+    }
+  }
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  if (cw && ch) ctx.drawImage(src, ox, oy, cw, ch, dx, dy, dw, dh);
+  else ctx.drawImage(img, dx, dy, dw, dh); // SVG 沒有像素尺寸：直接畫(向量不會鋸齒)
+}
+// 地圖圖示畫好的 canvas → addImage 用的資料與像素比
+function snmTileImage(c) { return { data: c.getContext('2d').getImageData(0, 0, c.width, c.height), pixelRatio: 2 * (c._snmK || 1) }; }
 function snmRoundTile(draw, size, bg) {
   size = size || 60;
+  const K = SNM_ICON_K;
   const c = document.createElement('canvas');
-  c.width = size; c.height = size;
+  c.width = Math.round(size * K); c.height = Math.round(size * K);
+  c._snmK = K;
   const x = c.getContext('2d');
+  x.scale(K, K); // 呼叫端照舊用 60×60 的座標畫
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
   x.save();
   snmRoundPath(x, 0.5, 0.5, size - 1, size - 1, SNM_TILE_R);
   x.clip();
@@ -3389,7 +3408,7 @@ function _flipCell(cell, from, to) {
 
   // 整張卡片 + rect3 拖拉（上滑展開，下滑收合；導航時支援 compact↔normal）
   if (_rect1El) {
-    let _tsY = 0, _tgtIsBtn = false, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
+    let _tsY = 0, _tgtIsBtn = false, _allowNative = false, _curH = RECT1_COMPACT, _moved = false, _rafId = null;
     // 手指(touch)、滑鼠都讀得到 Y：電腦也能用滑鼠拉卡片
     const _evY = e => (e.touches && e.touches[0]) ? e.touches[0].clientY
       : (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY;
@@ -3398,6 +3417,7 @@ function _flipCell(cell, from, to) {
       _tsY = _evY(e);
       _moved = false;
       _tgtIsBtn = !!e.target.closest('button, input, select, a, label, .pttModes, .pttMembers');
+      _allowNative = !!e.target.closest('input, select, textarea, #voiceList, .pttChatList'); // 這些要能拖滑桿、捲清單
       if (_tgtIsBtn) return;
       _curH = _drawerOpen ? _expandedH : (parseFloat(_rect1El.style.height) || RECT1_COMPACT);
       if (!_drawerOpen) {
@@ -3409,10 +3429,13 @@ function _flipCell(cell, from, to) {
       if (_rafId) cancelAnimationFrame(_rafId);
     }
     function _onDragMove(e) {
+      // 卡片自己處理上下拖拉：每一個 touchmove 都擋掉瀏覽器的頁面捲動(包含一開始還不到 5px 的移動、從按鈕上開始的滑動)。
+      // iPhone 在第一個 touchmove 就決定要不要捲動頁面，沒擋到那一下整頁就會跟著手指移動，放開後彈回來
+      // (滑桿、輸入框、可以捲動的清單照常交給瀏覽器)
+      if (e.cancelable && !_allowNative) e.preventDefault();
       if (_tgtIsBtn) return;
       const dy = _tsY - _evY(e);
       if (!_moved && Math.abs(dy) < 5) return;
-      e.preventDefault();
       const newH = Math.min(_expandedH, Math.max(RECT1_COMPACT, _curH + dy));
       _moved = true;
       if (_rafId) cancelAnimationFrame(_rafId);
@@ -6144,19 +6167,22 @@ function _flipCell(cell, from, to) {
 map.on('load', function() {
   let _cachedCarImg = null; // 快取已處理好的圖，樣式切換不需重新下載
   const _carImg = new Image();
+  // 原圖 導航車子1.png 1066×1475(透明 PNG)。以前一次縮到 80×120：縮 13 倍只取樣少數像素 → 邊緣鋸齒；
+  // 而且 80×120 跟原圖比例(0.72)不同，車子被壓扁；又固定用 2 倍圖，3 倍螢幕的手機會再放大變糊。
+  // 現在：寬 40(畫面上的大小跟原本一樣)、高照原圖比例，依螢幕解析度畫，分次減半縮小。只做一次，之後旋轉/移動都由地圖 GPU 處理。
   _carImg.onload = function() {
-    const W = 80, H = 120;
+    const ratio = Math.min(4, Math.max(2, Math.ceil(window.devicePixelRatio || 1)));
+    const CSS_W = 40, CSS_H = Math.round(CSS_W * _carImg.naturalHeight / _carImg.naturalWidth);
     const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    c.getContext('2d').drawImage(_carImg, 0, 0, W, H);
-    const sized = new Image(W, H);
-    sized.onload = function() { _cachedCarImg = sized; _addCarLayers(sized); };
-    sized.src = c.toDataURL('image/png');
+    c.width = CSS_W * ratio; c.height = CSS_H * ratio;
+    snmDrawHQ(c.getContext('2d'), _carImg, 0, 0, c.width, c.height);
+    _cachedCarImg = { data: c.getContext('2d').getImageData(0, 0, c.width, c.height), pixelRatio: ratio };
+    _addCarLayers(_cachedCarImg);
   };
   function _addCarLayers(_img) {
     if (map.getSource('user-pos')) return;
     // 切換地圖風格後舊圖可能還在,重複 addImage 會丟錯中斷,車子就整個不見
-    if (!map.hasImage('car-icon')) map.addImage('car-icon', _img, { pixelRatio: 2 });
+    if (!map.hasImage('car-icon')) map.addImage('car-icon', _img.data, { pixelRatio: _img.pixelRatio });
 
     map.addSource('user-pos', {
       type: 'geojson',
@@ -7049,6 +7075,13 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var playBtn  = document.getElementById('radioPlayBtn');
   var prevBtn  = document.getElementById('radioPrev');
   var nextBtn  = document.getElementById('radioNext');
+  // 圖示：沿用之前導航按鈕的實心圓角播放三角形(snmIco 'play')，暫停/上一首/下一首用同一套，純黑
+  if (prevBtn) prevBtn.innerHTML = snmIco('skip-back', '18');
+  if (nextBtn) nextBtn.innerHTML = snmIco('skip-forward', '18');
+  if (playBtn) {
+    playBtn.querySelector('.play-icon').innerHTML = snmIco('play', '22');
+    playBtn.querySelector('.pause-icon').innerHTML = snmIco('pause', '22');
+  }
   var track    = document.getElementById('fmTrack');
   var dial     = document.getElementById('fmDial');
 
@@ -7365,7 +7398,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         x.fillStyle=NAVY; x.beginPath(); x.arc(-15, 0, 2.6, 0, Math.PI*2); x.fill();
         x.restore();
       }, sz, NAVY);
-      m.addImage('cctv-icon', cv.getContext('2d').getImageData(0,0,sz,sz), { pixelRatio: 2 });
+      var cti = snmTileImage(cv); m.addImage('cctv-icon', cti.data, { pixelRatio: cti.pixelRatio });
       window._snmCctvIconUrl = cv.toDataURL('image/png'); // 地點卡片的 logo 也用這個
     }
 
@@ -7525,8 +7558,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     // 測速照相圖示(照台灣固定式測速照相照片)：白色方箱(薄頂蓋凸出)、正面上方兩個深色正方形窗(左邊窗裡有圓形鏡頭)、下方米黃銘牌，
     // 灰色接頭架在整根黃黑斜紋的方柱上；右上疊速限牌(C 排法)、速限牌下面白色圓形紅字「固」(zone = 區間測速時寫「區」)。邏輯 56×62，2 倍解析度；柱子底部中央 = 測速照相位置
     function drawSpeedIcon(lim, zone) {
-      var W = 56, H = 62, cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2;
-      var c = cv.getContext('2d'); c.scale(2, 2); c.lineJoin = 'round';
+      var SR = 2 * SNM_ICON_K; // 依螢幕解析度畫(原本固定 2 倍)
+      var W = 56, H = 62, cv = document.createElement('canvas'); cv.width = Math.round(W * SR); cv.height = Math.round(H * SR);
+      var c = cv.getContext('2d'); c.scale(SR, SR); c.lineJoin = 'round';
       function rr(x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
       var EDGE = '#5F6368', cx = 15;
     
@@ -7596,7 +7630,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         var key='speed-'+lim+sfx;
         if(m.hasImage(key)) return;
         var cv=drawSpeedIcon(lim, !!sfx);
-        m.addImage(key, cv.getContext('2d').getImageData(0,0,cv.width,cv.height), { pixelRatio: 2 });
+        m.addImage(key, cv.getContext('2d').getImageData(0,0,cv.width,cv.height), { pixelRatio: 2 * SNM_ICON_K });
       });
     });
 
@@ -7811,15 +7845,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if(m.getSource(SOURCE)) return;
     // 直立圓角長方形(40×60，畫面上 20×30，跟全家 30px 一樣高)、白底、1px 細灰框，裡面 🚦
     if(!m.hasImage('signal-icon')){
-      var sw=40, sh=60, sc=document.createElement('canvas'); sc.width=sw; sc.height=sh;
-      var sx=sc.getContext('2d');
+      var SK=SNM_ICON_K, sw=40, sh=60, sc=document.createElement('canvas'); sc.width=Math.round(sw*SK); sc.height=Math.round(sh*SK);
+      var sx=sc.getContext('2d'); sx.scale(SK,SK); // 依螢幕解析度畫
       snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.fillStyle='#FFFFFF'; sx.fill();
       sx.save(); snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.clip();
       sx.font='50px serif'; sx.textAlign='center'; sx.textBaseline='middle';
       sx.fillText('🚦', sw/2, sh/2+3); // 紅綠燈用原本的 emoji
       sx.restore();
       snmRoundPath(sx, 0.5, 0.5, sw-1, sh-1, 10); sx.lineWidth=1; sx.strokeStyle='#d9d9d9'; sx.stroke();
-      m.addImage('signal-icon', sx.getImageData(0,0,sw,sh), { pixelRatio: 2 });
+      m.addImage('signal-icon', sx.getImageData(0,0,sc.width,sc.height), { pixelRatio: 2*SK });
     }
 
     m.addSource(SOURCE, {
@@ -8493,10 +8527,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var raw = new Image();
     raw.onload = function() {
       var W = 60, H = 60;
-      var c = snmRoundTile(function (x) { x.drawImage(raw, 0, 0, W, H); }, W); // 圓角白底
-      var sized = new Image(W, H);
-      sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
-      sized.src = c.toDataURL('image/png');
+      var c = snmRoundTile(function (x) { snmDrawHQ(x, raw, 0, 0, W, H); }, W); // 圓角白底(分次縮小)
+      var ti = snmTileImage(c);
+      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, ti.data, { pixelRatio: ti.pixelRatio });
     };
     raw.onerror = function() {
       var svg = '<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">' +
@@ -8622,12 +8655,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       // 中間分隔線
       x.fillRect(29.25, 11, 1.5, 39);
     }, sz, '#1A73E8');
-    var img = new Image(sz, sz);
-    img.onload = function() {
-      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, img, { pixelRatio: 2 });
-    };
-    img.src = c.toDataURL('image/png');
-    window._snmToiletIconUrl = img.src; // 地點卡片的 logo 也用這個
+    var ti = snmTileImage(c);
+    if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, ti.data, { pixelRatio: ti.pixelRatio });
+    window._snmToiletIconUrl = c.toDataURL('image/png'); // 地點卡片的 logo 也用這個
   }
 
   function initToilets(m) {
@@ -8731,10 +8761,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var raw = new Image();
     raw.onload = function() {
       var W = 60, H = 60;
-      var c = snmRoundTile(function (x) { x.drawImage(raw, 0, 0, W, H); }, W); // 圓角白底
-      var sized = new Image(W, H);
-      sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
-      sized.src = c.toDataURL('image/png');
+      var c = snmRoundTile(function (x) { snmDrawHQ(x, raw, 0, 0, W, H); }, W); // 圓角白底(分次縮小)
+      var ti = snmTileImage(c);
+      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, ti.data, { pixelRatio: ti.pixelRatio });
     };
     raw.onerror = function() {
       var c = document.createElement('canvas');
@@ -8755,8 +8784,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     if (!m.hasImage(FC_ICON_ID)) {
       var fc = new Image();
       fc.onload = function() {
-        var c = snmRoundTile(function (x) { x.drawImage(fc, 0, 0, 60, 60); }, 60); // 圓角白底
-        if (!m.hasImage(FC_ICON_ID)) m.addImage(FC_ICON_ID, c.getContext('2d').getImageData(0, 0, 60, 60), { pixelRatio: 2 });
+        var c = snmRoundTile(function (x) { snmDrawHQ(x, fc, 0, 0, 60, 60); }, 60); // 圓角白底(分次縮小)
+        var ti = snmTileImage(c);
+        if (!m.hasImage(FC_ICON_ID)) m.addImage(FC_ICON_ID, ti.data, { pixelRatio: ti.pixelRatio });
       };
       fc.onerror = function() { // 載入失敗：深藍底白字「全聯」
         var c = document.createElement('canvas');
@@ -8873,10 +8903,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     raw.onload = function() {
       var W = 60, H = 60;
       // 中油 logo 是透明底，墊圓角白底
-      var c = snmRoundTile(function (cx) { cx.drawImage(raw, 4, 4, W - 8, H - 8); }, W);
-      var sized = new Image(W, H);
-      sized.onload = function() { if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, sized, { pixelRatio: 2 }); };
-      sized.src = c.toDataURL('image/png');
+      var c = snmRoundTile(function (cx) { snmDrawHQ(cx, raw, 4, 4, W - 8, H - 8); }, W);
+      var ti = snmTileImage(c);
+      if (!m.hasImage(ICON_ID)) m.addImage(ICON_ID, ti.data, { pixelRatio: ti.pixelRatio });
     };
     raw.onerror = function() {
       var c = document.createElement('canvas');
@@ -9047,8 +9076,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var raw = new Image();
     raw.onload = function () {
       var S = 60, cr = b.crop || [0, 0, raw.naturalWidth, raw.naturalHeight];
-      var c = snmRoundTile(function (ctx) { ctx.drawImage(raw, cr[0], cr[1], cr[2], cr[3], 0, 0, S, S); }, S); // 圓角白底
-      if (!m.hasImage(id)) m.addImage(id, c.getContext('2d').getImageData(0, 0, S, S), { pixelRatio: 2 });
+      var c = snmRoundTile(function (ctx) { snmDrawHQ(ctx, raw, cr[0], cr[1], cr[2], cr[3], 0, 0, S, S); }, S); // 圓角白底(分次縮小)
+      var ti = snmTileImage(c);
+      if (!m.hasImage(id)) m.addImage(id, ti.data, { pixelRatio: ti.pixelRatio });
       done();
     };
     raw.onerror = function () {
@@ -9179,10 +9209,10 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (m.hasImage(id)) { if (--left === 0) done(); return; }
       var img = new Image();
       img.onload = function () {
-        var S = 64, c = document.createElement('canvas');
+        var S = Math.round(64 * SNM_ICON_K), c = document.createElement('canvas'); // 依螢幕解析度畫(畫面上一樣 32px)
         c.width = c.height = S;
-        c.getContext('2d').drawImage(img, 0, 0, S, S); // SVG 畫成 64px(pixelRatio 2 → 畫面 32px)
-        if (!m.hasImage(id)) m.addImage(id, c.getContext('2d').getImageData(0, 0, S, S), { pixelRatio: 2 });
+        c.getContext('2d').drawImage(img, 0, 0, S, S);
+        if (!m.hasImage(id)) m.addImage(id, c.getContext('2d').getImageData(0, 0, S, S), { pixelRatio: 2 * SNM_ICON_K });
         if (--left === 0) done();
       };
       img.onerror = function () { if (--left === 0) done(); };
@@ -10998,14 +11028,15 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   function addCarIcon(m) {
     if (m.hasImage(CAR_ICON)) return;
     var S = 64, c = document.createElement('canvas');
-    c.width = c.height = S;
+    c.width = c.height = Math.round(S * SNM_ICON_K); // 依螢幕解析度畫(畫面上一樣 32px)
     var g = c.getContext('2d');
+    g.scale(SNM_ICON_K, SNM_ICON_K);
     g.beginPath(); g.arc(S / 2, S / 2, 26, 0, Math.PI * 2);
     g.fillStyle = '#34C759'; g.fill();
     g.lineWidth = 5; g.strokeStyle = '#fff'; g.stroke();
     g.beginPath(); g.moveTo(S / 2, 13); g.lineTo(S / 2 + 12, 44); g.lineTo(S / 2, 37); g.lineTo(S / 2 - 12, 44); g.closePath();
     g.fillStyle = '#fff'; g.fill();
-    m.addImage(CAR_ICON, g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+    m.addImage(CAR_ICON, g.getImageData(0, 0, c.width, c.height), { pixelRatio: 2 * SNM_ICON_K });
   }
   function initCarsLayer() {
     var m = window.map;
