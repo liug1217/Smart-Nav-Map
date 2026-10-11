@@ -1996,7 +1996,7 @@ html, body {
       </div>
       <div class="navInfoCard" id="radioCard">
       <button class="radioStartBtn" id="radioStartBtn">
-        <svg width="13" height="15" viewBox="0 0 13 15" fill="none"><path d="M1.5 1.5L11.5 7.5L1.5 13.5V1.5Z" fill="#000"/></svg>
+        <span class="radioStartIco" style="display:flex;color:#000"></span><!-- 圖示由程式填入：跟播放器同一個實心圓角三角形 -->
         開始播放
       </button>
       <div class="radioFullUI" id="radioFullUI" style="display:none;">
@@ -7106,6 +7106,9 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
   var prevBtn  = document.getElementById('radioPrev');
   var nextBtn  = document.getElementById('radioNext');
   // 圖示：沿用之前導航按鈕的實心圓角播放三角形(snmIco 'play')，暫停/上一首/下一首用同一套，純黑
+  // 「開始播放」按鈕的三角形也用同一個圓角三角形(原本是另外寫死的尖角三角形)
+  var startIco = document.querySelector('#radioStartBtn .radioStartIco');
+  if (startIco) startIco.innerHTML = snmIco('play', '16');
   if (prevBtn) prevBtn.innerHTML = snmIco('skip-back', '20');
   if (nextBtn) nextBtn.innerHTML = snmIco('skip-forward', '20');
   if (playBtn) {
