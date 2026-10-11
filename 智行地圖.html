@@ -6224,14 +6224,13 @@ map.on('load', function() {
     // 地圖怎麼轉，方位字跟指針就跟著轉到正確的實際方位，不用每幀算座標。
     (function _buildCompassIcon() {
       // 畫布要留夠邊界給往外凸出的北方箭頭，不然箭頭尖端會被畫布邊緣切掉
-      const S = 280, C = S / 2;       // 畫布尺寸@2x=280(多留邊界給加大的北方箭頭；圓圈大小不變)
+      const S = 240, C = S / 2;       // 畫布尺寸@2x=240，畫面上實際約 120px 直徑
       const CIRCLE_R = 80;            // 圓圈半徑（畫面上 40px）
       const LABEL_R = CIRCLE_R;       // 方位文字半徑=圓圈半徑，讓文字剛好插在邊線中間，一半在圈內一半在圈外
 
       const cv = document.createElement('canvas');
-      cv.width = cv.height = Math.round(S * SNM_ICON_K); // 依螢幕解析度畫(3 倍螢幕不再放大變糊)
+      cv.width = cv.height = S;
       const g = cv.getContext('2d');
-      g.scale(SNM_ICON_K, SNM_ICON_K);
 
       g.beginPath();
       g.arc(C, C, CIRCLE_R, 0, Math.PI * 2);
@@ -6272,22 +6271,15 @@ map.on('load', function() {
       });
 
       // 北方指針：畫在文字之後，疊到「北」字時箭頭會蓋在文字前面，而不是被文字蓋住
-      // 箭頭形狀跟播放器的播放鍵同一個實心圓角三角形(snmIco 'play')，轉成朝上指北；顏色維持紅色
-      {
-        const PLAY = SNM_ICO_SOLID.play.match(/d="([^"]+)"/)[1]; // 256 格，三角形範圍 x 64~240、y 24~232，朝右
-        // 寬 40(畫面上約 20px，跟播放器的播放鍵差不多大)。指南針平貼在地面上、3D 視角會被壓扁，太小就只剩一條紅線
-        const sc = 40 / 208;
-        g.save();
-        g.translate(C, C - CIRCLE_R - 31);                         // 圓圈外面、「北」字正上方(不壓到字)
-        g.rotate(-Math.PI / 2);                                    // 朝右 → 朝上
-        g.scale(sc, sc);
-        g.translate(-152, -128);                                   // 以三角形中心為基準
-        g.fillStyle = '#E53935';
-        g.fill(new Path2D(PLAY));
-        g.restore();
-      }
+      g.beginPath();
+      g.moveTo(C, C - CIRCLE_R - 28);
+      g.lineTo(C - 9, C - CIRCLE_R - 14);
+      g.lineTo(C + 9, C - CIRCLE_R - 14);
+      g.closePath();
+      g.fillStyle = '#E53935';
+      g.fill();
 
-      if (!map.hasImage('compass-icon')) map.addImage('compass-icon', g.getImageData(0, 0, cv.width, cv.height), { pixelRatio: 2 * SNM_ICON_K });
+      if (!map.hasImage('compass-icon')) map.addImage('compass-icon', g.getImageData(0, 0, S, S), { pixelRatio: 2 });
       map.addLayer({
         id: 'user-compass',
         type: 'symbol',
