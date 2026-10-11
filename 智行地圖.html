@@ -2220,6 +2220,19 @@ function snmDrawHQ(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
   if (cw && ch) ctx.drawImage(src, ox, oy, cw, ch, dx, dy, dw, dh);
   else ctx.drawImage(img, dx, dy, dw, dh); // SVG 沒有像素尺寸：直接畫(向量不會鋸齒)
 }
+// 沿圖案本身的外緣描一圈細灰邊(不加白色方框)：圖案往 12 個方向各挪一點疊成剪影、填灰色，再把原圖蓋上去。
+// S = 畫面上的大小×2(跟其他圖示一樣)，inset = 給描邊留的空間
+function snmOutlineIcon(img, S, inset) {
+  const K = SNM_ICON_K, D = Math.round(S * K);
+  const t = document.createElement('canvas'); t.width = t.height = D;
+  t.getContext('2d').drawImage(img, inset * K, inset * K, D - 2 * inset * K, D - 2 * inset * K);
+  const o = document.createElement('canvas'); o.width = o.height = D;
+  const x = o.getContext('2d'), w = K; // K 個實際像素 = 畫面 0.5px
+  for (let a = 0; a < 360; a += 30) x.drawImage(t, w * Math.cos(a * Math.PI / 180), w * Math.sin(a * Math.PI / 180));
+  x.globalCompositeOperation = 'source-in'; x.fillStyle = '#d9d9d9'; x.fillRect(0, 0, D, D);
+  x.globalCompositeOperation = 'source-over'; x.drawImage(t, 0, 0);
+  return o;
+}
 // 地圖圖示畫好的 canvas → addImage 用的資料與像素比
 function snmTileImage(c) { return { data: c.getContext('2d').getImageData(0, 0, c.width, c.height), pixelRatio: 2 * (c._snmK || 1) }; }
 function snmRoundTile(draw, size, bg) {
@@ -7420,23 +7433,30 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 
   function initLayers(m, geojson){
     if(m.getSource('cctv')) return;
-    // 跟公廁圖示同樣式：圓角方塊整塊填滿深藍(同導航橫幅顏色)＋細灰框，白色監視器圖案(不用 emoji，各裝置都一樣)
+    // 跟測速照相同樣的畫法：地面陰影、灰色金屬柱、往外伸的橫桿、吊著白色槍型監視器(深色鏡頭＋反光＋紅色指示燈)
+    // 36×44(畫面上的大小)，柱子腳在 x=12、圖的底部 → 圖層用 icon-anchor bottom、往右挪 6 對準監視器位置
     if(!m.hasImage('cctv-icon')){
-      var sz=60, NAVY='#0E1A2D';
-      var cv=snmRoundTile(function(x){
-        x.fillStyle='#FFFFFF';
-        // 支架：直桿＋底座
-        x.fillRect(38, 25, 3.5, 17);
-        snmRoundPath(x, 31, 40, 17, 5, 2); x.fill();
-        // 機身：斜斜往左下看的長方體＋前面的鏡頭罩
-        x.save(); x.translate(27, 24); x.rotate(0.38);
-        snmRoundPath(x, -14, -7, 27, 14, 3.5); x.fill();
-        x.fillRect(-19, -5, 6, 10);
-        // 鏡頭(深藍小圓)
-        x.fillStyle=NAVY; x.beginPath(); x.arc(-15, 0, 2.6, 0, Math.PI*2); x.fill();
-        x.restore();
-      }, sz, NAVY);
-      var cti = snmTileImage(cv); m.addImage('cctv-icon', cti.data, { pixelRatio: cti.pixelRatio });
+      var SR=2*SNM_ICON_K, W=36, H=44, cv=document.createElement('canvas'); cv.width=Math.round(W*SR); cv.height=Math.round(H*SR);
+      var c=cv.getContext('2d'); c.scale(SR,SR); c.lineJoin='round';
+      var EDGE='#5F6368', px=10, pw=4;
+      c.fillStyle='rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(12,42.4,7,1.6,0,0,Math.PI*2); c.fill(); // 地面陰影
+      var pg=c.createLinearGradient(px,0,px+pw,0); pg.addColorStop(0,'#8A9096'); pg.addColorStop(0.45,'#D7DADD'); pg.addColorStop(1,'#7B8187');
+      c.fillStyle=pg; c.fillRect(px,12,pw,30); c.lineWidth=0.7; c.strokeStyle=EDGE; c.strokeRect(px,12,pw,30);          // 柱子
+      c.fillStyle='#C9CDD1'; c.fillRect(px-0.8,40.6,pw+1.6,1.6); c.strokeRect(px-0.8,40.6,pw+1.6,1.6);                  // 柱腳
+      var ag=c.createLinearGradient(0,10,0,13.4); ag.addColorStop(0,'#D7DADD'); ag.addColorStop(1,'#8A9096');
+      c.fillStyle=ag; c.fillRect(px,10,15,3.4); c.strokeRect(px,10,15,3.4);                                               // 橫桿
+      c.fillStyle='#B8BDC2'; c.fillRect(22,13.4,2.4,3); c.strokeRect(22,13.4,2.4,3);                                      // 吊架
+      c.save(); c.translate(23.5,19.5); c.rotate(0.32);                                                                    // 監視器往下斜
+      var hg=c.createLinearGradient(0,-5,0,5); hg.addColorStop(0,'#FFFFFF'); hg.addColorStop(0.7,'#F1F2F2'); hg.addColorStop(1,'#D9DCDE');
+      snmRoundPath(c,-8,-4,17,8,2.2); c.fillStyle=hg; c.fill(); c.lineWidth=0.8; c.strokeStyle=EDGE; c.stroke();         // 機身
+      snmRoundPath(c,-8.8,-5.4,19.2,2.4,1); c.fillStyle='#E3E5E7'; c.fill(); c.lineWidth=0.7; c.stroke();                // 遮陽罩
+      snmRoundPath(c,8.2,-3.2,2.6,6.4,0.8); c.fillStyle='#3C4043'; c.fill();                                             // 鏡頭座
+      c.beginPath(); c.arc(9.6,0,2.3,0,Math.PI*2); c.fillStyle='#AEB4BA'; c.fill();
+      c.beginPath(); c.arc(9.6,0,1.6,0,Math.PI*2); c.fillStyle='#0B0F13'; c.fill();
+      c.beginPath(); c.arc(9.1,-0.5,0.55,0,Math.PI*2); c.fillStyle='rgba(255,255,255,0.85)'; c.fill();                     // 反光
+      c.beginPath(); c.arc(-5.6,1.4,0.75,0,Math.PI*2); c.fillStyle='#FF3B30'; c.fill();                                    // 指示燈
+      c.restore();
+      m.addImage('cctv-icon', c.getImageData(0,0,cv.width,cv.height), { pixelRatio: SR });
       window._snmCctvIconUrl = cv.toDataURL('image/png'); // 地點卡片的 logo 也用這個
     }
 
@@ -7456,7 +7476,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       filter:['has','point_count'],
       layout:{
         'icon-image':'cctv-icon',
-        'icon-size':0.8,
+        'icon-size':0.7,
         'icon-allow-overlap':true,
         'icon-ignore-placement':true,
         'text-field':['get','point_count_abbreviated'],
@@ -7481,7 +7501,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       filter:['!',['has','point_count']],
       layout:{
         'icon-image':'cctv-icon',
-        'icon-size':1, // 跟公廁、店家圖示一樣大(30px)
+        'icon-anchor':'bottom','icon-offset':[6,0], // 柱子在圖的左邊：底部錨點往右挪，柱腳才會對準監視器位置
+        'icon-size':['interpolate',['linear'],['zoom'],12,0.5,15,0.75,17,1.0,19,1.3], // 跟測速照相一樣隨縮放變大小
         'icon-allow-overlap':true,
         'icon-ignore-placement':true
       }
@@ -7518,7 +7539,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
         live.onerror=function(){ if(stopped) return; clearTimeout(retry); retry=setTimeout(load,2000); };
         load();
         var tick=setInterval(load,8000);
-        window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:(window._snmCctvIconUrl||'📹'),
+        window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:(window._snmCctvIconUrl||'📹'), logoShape:'bare',
           lat:coords[1], lng:coords[0], extraEl:wrap, extraTop:true, fitPeek:true,
           onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); live.removeAttribute('src'); } });
         return;
@@ -9253,9 +9274,8 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
       if (m.hasImage(id)) { if (--left === 0) done(); return; }
       var img = new Image();
       img.onload = function () {
-        var S = Math.round(64 * SNM_ICON_K), c = document.createElement('canvas'); // 依螢幕解析度畫(畫面上一樣 32px)
-        c.width = c.height = S;
-        c.getContext('2d').drawImage(img, 0, 0, S, S);
+        // 依螢幕解析度畫(畫面上一樣 32px)；沿路牌外緣描一圈跟全家一樣的細灰邊(不加白色方框)
+        var c = snmOutlineIcon(img, 64, 1), S = c.width;
         if (!m.hasImage(id)) m.addImage(id, c.getContext('2d').getImageData(0, 0, S, S), { pixelRatio: 2 * SNM_ICON_K });
         if (--left === 0) done();
       };
