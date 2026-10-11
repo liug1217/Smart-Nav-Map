@@ -2114,6 +2114,8 @@ const SNM_ICO_COLOR = { coins: '#F5B400', trophy: '#F5B400', crown: '#F5B400', g
 })();
 // 正向的導航箭頭：實心導航箭頭本來朝左上 45 度，轉正成朝上
 SNM_ICO_SOLID['navigation-up'] = '<g transform="rotate(45 128 128)">' + SNM_ICO_SOLID.navigation + '</g>';
+// 路線(地點卡片按鈕)：菱形裡一個右轉箭頭，主流地圖 App 的「路線」圖示(Material Icons directions，Apache 2.0)；24 格放大到 256 格
+SNM_ICO_SOLID.directions = '<g transform="scale(10.6667)"><path fill-rule="evenodd" d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.38.39-1.01 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/></g>';
 // 路線：起點、終點兩個圓，中間一條彎曲的路(Lucide route)
 SNM_ICO.route = '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>';
 function snmIco(name, size, color) {
@@ -9961,7 +9963,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var bNav = el('button', null); bNav.innerHTML = '<span class="snmIco">' + snmIco('navigation-up') + '</span> 導航';
     bNav.onclick = function () { close(); if (window._navigateNow) window._navigateNow(p.lat, p.lng, p.name, p.logo); };
     acts.appendChild(bNav);
-    var bRoute = el('button', 'route'); bRoute.innerHTML = '<span class="snmIco">' + snmIco('route') + '</span> 路線';
+    var bRoute = el('button', 'route'); bRoute.innerHTML = '<span class="snmIco">' + snmIco('directions') + '</span> 路線';
     bRoute.onclick = function () { close(); if (window._navigateToCoord) window._navigateToCoord(p.lat, p.lng, p.name, p.logo); };
     acts.appendChild(bRoute);
     var poi = { layer: p.layer || 'place-points', name: p.name || '', lat: p.lat, lng: p.lng };
