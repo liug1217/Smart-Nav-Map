@@ -2017,12 +2017,12 @@ html, body {
       </div>
       <button id="voiceTestBtn" style="margin-top:12px;width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;">🔊 試聽</button>
 
-      <!-- ── 車牌(畫在導航車子的車尾) ── -->
+      <!-- ── 車牌(顯示在導航車子下面) ── -->
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
         <div style="font-size:15px;font-weight:600;margin-bottom:4px;">🚗 我的車牌</div>
-        <div style="font-size:12px;color:#666;margin-bottom:10px;">顯示在導航車子的車尾。只存在這支手機，不會上傳或分享給別人；最多 8 個字(中英文、數字、-)，留空就不顯示。</div>
+        <div style="font-size:12px;color:#666;margin-bottom:10px;">顯示在導航車子下面(點地圖上的車子也可以改)。只存在這支手機，不會上傳或分享給別人；最多 8 個字(中英文、數字、-)，留空就不顯示。</div>
         <div style="display:flex;align-items:center;gap:12px;">
-          <canvas id="platePreview" width="80" height="110" style="width:56px;height:77px;flex-shrink:0;" aria-label="車牌預覽"></canvas>
+          <canvas id="platePreview" width="80" height="110" style="width:72px;height:84px;flex-shrink:0;" aria-label="車牌預覽"></canvas>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
             <input id="plateInput" type="text" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid #d1d1d6;border-radius:999px;font-size:15px;font-family:inherit;">
             <button id="plateSaveBtn" style="width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;">儲存車牌</button>
@@ -2231,22 +2231,44 @@ function snmPlateText() { try { return (localStorage.getItem('snm_plate') || '')
 function snmCleanPlate(t) {
   return Array.from(String(t || '').toUpperCase().replace(/[^0-9A-Z\u3400-\u9FFF\s\-·]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 8).join('');
 }
-// 在車子圖(車頭朝上、W×H 實際像素)的車尾、兩個尾燈之間的行李箱上畫白底黑字車牌；字太長自動縮小
-function snmDrawPlate(x, W, H, text) {
-  if (!text) return;
-  const pw = W * 0.56, ph = H * 0.12, cx = W / 2, cy = H * 0.885;
-  x.save();
-  snmRoundPath(x, cx - pw / 2, cy - ph / 2, pw, ph, ph * 0.22);
-  x.fillStyle = '#FFFFFF'; x.fill();
-  x.lineWidth = Math.max(1, ph * 0.08); x.strokeStyle = '#1C1C1E'; x.stroke();
-  const FONT = '"SF Pro Display","PingFang TC","Microsoft JhengHei","Noto Sans TC",Arial,sans-serif';
-  let fs = ph * 0.74;
-  x.font = '800 ' + fs + 'px ' + FONT;
-  const tw = x.measureText(text).width, maxW = pw * 0.88;
-  if (tw > maxW) { fs *= maxW / tw; x.font = '800 ' + fs + 'px ' + FONT; }
-  x.fillStyle = '#000000'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(text, cx, cy + fs * 0.05);
+// 車子下面的車牌牌子：白底黑字、細黑框、圓角，寬度跟著字數走。R = 實際像素/畫面像素
+const SNM_LABEL_FONT = '"SF Pro Display","PingFang TC","Microsoft JhengHei","Noto Sans TC",Arial,sans-serif';
+function snmPlateBadge(text, R) {
+  const c = document.createElement('canvas');
+  if (!text) { c.width = c.height = 1; return c; }
+  const H = 20, PAD = 7, FS = 13, m = c.getContext('2d');
+  m.font = '800 ' + FS * R + 'px ' + SNM_LABEL_FONT;
+  const W = Math.ceil(m.measureText(text).width / R) + PAD * 2 + 4; // +4 留給陰影
+  c.width = W * R; c.height = (H + 4) * R;
+  const x = c.getContext('2d'); x.scale(R, R);
+  x.shadowColor = 'rgba(0,0,0,0.25)'; x.shadowBlur = 3; x.shadowOffsetY = 1;
+  snmRoundPath(x, 2, 1.5, W - 4, H, 4); x.fillStyle = '#FFFFFF'; x.fill();
+  x.shadowColor = 'transparent'; x.lineWidth = 1.2; x.strokeStyle = '#1C1C1E'; x.stroke();
+  x.font = '800 ' + FS + 'px ' + SNM_LABEL_FONT; x.fillStyle = '#000000'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, W / 2, 1.5 + H / 2 + 0.5);
+  return c;
+}
+// 車子上面的頭像：圓形、白色外圈＋陰影；沒照片就用藍底白字(名字第一個字)，跟對講、留言的頭像一樣
+function snmAvatarBadge(img, name, R) {
+  const D = 34, B = 2.5, S = D + 6, c = document.createElement('canvas');
+  c.width = c.height = S * R;
+  const x = c.getContext('2d'); x.scale(R, R);
+  const cx = S / 2, cy = S / 2 - 0.5, r = D / 2;
+  x.shadowColor = 'rgba(0,0,0,0.3)'; x.shadowBlur = 3; x.shadowOffsetY = 1;
+  x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fillStyle = '#FFFFFF'; x.fill();
+  x.shadowColor = 'transparent';
+  x.save(); x.beginPath(); x.arc(cx, cy, r - B, 0, Math.PI * 2); x.clip();
+  if (img) {
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, cx - r + B, cy - r + B, (r - B) * 2, (r - B) * 2);
+  } else {
+    x.fillStyle = '#5ac8fa'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#FFFFFF'; x.font = '700 15px ' + SNM_LABEL_FONT; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText((String(name || '').trim().charAt(0) || '?').toUpperCase(), cx, cy + 1);
+  }
   x.restore();
+  return c;
 }
 function snmRoundTile(draw, size, bg) {
   size = size || 60;
@@ -2993,13 +3015,16 @@ function _flipCell(cell, from, to) {
     const inp = document.getElementById('plateInput'), btn = document.getElementById('plateSaveBtn'), pv = document.getElementById('platePreview');
     if (!inp || !btn || !pv) return;
     function preview() {
+      // 跟地圖上一樣：車子＋下面的車牌牌子(畫面上 72×84)
       const base = window._snmCarBase && window._snmCarBase();
-      const x = pv.getContext('2d');
-      x.clearRect(0, 0, pv.width, pv.height);
       if (!base) { setTimeout(preview, 500); return; } // 車子圖還沒載好
-      pv.width = base.width; pv.height = base.height;
-      x.drawImage(base, 0, 0);
-      snmDrawPlate(x, pv.width, pv.height, snmCleanPlate(inp.value));
+      const R = base.width / 40, W = 72, H = 84, x = pv.getContext('2d');
+      pv.width = W * R; pv.height = H * R;
+      x.clearRect(0, 0, pv.width, pv.height);
+      const carH = base.height / R, s = Math.min(1, 56 / carH); // 車子縮一點，留位置給車牌
+      x.drawImage(base, (W - 40 * s) / 2 * R, 0, 40 * s * R, carH * s * R);
+      const plate = snmPlateBadge(snmCleanPlate(inp.value), R);
+      if (plate.width > 1) x.drawImage(plate, Math.max(0, (pv.width - plate.width) / 2), (carH * s + 2) * R, Math.min(plate.width, pv.width), plate.height * Math.min(1, pv.width / plate.width));
     }
     inp.value = snmPlateText();
     inp.addEventListener('input', preview);
@@ -3376,6 +3401,7 @@ function _flipCell(cell, from, to) {
       var upd = { name: (wName.value || '').trim() || AM.getProfile().name };
       if (pendingAvatar) upd.avatar = pendingAvatar;
       AM.setProfile(upd);
+      if (window._snmApplyCarLabels) window._snmApplyCarLabels(); // 車子上面的頭像也換
       wModal.style.display = 'none';
     });
   });
@@ -5162,7 +5188,7 @@ function _flipCell(cell, from, to) {
     style.layers.forEach(layer => {
       // 隱藏所有 symbol 類型圖層（包含 POI marker、地名、圖示）
       // 只保留 line（道路）、fill（區域填色）、background，以及車子圖層
-      const isPoiSymbol = layer.type === 'symbol' && layer.id !== 'user-car' && layer.id !== 'navRoute-arrows' && !layer.id.startsWith('navTurnArrow-');
+      const isPoiSymbol = layer.type === 'symbol' && !layer.id.startsWith('user-car') && layer.id !== 'navRoute-arrows' && !layer.id.startsWith('navTurnArrow-');
       if (isPoiSymbol) {
         try {
           map.setLayoutProperty(layer.id, 'visibility', visibility);
@@ -6311,26 +6337,56 @@ map.on('load', function() {
     _cachedCarImg = { data: _carImageData(), pixelRatio: ratio };
     _addCarLayers(_cachedCarImg);
   };
-  // 車子＋車尾車牌(畫在同一張圖上，所以移動、轉彎、旋轉都跟車子完全同步)
   function _carImageData() {
-    const c = document.createElement('canvas');
-    c.width = _carBase.width; c.height = _carBase.height;
-    const x = c.getContext('2d');
-    x.drawImage(_carBase, 0, 0);
-    if (window.snmDrawPlate) window.snmDrawPlate(x, c.width, c.height, window.snmPlateText());
-    return x.getImageData(0, 0, c.width, c.height);
+    return _carBase.getContext('2d').getImageData(0, 0, _carBase.width, _carBase.height);
   }
-  // 換車牌：直接更新車子圖示(同樣大小)，不重建圖層
-  window._snmApplyPlate = function () {
-    if (!_carBase) return;
-    _cachedCarImg = { data: _carImageData(), pixelRatio: _carRatio };
-    if (map.hasImage('car-icon')) map.updateImage('car-icon', _cachedCarImg.data);
-  };
-  window._snmCarBase = function () { return _carBase; }; // 設定頁預覽用
+  // ── 車子上面的頭像、下面的車牌：各自一張圖，只有換頭像/名字/車牌時才重畫，平常移動、轉彎都交給地圖 GPU ──
+  // 兩張圖都固定正對螢幕(不跟車子轉)，地圖怎麼轉、怎麼傾斜，頭像都在車子上方、車牌都在下方
+  let _labelImgs = null; // { avatar:{data,pixelRatio}, plate:{data,pixelRatio}, hasPlate }
+  let _labelSeq = 0;     // 頭像圖片是非同步載入，用序號避免舊的結果蓋掉新的
+  function _profile() {
+    try { const p = JSON.parse(localStorage.getItem('ptt_profile') || 'null'); if (p) return p; } catch (e) {}
+    return { name: '', avatar: '' };
+  }
+  function _putImage(id, img) {
+    if (!map.hasImage(id)) { map.addImage(id, img.data, { pixelRatio: img.pixelRatio }); return; }
+    const old = map.getImage(id);
+    // 大小一樣用 updateImage(不重建圖層)；車牌字數變了圖就變寬，只能移掉重加
+    if (old && old.data && old.data.width === img.data.width && old.data.height === img.data.height) map.updateImage(id, img.data);
+    else { map.removeImage(id); map.addImage(id, img.data, { pixelRatio: img.pixelRatio }); }
+  }
+  function _applyLabels() {
+    if (!_labelImgs) return;
+    _putImage('car-avatar', _labelImgs.avatar);
+    _putImage('car-plate', _labelImgs.plate);
+    if (map.getLayer('user-car-plate')) map.setLayoutProperty('user-car-plate', 'visibility', _labelImgs.hasPlate ? 'visible' : 'none');
+  }
+  function _buildLabels() {
+    const seq = ++_labelSeq, R = _carRatio, p = _profile(), plate = window.snmPlateText ? window.snmPlateText() : '';
+    const done = function (img) {
+      if (seq !== _labelSeq) return;
+      const a = snmAvatarBadge(img, p.name, R), b = snmPlateBadge(plate, R);
+      _labelImgs = {
+        avatar: { data: a.getContext('2d').getImageData(0, 0, a.width, a.height), pixelRatio: R },
+        plate:  { data: b.getContext('2d').getImageData(0, 0, b.width, b.height), pixelRatio: R },
+        hasPlate: !!plate
+      };
+      _applyLabels();
+    };
+    if (!p.avatar) { done(null); return; }
+    const im = new Image();
+    im.onload = function () { done(im); };
+    im.onerror = function () { done(null); };
+    im.src = p.avatar;
+  }
+  // 換頭像/名字/車牌時呼叫(設定裡的車牌、第一次打開的設定卡、對講的個人資料都會叫它)
+  window._snmApplyPlate = window._snmApplyCarLabels = function () { if (_carBase) _buildLabels(); };
+  window._snmCarBase = function () { return _carBase; };
   function _addCarLayers(_img) {
     if (map.getSource('user-pos')) return;
     // 切換地圖風格後舊圖可能還在,重複 addImage 會丟錯中斷,車子就整個不見
     if (!map.hasImage('car-icon')) map.addImage('car-icon', _img.data, { pixelRatio: _img.pixelRatio });
+    if (_labelImgs) _applyLabels(); else _buildLabels();
 
     map.addSource('user-pos', {
       type: 'geojson',
@@ -6434,6 +6490,30 @@ map.on('load', function() {
         'icon-allow-overlap': true,
         'icon-ignore-placement': true
       }
+    });
+
+    // 頭像在車子上方、車牌在車子下方：正對螢幕，離車子中心 24px(車子 40×55，轉向、傾斜時大約都不會蓋到)
+    const _labelLayout = function (img, anchor, dy) {
+      return {
+        'icon-image': img, 'icon-anchor': anchor, 'icon-offset': [0, dy],
+        'icon-rotation-alignment': 'viewport', 'icon-pitch-alignment': 'viewport',
+        'icon-allow-overlap': true, 'icon-ignore-placement': true
+      };
+    };
+    map.addLayer({ id: 'user-car-plate', type: 'symbol', source: 'user-pos', layout: Object.assign(_labelLayout('car-plate', 'top', 24),
+      { visibility: (_labelImgs && _labelImgs.hasPlate) ? 'visible' : 'none' }) });
+    map.addLayer({ id: 'user-car-avatar', type: 'symbol', source: 'user-pos', layout: _labelLayout('car-avatar', 'bottom', -24) });
+
+    // 點車子、頭像或車牌 → 打開「我的資料」(頭像、名稱、車牌)；換地圖風格會重建圖層，事件只綁一次
+    if (!window._snmCarClickBound) ['user-car', 'user-car-avatar', 'user-car-plate'].forEach(function (id) {
+      window._snmCarClickBound = true;
+      map.on('click', id, function (e) {
+        if (e.originalEvent) e.originalEvent.stopPropagation();
+        e.preventDefault && e.preventDefault();
+        if (window._snmOpenProfile) window._snmOpenProfile();
+      });
+      map.on('mouseenter', id, function () { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', id, function () { map.getCanvas().style.cursor = ''; });
     });
 
     window._updateCarMarkerRaw = function(lng, lat, bearing) {
@@ -10185,38 +10265,73 @@ setTimeout(() => {
 #snmOnb input[type=text]:focus{border-color:#2F80FF;}
 #snmOnbGo{width:100%;padding:13px 0;margin-top:4px;border:none;border-radius:999px;background:#2F80FF;color:#fff;font-size:16px;font-weight:600;cursor:pointer;}
 #snmOnbGo:disabled{background:#b8c9e6;cursor:default;}
+#snmOnb .card{position:relative;}
+#snmOnbX{position:absolute;right:14px;top:14px;width:32px;height:32px;border:none;border-radius:16px;background:rgba(0,0,0,0.06);color:#1c1c1e;font-size:15px;cursor:pointer;}
+#snmOnbPlatePv{display:block;margin:-6px auto 14px;height:24px;}
+#snmOnbPlatePv[hidden]{display:none;}
 </style>
 <div id="snmOnb" hidden>
-  <div class="card">
-    <h3>歡迎使用智行地圖</h3>
-    <p class="sub">先設定一下你的資料，對講、留言時大家就認得你</p>
-    <div id="snmOnbAv"></div>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="snmOnbTitle">
+    <button id="snmOnbX" aria-label="關閉" hidden>✕</button>
+    <h3 id="snmOnbTitle">歡迎使用智行地圖</h3>
+    <p class="sub" id="snmOnbSub">先設定一下你的資料，對講、留言時大家就認得你</p>
+    <div id="snmOnbAv" role="button" aria-label="換頭像照片"></div>
     <div class="avHint">點頭像上傳照片(可不放)</div>
     <input type="file" id="snmOnbFile" accept="image/*" hidden>
     <label for="snmOnbName">名稱</label>
-    <input type="text" id="snmOnbName" maxlength="12" placeholder="你的名字" autocomplete="nickname">
-    <label for="snmOnbPlate">車牌 <span>(可不填)</span></label>
-    <input type="text" id="snmOnbPlate" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off">
+    <input type="text" id="snmOnbName" maxlength="12" placeholder="你的名字" autocomplete="nickname" enterkeyhint="next">
+    <label for="snmOnbPlate">車牌 <span>(可不填，會顯示在導航車子下面)</span></label>
+    <input type="text" id="snmOnbPlate" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off" autocapitalize="characters" enterkeyhint="done">
+    <canvas id="snmOnbPlatePv" hidden aria-hidden="true"></canvas>
     <button id="snmOnbGo" disabled>開始使用</button>
   </div>
 </div>
 <script>
+// 同一張卡兩種用法：第一次打開網站時自動跳出(一定要填名字)；之後點導航車子打開「我的資料」(可以關掉不存)
 (function () {
-  var done = false;
-  try { done = localStorage.getItem('snm_onboarded') === '1'; } catch (e) { done = true; } // 存不了就不要每次都跳
-  if (done) return;
   var box = document.getElementById('snmOnb'), av = document.getElementById('snmOnbAv'), file = document.getElementById('snmOnbFile');
   var nameIn = document.getElementById('snmOnbName'), plateIn = document.getElementById('snmOnbPlate'), go = document.getElementById('snmOnbGo');
-  var avatar = '';
-  try { var p = JSON.parse(localStorage.getItem('ptt_profile') || 'null'); if (p && p.avatar) avatar = p.avatar; } catch (e) {}
-  try { plateIn.value = localStorage.getItem('snm_plate') || ''; } catch (e) {}
+  var xBtn = document.getElementById('snmOnbX'), pv = document.getElementById('snmOnbPlatePv');
+  var avatar = '', editMode = false;
+  function cleanPlate(t) { return (typeof snmCleanPlate === 'function') ? snmCleanPlate(t) : String(t || '').trim().toUpperCase(); }
+  function profile() { try { return JSON.parse(localStorage.getItem('ptt_profile') || 'null') || {}; } catch (e) { return {}; } }
   function showAv() {
     av.style.backgroundImage = avatar ? 'url("' + avatar + '")' : '';
     av.textContent = avatar ? '' : (nameIn.value.trim().charAt(0).toUpperCase() || '?');
   }
+  // 車牌即時預覽：跟車子下面顯示的牌子同一個畫法
+  function showPlate() {
+    var t = cleanPlate(plateIn.value);
+    if (!t || typeof snmPlateBadge !== 'function') { pv.hidden = true; return; }
+    var R = Math.max(2, Math.ceil(window.devicePixelRatio || 1)), c = snmPlateBadge(t, R);
+    pv.width = c.width; pv.height = c.height; pv.style.width = (c.width / R) + 'px'; pv.style.height = (c.height / R) + 'px';
+    pv.getContext('2d').drawImage(c, 0, 0); pv.hidden = false;
+  }
   function check() { go.disabled = !nameIn.value.trim(); showAv(); }
+  function open(edit) {
+    editMode = !!edit;
+    var p = profile(), n = p.name || '';
+    avatar = p.avatar || '';
+    nameIn.value = (!editMode && /^駕駛\d{3}$/.test(n)) ? '' : n; // 系統自動取的「駕駛123」第一次不填進去，讓使用者自己取
+    try { plateIn.value = localStorage.getItem('snm_plate') || ''; } catch (e) { plateIn.value = ''; }
+    document.getElementById('snmOnbTitle').textContent = editMode ? '我的資料' : '歡迎使用智行地圖';
+    document.getElementById('snmOnbSub').textContent = editMode ? '頭像會顯示在導航車子上面，車牌在下面' : '先設定一下你的資料，對講、留言時大家就認得你';
+    go.textContent = editMode ? '儲存' : '開始使用';
+    xBtn.hidden = !editMode;
+    check(); showPlate();
+    box.hidden = false;
+  }
+  function close() { box.hidden = true; }
+  window._snmOpenProfile = function () { open(true); };
+
   nameIn.addEventListener('input', check);
+  nameIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); plateIn.focus(); } });
+  plateIn.addEventListener('input', showPlate);
+  plateIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); plateIn.blur(); if (!go.disabled) go.click(); } });
+  plateIn.addEventListener('blur', function () { plateIn.value = cleanPlate(plateIn.value); showPlate(); });
   av.addEventListener('click', function () { file.click(); });
+  xBtn.addEventListener('click', close);
+  box.addEventListener('click', function (e) { if (editMode && e.target === box) close(); }); // 點外面關掉(第一次設定不行)
   // 選照片 → 中間裁成正方形、縮成 96×96 JPEG(跟對講的頭像一樣)
   file.addEventListener('change', function () {
     var f = file.files && file.files[0]; file.value = '';
@@ -10224,9 +10339,10 @@ setTimeout(() => {
     var url = URL.createObjectURL(f), img = new Image();
     img.onload = function () {
       var S = 96, c = document.createElement('canvas'); c.width = c.height = S;
-      var side = Math.min(img.naturalWidth, img.naturalHeight);
-      c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
-      avatar = c.toDataURL('image/jpeg', 0.8); URL.revokeObjectURL(url); showAv();
+      var side = Math.min(img.naturalWidth, img.naturalHeight), x = c.getContext('2d');
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+      avatar = c.toDataURL('image/jpeg', 0.85); URL.revokeObjectURL(url); showAv();
     };
     img.onerror = function () { URL.revokeObjectURL(url); };
     img.src = url;
@@ -10236,18 +10352,20 @@ setTimeout(() => {
     if (!name) return;
     if (window.AudioManager && window.AudioManager.setProfile) window.AudioManager.setProfile({ name: name, avatar: avatar });
     else try { localStorage.setItem('ptt_profile', JSON.stringify({ name: name, avatar: avatar })); } catch (e) {}
-    var plate = (typeof snmCleanPlate === 'function') ? snmCleanPlate(plateIn.value) : plateIn.value.trim();
+    var plate = cleanPlate(plateIn.value);
     try {
       if (plate) localStorage.setItem('snm_plate', plate); else localStorage.removeItem('snm_plate');
       localStorage.setItem('snm_onboarded', '1');
     } catch (e) {}
     var pi = document.getElementById('plateInput'); // 設定裡的車牌欄也同步
     if (pi) { pi.value = plate; pi.dispatchEvent(new Event('input')); }
-    if (window._snmApplyPlate) window._snmApplyPlate();
-    box.hidden = true;
+    if (window._snmApplyCarLabels) window._snmApplyCarLabels();
+    close();
   });
-  showAv();
-  box.hidden = false;
+
+  var done = false;
+  try { done = localStorage.getItem('snm_onboarded') === '1'; } catch (e) { done = true; } // 存不了就不要每次都跳
+  if (!done) open(false);
 })();
 </script>
 
