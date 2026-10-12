@@ -1619,7 +1619,7 @@ html, body {
 
 <!-- ===== Splash Screen ===== -->
 <div id="splashScreen">
-  <img id="splashLogo" src="圖片/智行地圖.png" alt="智行地圖">
+  <img id="splashLogo" src="智行地圖.png" alt="智行地圖"><!-- 跟分頁圖標同一個檔案，只下載一次 -->
   <div id="splashTitle">智行地圖</div>
   <div id="splashSub">智慧導航 · 即時路況</div>
   <div id="splashProgressWrap"><div id="splashProgress"></div></div>
@@ -1925,7 +1925,7 @@ html, body {
 </div>
 
 <div class="bottomBar">
-  <div class="appBrand" id="appBrand"><img src="圖片/智行地圖.png" alt=""><span>智行地圖</span></div>
+  <div class="appBrand" id="appBrand"><img src="智行地圖.png" alt=""><span>智行地圖</span></div>
 </div>
 <!-- 💬 對講聊天:訊息(頭像+名字+文字)在上,輸入框+麥克風在下;沒有文字時按住麥克風說話,有文字時變成送出 -->
 <div class="pttChat" id="pttChat">
@@ -5407,20 +5407,6 @@ function _flipCell(cell, from, to) {
     map.getSource(RP_SRC).setData({ type: 'FeatureCollection', features: _routeChoice.routes.map((r, i) => (
       { type: 'Feature', geometry: r.geometry, properties: { idx: i, sel: i === _routeChoice.sel } })) });
   }
-  // 選路線時也收起群集圓圈(公廁、紅綠燈、監視器…的數量圓圈)，不然會蓋住路線；只還原自己藏起來的
-  let _rpHiddenCircles = [];
-  function rpToggleCircles(show) {
-    if (show) {
-      _rpHiddenCircles.forEach(id => { try { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible'); } catch (_) {} });
-      _rpHiddenCircles = [];
-      return;
-    }
-    (map.getStyle().layers || []).forEach(l => {
-      if (l.type !== 'circle' || /^snm-traffic/.test(l.id)) return;
-      if ((map.getLayoutProperty(l.id, 'visibility') || 'visible') === 'none') return;
-      try { map.setLayoutProperty(l.id, 'visibility', 'none'); _rpHiddenCircles.push(l.id); } catch (_) {}
-    });
-  }
   function rpFmtMin(sec) {
     const m = Math.max(1, Math.round(sec / 60)), h = Math.floor(m / 60);
     return (h ? h + ' 小時 ' : '') + (m % 60) + ' 分鐘';
@@ -6965,6 +6951,8 @@ document.addEventListener("DOMContentLoaded", function(){
 
   function reloadCctvImage(){
     if(!cctvImage || !CCTV_BASE_URL) return;
+    // 螢幕關掉/切到別的 App 時切斷串流省電，回來時 visibilitychange 會馬上重連
+    if(document.hidden){ cctvImage.removeAttribute('src'); scheduleCctvReload(CCTV_REFRESH_INTERVAL); return; }
     cctvImage.src = CCTV_BASE_URL + "&_t=" + Date.now();
     // 每次重連之後,重新排下一次的定期重連(不管這次是正常排程還是錯誤觸發的)
     scheduleCctvReload(CCTV_REFRESH_INTERVAL);
@@ -6995,6 +6983,8 @@ document.addEventListener("DOMContentLoaded", function(){
     window.cctvActiveIsAuto = false;
   };
 
+
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden && CCTV_BASE_URL) reloadCctvImage(); });
 
   if(cctvImage){
     cctvImage.addEventListener("load", function(){
@@ -7128,6 +7118,7 @@ setTimeout(() => {
     /* --- 時鐘 --- */
     const clockEl = document.getElementById('mapClockText');
     function tick(){
+      if (document.hidden) return; // 螢幕關掉/切到別的 App 時不用更新，回來下一秒就會補上
       const now = new Date();
       const h = String(now.getHours()).padStart(2,'0');
       const m = String(now.getMinutes()).padStart(2,'0');
@@ -7689,13 +7680,16 @@ setTimeout(() => {
         wrap.appendChild(live);
         var badge=document.createElement('span'); badge.className='cctvLive'; badge.innerHTML='<span class="dot"></span>即時'; wrap.appendChild(badge);
         var stopped=false, retry=null;
-        var load=function(){ if(stopped) return; live.src=baseUrl+sep+'t='+Date.now(); };
+        // 螢幕關掉/切到別的 App 時切斷影像串流(背景還一直下載很耗電、耗流量)，回來馬上重連
+        var load=function(){ if(stopped) return; if(document.hidden){ live.removeAttribute('src'); return; } live.src=baseUrl+sep+'t='+Date.now(); };
+        var onVis=function(){ load(); };
+        document.addEventListener('visibilitychange', onVis);
         live.onerror=function(){ if(stopped) return; clearTimeout(retry); retry=setTimeout(load,2000); };
         load();
         var tick=setInterval(load,8000);
         window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:(window._snmCctvIconUrl||'📹'), logoShape:'bare',
           lat:coords[1], lng:coords[0], extraEl:wrap, extraTop:true, fitPeek:true,
-          onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); live.removeAttribute('src'); } });
+          onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); document.removeEventListener('visibilitychange', onVis); live.removeAttribute('src'); } });
         return;
       }
       cctvPopup=new maplibregl.Popup({maxWidth:'320px',closeButton:true})
@@ -8401,6 +8395,7 @@ setTimeout(() => {
   // 閒置提示：3分鐘沒賺幣就提示一條
   window._lastEarnTime = Date.now();
   setInterval(()=>{
+    if(document.hidden) return; // 看不到畫面時不用跳提示
     if(Date.now() - (window._lastEarnTime||0) > 3*60*1000){
       showToast(COIN_HINTS[_hintIdx % COIN_HINTS.length]);
       _hintIdx++;
