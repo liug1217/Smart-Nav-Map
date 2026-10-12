@@ -10167,6 +10167,90 @@ setTimeout(() => {
   </div>
 </div>
 
+<!-- 👋 第一次打開網站：設定頭像、名稱(必填)、車牌(可不填)。存到跟對講、留言、導航車牌同一個地方 -->
+<style>
+#snmOnb{position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;}
+#snmOnb[hidden]{display:none!important;}
+#snmOnb .card{width:min(100%,360px);max-height:calc(100vh - 32px);overflow-y:auto;box-sizing:border-box;padding:24px 20px 20px;border-radius:28px;
+  background:rgba(255,255,255,0.8);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:0.5px solid #d9d9d9;box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  color:#1c1c1e;font-family:-apple-system,BlinkMacSystemFont,sans-serif;text-align:center;}
+#snmOnb h3{margin:0 0 4px;font-size:20px;}
+#snmOnb .sub{font-size:13px;color:#8e8e93;margin:0 0 18px;line-height:1.5;}
+#snmOnbAv{width:88px;height:88px;border-radius:50%;margin:0 auto 6px;background:#5ac8fa center/cover no-repeat;display:flex;align-items:center;justify-content:center;
+  font-size:34px;font-weight:700;color:#fff;cursor:pointer;border:0.5px solid #d9d9d9;}
+#snmOnb .avHint{font-size:12px;color:#8e8e93;margin-bottom:16px;}
+#snmOnb label{display:block;text-align:left;font-size:13px;font-weight:600;margin:0 0 6px 4px;}
+#snmOnb label span{font-weight:400;color:#8e8e93;}
+#snmOnb input[type=text]{width:100%;box-sizing:border-box;padding:12px 16px;margin-bottom:14px;border-radius:999px;border:1px solid #d1d1d6;background:#fff;color:#1c1c1e;font-size:16px;outline:none;}
+#snmOnb input[type=text]:focus{border-color:#2F80FF;}
+#snmOnbGo{width:100%;padding:13px 0;margin-top:4px;border:none;border-radius:999px;background:#2F80FF;color:#fff;font-size:16px;font-weight:600;cursor:pointer;}
+#snmOnbGo:disabled{background:#b8c9e6;cursor:default;}
+</style>
+<div id="snmOnb" hidden>
+  <div class="card">
+    <h3>歡迎使用智行地圖</h3>
+    <p class="sub">先設定一下你的資料，對講、留言時大家就認得你</p>
+    <div id="snmOnbAv"></div>
+    <div class="avHint">點頭像上傳照片(可不放)</div>
+    <input type="file" id="snmOnbFile" accept="image/*" hidden>
+    <label for="snmOnbName">名稱</label>
+    <input type="text" id="snmOnbName" maxlength="12" placeholder="你的名字" autocomplete="nickname">
+    <label for="snmOnbPlate">車牌 <span>(可不填)</span></label>
+    <input type="text" id="snmOnbPlate" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off">
+    <button id="snmOnbGo" disabled>開始使用</button>
+  </div>
+</div>
+<script>
+(function () {
+  var done = false;
+  try { done = localStorage.getItem('snm_onboarded') === '1'; } catch (e) { done = true; } // 存不了就不要每次都跳
+  if (done) return;
+  var box = document.getElementById('snmOnb'), av = document.getElementById('snmOnbAv'), file = document.getElementById('snmOnbFile');
+  var nameIn = document.getElementById('snmOnbName'), plateIn = document.getElementById('snmOnbPlate'), go = document.getElementById('snmOnbGo');
+  var avatar = '';
+  try { var p = JSON.parse(localStorage.getItem('ptt_profile') || 'null'); if (p && p.avatar) avatar = p.avatar; } catch (e) {}
+  try { plateIn.value = localStorage.getItem('snm_plate') || ''; } catch (e) {}
+  function showAv() {
+    av.style.backgroundImage = avatar ? 'url("' + avatar + '")' : '';
+    av.textContent = avatar ? '' : (nameIn.value.trim().charAt(0).toUpperCase() || '?');
+  }
+  function check() { go.disabled = !nameIn.value.trim(); showAv(); }
+  nameIn.addEventListener('input', check);
+  av.addEventListener('click', function () { file.click(); });
+  // 選照片 → 中間裁成正方形、縮成 96×96 JPEG(跟對講的頭像一樣)
+  file.addEventListener('change', function () {
+    var f = file.files && file.files[0]; file.value = '';
+    if (!f) return;
+    var url = URL.createObjectURL(f), img = new Image();
+    img.onload = function () {
+      var S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+      var side = Math.min(img.naturalWidth, img.naturalHeight);
+      c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+      avatar = c.toDataURL('image/jpeg', 0.8); URL.revokeObjectURL(url); showAv();
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+  go.addEventListener('click', function () {
+    var name = nameIn.value.trim().slice(0, 12);
+    if (!name) return;
+    if (window.AudioManager && window.AudioManager.setProfile) window.AudioManager.setProfile({ name: name, avatar: avatar });
+    else try { localStorage.setItem('ptt_profile', JSON.stringify({ name: name, avatar: avatar })); } catch (e) {}
+    var plate = (typeof snmCleanPlate === 'function') ? snmCleanPlate(plateIn.value) : plateIn.value.trim();
+    try {
+      if (plate) localStorage.setItem('snm_plate', plate); else localStorage.removeItem('snm_plate');
+      localStorage.setItem('snm_onboarded', '1');
+    } catch (e) {}
+    var pi = document.getElementById('plateInput'); // 設定裡的車牌欄也同步
+    if (pi) { pi.value = plate; pi.dispatchEvent(new Event('input')); }
+    if (window._snmApplyPlate) window._snmApplyPlate();
+    box.hidden = true;
+  });
+  showAv();
+  box.hidden = false;
+})();
+</script>
+
 <div id="ios-home-guard"></div>
 
 <!-- ===== Smart Nav Traffic Engine ===== -->
