@@ -7687,8 +7687,13 @@ setTimeout(() => {
         live.onerror=function(){ if(stopped) return; clearTimeout(retry); retry=setTimeout(load,2000); };
         load();
         var tick=setInterval(load,8000);
+        // 影像下面：打開監視器清單頁，看同一條路、同方向的所有監視器(這支會標出來)
+        var box=document.createElement('div'); box.appendChild(wrap);
+        var all=document.createElement('a'); all.href='監視器.html?cam='+encodeURIComponent(baseUrl); all.textContent='這條路所有監視器 ›';
+        all.style.cssText='display:block;margin-top:8px;padding:10px 0;text-align:center;border-radius:999px;background:#EAF2FF;color:#1B5FC9;font-size:14px;font-weight:600;text-decoration:none';
+        box.appendChild(all);
         window._snmOpenPlace({ layer:'cctv-point', name:label||'監視器', kind:'即時監視器'+(props.road?' · '+props.road:''), logo:(window._snmCctvIconUrl||'📹'), logoShape:'bare',
-          lat:coords[1], lng:coords[0], extraEl:wrap, extraTop:true, fitPeek:true,
+          lat:coords[1], lng:coords[0], extraEl:box, extraTop:true, fitPeek:true,
           onClose:function(){ stopped=true; clearInterval(tick); clearTimeout(retry); document.removeEventListener('visibilitychange', onVis); live.removeAttribute('src'); } });
         return;
       }

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>智行監視器</title>
+<link rel="icon" type="image/png" href="智行地圖.png">
+<style>
+  /* 跟智行地圖同一套顏色：藍色按鈕 #2F80FF、白色磨砂卡片、膠囊按鈕 */
+  :root {
+    --blue: #2F80FF; --blue-dark: #1B5FC9; --blue-soft: #EAF2FF;
+    --page: #F2F2F7; --card: rgba(255,255,255,0.86); --line: #d9d9d9;
+    --text: #1c1c1e; --text-2: #3c3c43; --muted: #8e8e93;
+    --cms-bg: #FFF4D6; --cms-text: #6B4A00; --live: #FF3B30;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { color-scheme: light; }
+  body { margin: 0; background: var(--page); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  button { font-family: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ── 頂部(捲動時固定) ── */
+  .top { position: sticky; top: 0; z-index: 20; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background: rgba(242,242,247,0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-bottom: 0.5px solid var(--line); }
+  .bar { display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 0 auto; }
+  .bar img { width: 34px; height: 34px; border-radius: 9px; }
+  .bar h1 { margin: 0; font-size: 19px; flex: 1; min-width: 0; }
+  .bar h1 small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .back { text-decoration: none; color: #fff; background: var(--blue); padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .controls { max-width: 1180px; margin: 10px auto 0; display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .row::-webkit-scrollbar { display: none; }
+  .pill { flex-shrink: 0; border: 1px solid var(--line); background: #fff; color: var(--text); padding: 7px 14px; border-radius: 999px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  .pill.on { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+  .tabs .pill { font-weight: 600; }
+  .seg { display: inline-flex; background: rgba(118,118,128,0.12); border-radius: 999px; padding: 2px; flex-shrink: 0; }
+  .seg button { border: none; background: transparent; padding: 6px 14px; border-radius: 999px; font-size: 14px; color: var(--text); cursor: pointer; white-space: nowrap; }
+  .seg button.on { background: #fff; color: var(--blue-dark); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .search { flex: 1; min-width: 140px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-size: 15px; background: #fff; outline: none; }
+  .search:focus { border-color: var(--blue); }
+
+  /* ── 清單 ── */
+  main { max-width: 1180px; margin: 0 auto; padding: 14px 16px calc(32px + env(safe-area-inset-bottom)); }
+  .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .summary b { color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  @media (max-width: 560px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+  .gap { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin: 4px 0 -4px; }
+  .gap::before, .gap::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .card { position: relative; background: var(--card); border: 0.5px solid var(--line); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08); cursor: pointer; transition: transform .15s; }
+  .card:active { transform: scale(0.98); }
+  .card.hl { box-shadow: 0 0 0 3px var(--blue), 0 2px 6px rgba(0,0,0,0.08); }
+  .shot { position: relative; aspect-ratio: 16 / 10; background: #1c1c1e; }
+  .shot canvas, .shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .shot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #8e8e93; font-size: 12px; }
+  .time { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,0.55); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 999px; }
+  .star { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 15px; border: none; background: rgba(0,0,0,0.45); color: #fff; font-size: 15px; cursor: pointer; }
+  .star.on { color: #FFD60A; }
+  .info { padding: 8px 10px 10px; }
+  .t1 { font-size: 14px; font-weight: 700; }
+  .t1 .dir { color: var(--blue-dark); }
+  .t2 { font-size: 12px; color: var(--text-2); margin-top: 2px; line-height: 1.35; }
+  .cms { margin-top: 6px; background: var(--cms-bg); color: var(--cms-text); border-radius: 8px; padding: 5px 7px; font-size: 11.5px; line-height: 1.4; }
+  .cms b { font-weight: 700; }
+  .empty { padding: 60px 0; text-align: center; color: var(--muted); }
+  .more { display: block; margin: 18px auto 0; }
+
+  /* ── 大圖檢視(即時影像、前後切換、沿路巡航) ── */
+  .viewer { position: fixed; inset: 0; z-index: 50; background: #0b0b0d; display: flex; flex-direction: column; color: #fff;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  .vhead { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; }
+  .vhead .tt { flex: 1; min-width: 0; }
+  .vhead .t1 { font-size: 16px; }
+  .vhead .t1 .dir { color: #8AB8FF; }
+  .vhead .t2 { color: #c7c7cc; font-size: 13px; }
+  .vbtn { border: none; background: rgba(255,255,255,0.14); color: #fff; width: 38px; height: 38px; border-radius: 19px; font-size: 17px; cursor: pointer; flex-shrink: 0; }
+  .vstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+  .vstage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .vstage .live { position: absolute; left: 16px; top: 8px; display: flex; align-items: center; gap: 5px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 3px 9px; border-radius: 999px; }
+  .vstage .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+  .vnav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 23px; border: none; background: rgba(255,255,255,0.18); color: #fff; font-size: 22px; cursor: pointer; }
+  .vnav.l { left: 10px; } .vnav.r { right: 10px; }
+  .vnav:disabled { opacity: 0.25; }
+  .vcms { margin: 0 16px 10px; }
+  .vfoot { display: flex; align-items: center; gap: 10px; padding: 0 16px 14px; flex-wrap: wrap; }
+  .vfoot .pos { color: #c7c7cc; font-size: 13px; flex: 1; min-width: 120px; }
+  .cruise { border: none; border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 600; cursor: pointer; background: var(--blue); color: #fff; }
+  .cruise.on { background: #fff; color: var(--blue-dark); }
+  .prog { height: 3px; background: rgba(255,255,255,0.15); margin: 0 16px 12px; border-radius: 2px; overflow: hidden; }
+  .prog i { display: block; height: 100%; width: 0; background: var(--blue); }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="bar">
+    <img src="智行地圖.png" alt="">
+    <h1>智行監視器<small id="upd">國道、快速公路、省道即時影像</small></h1>
+    <a class="back" href="智行地圖.html">回地圖</a>
+  </div>
+  <div class="controls">
+    <div class="row tabs" id="tabs"></div>
+    <div class="row" id="roads"></div>
+    <div class="row" id="filters"></div>
+  </div>
+</div>
+<main>
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"></div>
+  <button class="pill more" id="more" hidden>顯示更多</button>
+</main>
+
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true">
+  <div class="vhead">
+    <div class="tt"><div class="t1" id="vT1"></div><div class="t2" id="vT2"></div></div>
+    <button class="vbtn" id="vStar" aria-label="收藏">☆</button>
+    <button class="vbtn" id="vClose" aria-label="關閉">✕</button>
+  </div>
+  <div class="vstage">
+    <img id="vImg" alt="監視器即時影像">
+    <span class="live"><i></i>即時</span>
+    <button class="vnav l" id="vPrev" aria-label="上一支">‹</button>
+    <button class="vnav r" id="vNext" aria-label="下一支">›</button>
+  </div>
+  <div class="vcms" id="vCms"></div>
+  <div class="prog" id="vProg" hidden><i></i></div>
+  <div class="vfoot">
+    <div class="pos" id="vPos"></div>
+    <button class="cruise" id="vCruise">▶ 沿路巡航</button>
+  </div>
+</div>
+
+<script src="cctv_list_data.js"></script>
+<script>
+(function () {
+  'use strict';
+  const API = 'https://node.tailfdfee1.ts.net/api';
+  const DATA = window.CCTV_LIST || { fw: [], thb: [] };
+  const REGION = { NR: '北區', CR: '中區', SR: '南區', PL: '坪林' };
+  const DIR_NAME = { N: '北上', S: '南下', E: '東向', W: '西向', '': '未標方向' };
+  const PAGE = 40;            // 一次顯示幾支(往下捲再多顯示)
+  const REFRESH_MS = 60000;   // 畫面上看得到的縮圖多久更新一次
+  const MAX_GRAB = 3;         // 同時最多抓幾支國道串流的畫面(串流很吃流量，排隊抓)
+  const CRUISE_MS = 8000;     // 沿路巡航每支停幾秒
+
+  // ── 監視器整理成統一格式 ──
+  const cams = [];
+  DATA.fw.forEach(function (r, i) {
+    const num = typeof r[8] === 'number'; // 一般只存攝影機編號；國5 等其他主機存完整網址
+    cams.push({ id: 'f' + (num ? r[8] : 'u' + i), kind: 'fw', road: r[0], dir: r[1], region: r[2], sec: r[3] + ' → ' + r[4], m: r[5], lat: r[6], lon: r[7],
+      url: num ? 'https://cctvn.freeway.gov.tw/abs2mjpg/bmjpg?camera=' + r[8] : r[8], stream: true });
+  });
+  DATA.thb.forEach(function (r, i) {
+    cams.push({ id: 't' + i, kind: 'thb', road: r[0], dir: r[1], region: '', sec: r[2].replace(/^[^(（]*[(（]/, '').replace(/[)）]$/, ''), m: r[3], lat: r[4], lon: r[5],
+      url: r[6], stream: false });
+  });
+  const byId = {}; cams.forEach(function (c) { byId[c.id] = c; });
+  const mileTxt = function (m) { return Math.floor(m / 1000) + 'K+' + String(m % 1000).padStart(3, '0'); };
+  const roadShort = function (r) { return r.replace('國道', '國').replace('號', '').replace('快速公路', '台').replace('汐止五股高架道路', '汐五高架').replace('五股楊梅高架道路', '五楊高架'); };
+  // 方向：國道里程往南/往東是增加；北上/西向時清單要從大里程排到小里程，才是「開車會依序經過」的順序
+  const forward = function (dir) { return dir === 'S' || dir === 'E' || dir === ''; };
+
+  // ── 收藏(存在這支手機) ──
+  let favs = [];
+  try { favs = JSON.parse(localStorage.getItem('snm_cctv_favs') || '[]'); } catch (e) {}
+  const isFav = function (c) { return favs.indexOf(c.url) >= 0; };
+  function toggleFav(c) {
+    const i = favs.indexOf(c.url);
+    if (i >= 0) favs.splice(i, 1); else favs.unshift(c.url);
+    try { localStorage.setItem('snm_cctv_favs', JSON.stringify(favs)); } catch (e) {}
+  }
+
+  // ── 狀態 ──
+  const st = { tab: 'fw', road: '國道1號', dir: 'S', region: '', q: '', shown: PAGE, near: null };
+  const roadsOf = function (kind) {
+    const n = {}; cams.forEach(function (c) { if (c.kind === kind) n[c.road] = (n[c.road] || 0) + 1; });
+    return Object.keys(n).sort(function (a, b) {
+      const na = parseInt((a.match(/\d+/) || [999])[0], 10), nb = parseInt((b.match(/\d+/) || [999])[0], 10);
+      const pre = kind === 'fw' ? '國道' : '台'; // 國道分頁國道排前面，省道分頁台X線排前面
+      return (a.indexOf(pre) === 0 ? 0 : 1) - (b.indexOf(pre) === 0 ? 0 : 1) || na - nb || a.length - b.length || a.localeCompare(b, 'zh-Hant'); // 同號碼：主線(台1線)排在支線(台1甲線)前面
+    });
+  };
+  const dirsOf = function (road, kind) {
+    const s = {}; cams.forEach(function (c) { if (c.road === road && c.kind === (kind || st.tab)) s[c.dir] = 1; });
+    return ['S', 'N', 'E', 'W', ''].filter(function (d) { return s[d]; });
+  };
+
+  // ── 電子看板(CMS)訊息：每支監視器顯示「開到這裡之前」最近的一面看板在講什麼 ──
+  let cmsList = [];
+  function loadCms() {
+    fetch(API + '/cms').then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) return;
+      cmsList = (j.data.items || []).filter(function (x) { return x.messages && x.messages.length; }).map(function (x) {
+        const mm = String(x.mile || '').match(/(\d+)K\+(\d+)/);
+        return { road: x.road, dir: x.direction, m: mm ? (+mm[1]) * 1000 + (+mm[2]) : null,
+          text: x.messages.map(function (t) { return t.text; }).filter(Boolean).join('　') };
+      }).filter(function (x) { return x.m != null && x.text; });
+      // 只把看板訊息補進已經在畫面上的卡片，不重畫清單(已經抓好的縮圖不用重抓)
+      document.querySelectorAll('.card').forEach(function (k) { setCmsEl(k.querySelector('.info'), byId[k.dataset.id]); });
+      if (vCam) showCam(vCam);
+    }).catch(function () {});
+  }
+  // 同一條路、同方向、在監視器「前面」10 公里內最近的看板
+  function cmsFor(c) {
+    if (c.kind !== 'fw' || !cmsList.length) return null;
+    let best = null, bd = 1e9;
+    cmsList.forEach(function (x) {
+      if (x.road !== c.road || x.dir !== c.dir) return;
+      const d = forward(c.dir) ? c.m - x.m : x.m - c.m;
+      if (d >= 0 && d <= 10000 && d < bd) { bd = d; best = x; }
+    });
+    return best ? { text: best.text, dist: bd } : null;
+  }
+
+  // ── 篩選 ──
+  function distKm(a, b) {
+    const R = 6371, dLa = (b.lat - a.lat) * Math.PI / 180, dLo = (b.lon - a.lon) * Math.PI / 180;
+    const x = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLo / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+  function currentList() {
+    const q = st.q.trim().replace(/\s+/g, '').toUpperCase();
+    const match = function (c) {
+      if (!q) return true;
+      return (c.road + c.sec + mileTxt(c.m) + roadShort(c.road)).replace(/\s+/g, '').toUpperCase().indexOf(q) >= 0;
+    };
+    if (st.tab === 'fav') return favs.map(function (u) { return cams.find(function (c) { return c.url === u; }); }).filter(Boolean).filter(match);
+    if (st.tab === 'near') {
+      if (!st.near) return [];
+      return cams.map(function (c) { return { c: c, d: distKm(st.near, c) }; }).filter(function (x) { return x.d <= 15; })
+        .sort(function (a, b) { return a.d - b.d; }).slice(0, 120).map(function (x) { x.c._d = x.d; return x.c; }).filter(match);
+    }
+    // 省道大多沒標方向，不分方向，照里程排
+    const allDir = st.tab === 'thb';
+    let list = cams.filter(function (c) { return c.kind === st.tab && c.road === st.road && (allDir || c.dir === st.dir) && (!st.region || c.region === st.region) && match(c); });
+    list.sort(function (a, b) { return allDir || forward(st.dir) ? a.m - b.m : b.m - a.m; });
+    return list;
+  }
+
+  // ── 縮圖：只抓畫面上看得到的；國道是串流，抓到第一張畫面就斷線(省電省流量) ──
+  const grabQueue = []; let grabbing = 0;
+  const lastShot = {}; // id → 時間
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
+    es.forEach(function (e) { e.target._vis = e.isIntersecting; if (e.isIntersecting) want(e.target); });
+  }, { rootMargin: '200px 0px' }) : null;
+  function want(card) {
+    const c = byId[card.dataset.id];
+    if (!c || card._queued) return;
+    if (lastShot[c.id] && Date.now() - lastShot[c.id] < REFRESH_MS && card._has) return;
+    card._queued = true; grabQueue.push(card); pump();
+  }
+  function pump() {
+    while (grabbing < MAX_GRAB && grabQueue.length) {
+      const card = grabQueue.shift(); card._queued = false;
+      if (!card.isConnected || (io && !card._vis) || document.hidden) continue;
+      grabbing++; grab(card, function () { grabbing--; pump(); });
+    }
+  }
+  function grab(card, done) {
+    const c = byId[card.dataset.id], shot = card.querySelector('.shot'), cv = shot.querySelector('canvas');
+    const img = new Image(); let finished = false, poll = null;
+    const finish = function (ok) {
+      if (finished) return; finished = true; clearInterval(poll); clearTimeout(to);
+      if (ok && img.naturalWidth) {
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        try { cv.getContext('2d').drawImage(img, 0, 0); card._has = true; lastShot[c.id] = Date.now(); } catch (e) {}
+        const ph = shot.querySelector('.ph'); if (ph) ph.remove();
+        const t = new Date(); card.querySelector('.time').textContent = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+      } else if (!card._has) {
+        const ph = shot.querySelector('.ph'); if (ph) ph.textContent = '影像暫時無法連線';
+      }
+      img.onload = img.onerror = null; img.src = ''; // 斷開串流
+      done();
+    };
+    img.onload = function () { finish(true); };
+    img.onerror = function () { finish(false); };
+    if (c.stream) poll = setInterval(function () { if (img.naturalWidth) finish(true); }, 250); // 串流不一定會觸發 onload
+    const to = setTimeout(function () { finish(!!img.naturalWidth); }, 9000);
+    img.src = c.url + (c.url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+  }
+  // 看得到的縮圖定時更新；螢幕關掉/切到別的 App 就不更新
+  setInterval(function () {
+    if (document.hidden) return;
+    document.querySelectorAll('.card').forEach(function (card) { if (!io || card._vis) want(card); });
+  }, 15000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) document.querySelectorAll('.card').forEach(function (card) { if (!io || card._vis) want(card); });
+  });
+
+  // ── 畫面 ──
+  const $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function pill(text, on, fn, cls) { const b = el('button', 'pill' + (on ? ' on' : '') + (cls ? ' ' + cls : ''), text); b.onclick = fn; return b; }
+
+  function renderControls() {
+    const tabs = $('tabs'); tabs.innerHTML = '';
+    [['fw', '國道'], ['thb', '快速公路・省道'], ['fav', '★ 收藏'], ['near', '📍 我附近']].forEach(function (t) {
+      tabs.appendChild(pill(t[1], st.tab === t[0], function () { setTab(t[0]); }));
+    });
+    const roads = $('roads'); roads.innerHTML = ''; roads.hidden = !(st.tab === 'fw' || st.tab === 'thb');
+    if (!roads.hidden) roadsOf(st.tab).forEach(function (r) {
+      roads.appendChild(pill(roadShort(r), st.road === r, function () { st.road = r; st.region = ''; const ds = dirsOf(r); if (ds.indexOf(st.dir) < 0) st.dir = ds[0]; st.shown = PAGE; update(); }));
+    });
+    const f = $('filters'); f.innerHTML = '';
+    if (st.tab === 'fw') {
+      const seg = el('div', 'seg');
+      dirsOf(st.road).forEach(function (d) {
+        const b = el('button', st.dir === d ? 'on' : '', DIR_NAME[d]); b.onclick = function () { st.dir = d; st.shown = PAGE; update(); }; seg.appendChild(b);
+      });
+      f.appendChild(seg);
+      const regs = {}; cams.forEach(function (c) { if (c.road === st.road && c.dir === st.dir && c.region) regs[c.region] = 1; });
+      const rk = ['NR', 'PL', 'CR', 'SR'].filter(function (k) { return regs[k]; });
+      if (rk.length > 1) {
+        const seg2 = el('div', 'seg');
+        [''].concat(rk).forEach(function (k) {
+          const b = el('button', st.region === k ? 'on' : '', k ? REGION[k] : '全部'); b.onclick = function () { st.region = k; st.shown = PAGE; update(); }; seg2.appendChild(b);
+        });
+        f.appendChild(seg2);
+      }
+    }
+    const s = el('input', 'search'); s.type = 'search'; s.placeholder = '搜尋交流道、里程…'; s.value = st.q;
+    s.oninput = function () { st.q = s.value; st.shown = PAGE; render(); };
+    f.appendChild(s);
+  }
+
+  function setCmsEl(info, c) {
+    if (!info || !c) return;
+    const old = info.querySelector('.cms'); if (old) old.remove();
+    const cm = cmsFor(c);
+    if (cm) { const b = el('div', 'cms'); b.appendChild(el('b', null, '前方看板 ')); b.appendChild(document.createTextNode(cm.text)); info.appendChild(b); }
+  }
+  function card(c) {
+    const k = el('div', 'card'); k.dataset.id = c.id; k._has = false;
+    const shot = el('div', 'shot');
+    shot.appendChild(el('canvas')); shot.appendChild(el('div', 'ph', '載入中…')); shot.appendChild(el('span', 'time', '—'));
+    const star = el('button', 'star' + (isFav(c) ? ' on' : ''), isFav(c) ? '★' : '☆'); star.setAttribute('aria-label', '收藏');
+    star.onclick = function (e) { e.stopPropagation(); toggleFav(c); star.classList.toggle('on', isFav(c)); star.textContent = isFav(c) ? '★' : '☆'; if (st.tab === 'fav') render(); };
+    shot.appendChild(star);
+    k.appendChild(shot);
+    const info = el('div', 'info');
+    const t1 = el('div', 't1'); t1.appendChild(document.createTextNode(roadShort(c.road) + ' '));
+    if (c.dir) t1.appendChild(el('span', 'dir', DIR_NAME[c.dir] + ' ')); t1.appendChild(document.createTextNode(mileTxt(c.m)));
+    info.appendChild(t1);
+    info.appendChild(el('div', 't2', c.sec + (c._d != null && st.tab === 'near' ? ' · ' + c._d.toFixed(1) + ' 公里' : '')));
+    setCmsEl(info, c);
+    k.appendChild(info);
+    k.onclick = function () { openViewer(c); };
+    return k;
+  }
+
+  let lastList = [];
+  function render(keepScroll) {
+    const list = currentList(); lastList = list;
+    const grid = $('grid'); grid.innerHTML = '';
+    if (io) io.disconnect();
+    grabQueue.length = 0;
+    const sum = $('summary'); sum.innerHTML = '';
+    if (st.tab === 'near' && !st.near) {
+      grid.appendChild(el('div', 'empty', '需要你的位置才能找附近的監視器'));
+      const b = pill('📍 使用我的位置', true, locate); b.style.marginTop = '8px'; grid.firstChild.appendChild(document.createElement('br')); grid.firstChild.appendChild(b);
+      $('more').hidden = true; return;
+    }
+    if (!list.length) {
+      grid.appendChild(el('div', 'empty', st.tab === 'fav' ? '還沒有收藏。點縮圖右上角的 ☆ 就能收藏常看的監視器' : '沒有符合的監視器'));
+      $('more').hidden = true; return;
+    }
+    const title = st.tab === 'fav' ? '我的收藏' : st.tab === 'near' ? '我附近 15 公里內' : roadShort(st.road) + (st.tab === 'fw' ? ' ' + DIR_NAME[st.dir] : '') + (st.region ? ' · ' + REGION[st.region] : '');
+    sum.appendChild(el('b', null, title));
+    sum.appendChild(document.createTextNode('共 ' + list.length + ' 支' + (st.tab === 'fw' ? '，依行車經過的順序排列' : st.tab === 'thb' ? '，依里程排列' : '') + '。點縮圖看即時影像'));
+    drawn = 0; prevSec = null;
+    appendCards(st.shown);
+    if (!keepScroll) window.scrollTo(0, 0);
+  }
+  // 把清單接著畫到 upTo 支(往下捲時只加新的，上面已經抓好的縮圖不動)
+  let drawn = 0, prevSec = null;
+  function appendCards(upTo) {
+    const grid = $('grid');
+    lastList.slice(drawn, upTo).forEach(function (c) {
+      // 換路段(交流道之間)時插一條分隔線，像高速公路的里程牌
+      if ((st.tab === 'fw' || st.tab === 'thb') && c.kind === 'fw' && c.sec !== prevSec) { grid.appendChild(el('div', 'gap', c.sec)); prevSec = c.sec; }
+      const k = card(c); grid.appendChild(k);
+      if (io) io.observe(k); else want(k);
+      if (st.focus && c.id === st.focus) { k.classList.add('hl'); setTimeout(function () { k.scrollIntoView({ block: 'center' }); }, 50); st.focus = null; }
+    });
+    drawn = Math.min(upTo, lastList.length);
+    $('more').hidden = lastList.length <= drawn;
+  }
+  function showMore() { st.shown += PAGE; appendCards(st.shown); }
+  $('more').onclick = showMore;
+  // 捲到底自動多顯示一些
+  window.addEventListener('scroll', function () {
+    if ($('more').hidden) return;
+    if (window.innerHeight + window.scrollY > document.body.scrollHeight - 600) showMore();
+  }, { passive: true });
+
+  function update() { renderControls(); render(); syncUrl(); }
+  function setTab(t) {
+    st.tab = t; st.shown = PAGE;
+    if (t === 'fw' || t === 'thb') { const rs = roadsOf(t); if (rs.indexOf(st.road) < 0) { st.road = rs[0]; st.dir = dirsOf(st.road)[0]; st.region = ''; } }
+    if (t === 'near' && !st.near) locate();
+    update();
+  }
+  function locate() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function (p) { st.near = { lat: p.coords.latitude, lon: p.coords.longitude }; if (st.tab === 'near') render(); },
+      function () { const g = $('grid'); if (g.firstChild) g.firstChild.firstChild.textContent = '拿不到位置，請允許這個網頁使用定位'; }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+  }
+  function syncUrl() {
+    if (st.tab !== 'fw' && st.tab !== 'thb') return;
+    try { history.replaceState(null, '', '?road=' + encodeURIComponent(st.road) + '&dir=' + st.dir); } catch (e) {}
+  }
+
+  // ── 大圖檢視：即時串流、‹ › 換上一支/下一支，「沿路巡航」自動一支一支往前看 ──
+  let vCam = null, vTimer = null, vReload = null, cruising = false, cruiseStart = 0, progRaf = null;
+  function vList() { return lastList.length ? lastList : [vCam]; }
+  function showCam(c) {
+    vCam = c;
+    const i = vList().indexOf(c), n = vList().length;
+    $('vT1').innerHTML = ''; $('vT1').appendChild(document.createTextNode(roadShort(c.road) + ' '));
+    if (c.dir) $('vT1').appendChild(el('span', 'dir', DIR_NAME[c.dir] + ' ')); $('vT1').appendChild(document.createTextNode(mileTxt(c.m)));
+    $('vT2').textContent = c.sec;
+    $('vStar').textContent = isFav(c) ? '★' : '☆'; $('vStar').style.color = isFav(c) ? '#FFD60A' : '#fff';
+    const cm = cmsFor(c); $('vCms').innerHTML = '';
+    if (cm) { const b = el('div', 'cms'); b.appendChild(el('b', null, '前方 ' + (cm.dist / 1000).toFixed(1) + ' 公里看板 ')); b.appendChild(document.createTextNode(cm.text)); $('vCms').appendChild(b); }
+    $('vPrev').disabled = i <= 0; $('vNext').disabled = i < 0 || i >= n - 1;
+    $('vPos').textContent = i >= 0 ? '第 ' + (i + 1) + ' / ' + n + ' 支' : '';
+    loadLive();
+  }
+  // 國道是串流(一直播)，每 8 秒重連避免卡住；省道是快照，每 5 秒換一張
+  function loadLive() {
+    clearTimeout(vReload);
+    if (!vCam || document.hidden) { $('vImg').removeAttribute('src'); return; }
+    $('vImg').src = vCam.url + (vCam.url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+    vReload = setTimeout(loadLive, vCam.stream ? 8000 : 5000);
+  }
+  $('vImg').onerror = function () { clearTimeout(vReload); vReload = setTimeout(loadLive, 2500); };
+  function step(d) {
+    const L = vList(), i = L.indexOf(vCam);
+    if (i < 0 || !L[i + d]) { if (cruising) setCruise(false); return; }
+    showCam(L[i + d]);
+    if (cruising) restartCruise();
+  }
+  function setCruise(on) {
+    cruising = on; $('vCruise').classList.toggle('on', on); $('vCruise').textContent = on ? '■ 停止巡航' : '▶ 沿路巡航';
+    $('vProg').hidden = !on; clearTimeout(vTimer); cancelAnimationFrame(progRaf);
+    if (on) restartCruise();
+  }
+  function restartCruise() {
+    clearTimeout(vTimer); cruiseStart = Date.now();
+    vTimer = setTimeout(function () { step(1); }, CRUISE_MS);
+    const bar = $('vProg').firstChild;
+    cancelAnimationFrame(progRaf);
+    (function tick() { if (!cruising) return; bar.style.width = Math.min(100, (Date.now() - cruiseStart) / CRUISE_MS * 100) + '%'; progRaf = requestAnimationFrame(tick); })();
+  }
+  function openViewer(c) { $('viewer').hidden = false; document.body.style.overflow = 'hidden'; showCam(c); }
+  function closeViewer() {
+    setCruise(false); clearTimeout(vReload); $('vImg').removeAttribute('src'); vCam = null;
+    $('viewer').hidden = true; document.body.style.overflow = '';
+  }
+  $('vClose').onclick = closeViewer;
+  $('vPrev').onclick = function () { step(-1); };
+  $('vNext').onclick = function () { step(1); };
+  $('vCruise').onclick = function () { setCruise(!cruising); };
+  $('vStar').onclick = function () {
+    if (!vCam) return; toggleFav(vCam); showCam(vCam);
+    const k = document.querySelector('.card[data-id="' + vCam.id + '"] .star'); // 清單上的星星也同步
+    if (k) { k.classList.toggle('on', isFav(vCam)); k.textContent = isFav(vCam) ? '★' : '☆'; }
+    if (st.tab === 'fav') render(true);
+  };
+  document.addEventListener('keydown', function (e) {
+    if ($('viewer').hidden) return;
+    if (e.key === 'Escape') closeViewer(); else if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1);
+  });
+  // 左右滑動換上一支/下一支
+  let sx = null;
+  $('viewer').addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+  $('viewer').addEventListener('touchend', function (e) { if (sx == null) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 60) step(dx < 0 ? 1 : -1); });
+  // 螢幕關掉/切到別的 App：停止串流與巡航計時，回來再接上
+  document.addEventListener('visibilitychange', function () {
+    if ($('viewer').hidden) return;
+    if (document.hidden) { clearTimeout(vReload); clearTimeout(vTimer); $('vImg').removeAttribute('src'); }
+    else { loadLive(); if (cruising) restartCruise(); }
+  });
+
+  // ── 從網址帶入：?road=國道1號&dir=S，或從地圖的監視器卡片帶 ?cam=攝影機網址 ──
+  (function init() {
+    const p = new URLSearchParams(location.search);
+    const camUrl = p.get('cam');
+    let focus = null;
+    if (camUrl) {
+      const key = (camUrl.match(/camera=(\d+)/) || [])[1];
+      focus = cams.find(function (c) { return c.url === camUrl; }) ||
+        (key ? cams.find(function (c) { return c.kind === 'fw' && c.url.endsWith('camera=' + key); }) : null);
+    }
+    if (focus) { st.tab = focus.kind; st.road = focus.road; st.dir = focus.dir; st.region = ''; st.focus = focus.id;
+      const idx = currentList().indexOf(focus); if (idx >= st.shown) st.shown = Math.ceil((idx + 1) / PAGE) * PAGE; }
+    else if (p.get('road')) {
+      const r = p.get('road'), k = cams.find(function (c) { return c.road === r; });
+      if (k) { st.tab = k.kind; st.road = r; const ds = dirsOf(r); st.dir = ds.indexOf(p.get('dir')) >= 0 ? p.get('dir') : ds[0]; }
+    }
+    if (DATA.updated) $('upd').textContent = '國道 ' + DATA.fw.length + ' 支、省道 ' + DATA.thb.length + ' 支 · 資料 ' + DATA.updated;
+    renderControls(); render(); if (focus) setTimeout(function () { openViewer(focus); }, 300);
+    loadCms();
+    setInterval(function () { if (!document.hidden) loadCms(); }, 5 * 60 * 1000); // 看板訊息 5 分鐘更新一次
+  })();
+})();
+</script>
+</body>
+</html>
