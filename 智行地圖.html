@@ -1093,7 +1093,6 @@ body.navigating .rect8{ top:0; }
 body.navigating .mapClock{ top:77px; }
 body.navigating .rect6{ top:77px; }
 body.navigating .weatherAlert{ top:180px; }
-body.navigating .earthquakeAlert{ top:218px; }
 
 /* ===== 隱藏 MapLibre 預設控制按鈕 ===== */
 .maplibregl-ctrl-top-right,
@@ -1531,25 +1530,6 @@ html, body {
   display:none;
 }
 
-/* ===== 🌋 中央氣象署地震報告橫幅 ===== */
-.earthquakeAlert{
-  position:fixed;
-  right:8px;
-  top:196px;
-  z-index:6;
-  max-width:calc(100% - 32px);
-  background:rgba(230,126,0,0.92);
-  color:#FFFFFF;
-  padding:8px 16px;
-  border-radius:12px;
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif;
-  font-size:14px;
-  font-weight:600;
-  box-shadow:0 4px 8px rgba(0,0,0,0.3);
-  text-align:center;
-  display:none;
-}
-
 /* iOS Home Bar 遮擋：覆蓋底部安全區讓地圖不響應誤觸 */
 #ios-home-guard {
   display: none;
@@ -1625,12 +1605,10 @@ html, body {
   .mapClock,
   .coinDisplay,
   .coinToast,
-  .weatherAlert,
-  .earthquakeAlert{
+  .weatherAlert{
     margin-right:var(--land-safe-r);
   }
-  .weatherAlert,
-  .earthquakeAlert{
+  .weatherAlert{
     max-width:calc(45vw - 32px);
   }
 }
@@ -1654,8 +1632,6 @@ html, body {
 <!-- 🌩️ 天氣特報橫幅(目前所在縣市有特報時顯示) -->
 <div class="weatherAlert" id="weatherAlert"></div>
 
-<!-- 🌋 地震報告橫幅(目前所在縣市在最新地震有感範圍內時顯示) -->
-<div class="earthquakeAlert" id="earthquakeAlert"></div>
 
 <!-- 🔍 搜尋地點 -->
 <div class="searchBarWrap" id="searchBarWrap">
@@ -2726,7 +2702,6 @@ function _flipCell(cell, from, to) {
     if (typeof window._reloadCarLayer === 'function') window._reloadCarLayer();
     if (typeof window._reloadCctvLayer === 'function') window._reloadCctvLayer();
     if (typeof window._reloadSpeedLayer === 'function') window._reloadSpeedLayer();
-    if (typeof window._reloadEqLayer === 'function') window._reloadEqLayer();
     if (typeof window._reloadSignalLayer === 'function') window._reloadSignalLayer();
     if (typeof window._reloadFamilyMartLayer === 'function') window._reloadFamilyMartLayer();
     if (typeof window._reloadToiletLayer === 'function') window._reloadToiletLayer();
@@ -5456,7 +5431,7 @@ function _flipCell(cell, from, to) {
     rpPaintModes();
     _navState = 'idle';
     if (window._snmClosePlace) window._snmClosePlace(); // 地點卡片收起來
-    // 選路線時：地圖跟平常一模一樣(綠色道路、路況、店家、地名、群集都照常顯示、照常可以點)
+    // 選路線時：只顯示路線(其他道路的綠色底圖收起來)；店家、地名、群集照常顯示、照常可以點
     document.body.classList.add('choosingRoute');
     destPanel.style.display = 'none';
     const toName = (selectedDest && selectedDest.name) || '目的地';
@@ -6981,7 +6956,6 @@ async function updateCurrentCounty(lat, lng){
     if(county){
       lastKnownCounty = normalizeCountyName(county);
       updateWeatherAlertDisplay();
-      if(typeof updateEarthquakeAlertDisplay === 'function') updateEarthquakeAlertDisplay();
     }
   } catch(err){
     console.log("reverse geocode (county) failed", err);
@@ -7026,68 +7000,6 @@ setTimeout(() => {
 }, 3000);
 </script>
 
-<script>
-// ===== 🌋 中央氣象署(CWA)地震報告 =====
-// E-A0016-001:近期地震報告列表(依時間新到舊排序,第一筆永遠是最新的)。
-// 跟天氣特報不同,這份資料沒有「現在有沒有生效中」的欄位——它只是歷史事件列表,
-// 所以要自己判斷「多新算新」(EARTHQUAKE_RECENCY_MS),避免舊地震一直掛在畫面上。
-// 只有「使用者目前所在縣市」出現在最新一筆地震的有感範圍(Intensity.ShakingArea)
-// 而且時間夠新,才會顯示提醒。
-const CWA_EQ_AUTH_KEY = "CWA-FFED18F8-F95F-423F-AA3E-5C18BDE89DA1";
-const CWA_EQ_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 地震是突發事件,查詢頻率比天氣特報高一點
-const EARTHQUAKE_RECENCY_MS = 30 * 60 * 1000; // 超過30分鐘的舊地震報告不再提醒
-const earthquakeAlertEl = document.getElementById("earthquakeAlert");
-
-let latestEarthquake = null;
-
-async function fetchCwaEarthquake(){
-  try{
-    const res = await fetch(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-001?Authorization=${CWA_EQ_AUTH_KEY}`);
-    if(!res.ok){
-      console.log("CWA earthquake API http error", res.status);
-      return;
-    }
-    const data = await res.json();
-    const list = data?.records?.Earthquake || [];
-    latestEarthquake = list[0] || null;
-    updateEarthquakeAlertDisplay();
-  } catch(err){
-    console.log("CWA earthquake fetch failed", err);
-  }
-}
-
-function updateEarthquakeAlertDisplay(){
-  if(!earthquakeAlertEl) return;
-
-  // 無論是否影響當前縣市，都先更新地圖震央標記
-  window.latestEarthquake = latestEarthquake;
-  if (typeof window.updateEqMapMarker === 'function') window.updateEqMapMarker(latestEarthquake);
-
-  if(!latestEarthquake || !lastKnownCounty){
-    earthquakeAlertEl.style.display = "none";
-    return;
-  }
-
-  const issueTime = new Date(latestEarthquake.IssueTime).getTime();
-  const isRecent = !isNaN(issueTime) && (Date.now() - issueTime) < EARTHQUAKE_RECENCY_MS;
-
-  const shakingAreas = latestEarthquake?.Intensity?.ShakingArea || [];
-  const affectsCurrentCounty = shakingAreas.some(
-    area => normalizeCountyName(area.CountyName) === lastKnownCounty
-  );
-
-  if(!isRecent || !affectsCurrentCounty){
-    earthquakeAlertEl.style.display = "none";
-    return;
-  }
-
-  earthquakeAlertEl.textContent = `🌋 ${latestEarthquake.ReportContent || "有感地震"}`;
-  earthquakeAlertEl.style.display = "block";
-}
-
-fetchCwaEarthquake();
-setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
-</script>
 
 
 
@@ -7942,86 +7854,6 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
 })();
 </script>
 
-<script>
-/* ===== 🌋 地震震央地圖標記（跟監視器相同樣式）===== */
-(function(){
-  var eqMarker = null;
-  var eqPopup  = null;
-
-  function makeEqIcon(m){
-    if(m.hasImage('eq-icon')) return;
-    var ew=48, eh=60, tip=10;
-    var cv=document.createElement('canvas'); cv.width=ew; cv.height=eh;
-    var cx=cv.getContext('2d');
-    cx.fillStyle='rgba(255,255,255,0.88)';
-    cx.beginPath();
-    cx.moveTo(ew/2-8,eh-tip); cx.lineTo(ew/2+8,eh-tip); cx.lineTo(ew/2,eh); cx.closePath();
-    cx.fill();
-    cx.beginPath(); cx.arc(ew/2,(eh-tip)/2,(eh-tip)/2-1,0,Math.PI*2); cx.fillStyle='#FFFFFF'; cx.fill();
-    cx.lineWidth=1; cx.strokeStyle='#d9d9d9'; cx.stroke();
-    m.addImage('eq-icon',{width:ew,height:eh,data:cx.getImageData(0,0,ew,eh).data});
-    snmIcoImg('activity','#CC2200',30,function(im){
-      cx.drawImage(im,(ew-30)/2,(eh-tip)/2-15,30,30);
-      if(m.hasImage('eq-icon')) m.updateImage('eq-icon',{width:ew,height:eh,data:cx.getImageData(0,0,ew,eh).data});
-    });
-  }
-
-  function showEqPopup(eq, lngLat){
-    if(eqPopup) eqPopup.remove();
-    var info = eq.EarthquakeInfo || {};
-    var epi  = info.Epicenter || {};
-    var mag  = (info.EarthquakeMagnitude || {}).MagnitudeValue || '?';
-    var loc  = epi.Location || '';
-    var time = info.OriginTime || '';
-    var dep  = info.FocalDepth ? info.FocalDepth+' km' : '';
-    var img  = eq.ReportImageURI || '';
-    var html =
-      '<div style="font-size:14px;font-weight:700;color:#CC2200;margin-bottom:6px">🌋 地震報告</div>'+
-      '<div style="font-size:13px;margin-bottom:3px">📍 '+loc+'</div>'+
-      '<div style="font-size:13px;margin-bottom:3px">規模 <b>'+mag+'</b>'+(dep ? '　深度 '+dep : '')+'</div>'+
-      '<div style="font-size:11px;color:#666;margin-bottom:6px">🕐 '+time+'</div>'+
-      (img ? '<img src="'+img+'" style="width:280px;display:block;background:#eee" onerror="this.style.display=\'none\'">' : '')+
-      '<div style="font-size:11px;color:#888;margin-top:6px">'+(eq.ReportContent||'')+'</div>';
-    eqPopup=new maplibregl.Popup({maxWidth:'320px',closeButton:true})
-      .setLngLat(lngLat).setHTML(html).addTo(window.map);
-  }
-
-  window.updateEqMapMarker = function(eq){
-    var m = window.map;
-    if(!m || !m.isStyleLoaded()) return;
-    if(!eq){ if(eqMarker){ eqMarker.remove(); eqMarker=null; } return; }
-    var epi = (eq.EarthquakeInfo||{}).Epicenter||{};
-    var lat = epi.EpicenterLatitude, lon = epi.EpicenterLongitude;
-    if(!lat||!lon) return;
-    makeEqIcon(m);
-    if(eqMarker){
-      eqMarker.setLngLat([lon,lat]);
-      eqMarker.getElement()._eq = eq;
-    } else {
-      var el=document.createElement('div');
-      el.style.cssText='width:40px;height:40px;cursor:pointer;border-radius:50%;background:#fff;border:0.5px solid #d9d9d9;box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:#CC2200;filter:drop-shadow(0 2px 5px rgba(0,0,0,0.3))';
-      el.innerHTML=snmIco('activity','26');
-      el._eq=eq;
-      el.addEventListener('click',function(){
-        var ep=(el._eq.EarthquakeInfo||{}).Epicenter||{};
-        showEqPopup(el._eq,[ep.EpicenterLongitude,ep.EpicenterLatitude]);
-      });
-      eqMarker=new maplibregl.Marker({element:el,anchor:'bottom'})
-        .setLngLat([lon,lat]).addTo(m);
-    }
-  };
-
-  function tryInit(){
-    var m=window.map;
-    if(!m){ setTimeout(tryInit,300); return; }
-    var fn=function(){ window.updateEqMapMarker(window.latestEarthquake||null); };
-    if(m.isStyleLoaded()) fn();
-    else m.once('styledata',fn);
-  }
-  window._reloadEqLayer = tryInit;
-  tryInit();
-})();
-</script>
 
 <script async src="signal_data.js"></script>
 <script>
@@ -10871,7 +10703,7 @@ setInterval(fetchCwaEarthquake, CWA_EQ_UPDATE_INTERVAL_MS);
     var m = window.map;
     if (!m) return;
     // 導航中、選路線時都把綠色道路底圖藏起來：不然選中的綠色路線跟所有道路混在一起看不出來
-    var roadsVis   = (_trafficOn && !isNavigating()) ? 'visible' : 'none'; // 規劃路線時跟平常一樣顯示綠色道路和路況
+    var roadsVis   = (_trafficOn && !isNavigating() && !document.body.classList.contains('choosingRoute')) ? 'visible' : 'none'; // 導航中、規劃路線時只顯示路線，其他道路的綠色底圖不顯示
     var trafficVis = _trafficOn ? 'visible' : 'none';
     TRAFFIC_LAYERS.forEach(function (id) {
       if (!m.getLayer(id)) return;
