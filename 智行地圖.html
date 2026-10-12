@@ -2024,6 +2024,7 @@ html, body {
         <div style="display:flex;align-items:center;gap:12px;">
           <canvas id="platePreview" width="80" height="110" style="width:72px;height:84px;flex-shrink:0;" aria-label="車牌預覽"></canvas>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
+            <div id="plateColors" style="display:flex;gap:8px;flex-wrap:wrap;" aria-label="車牌顏色"></div>
             <input id="plateInput" type="text" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid #d1d1d6;border-radius:999px;font-size:15px;font-family:inherit;">
             <button id="plateSaveBtn" style="width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;">儲存車牌</button>
           </div>
@@ -2233,8 +2234,31 @@ function snmCleanPlate(t) {
 }
 // 車子下面的車牌牌子：白底黑字、細黑框、圓角，寬度跟著字數走。R = 實際像素/畫面像素
 const SNM_LABEL_FONT = '"SF Pro Display","PingFang TC","Microsoft JhengHei","Noto Sans TC",Arial,sans-serif';
-function snmPlateBadge(text, R) {
-  const c = document.createElement('canvas');
+// 車牌顏色(跟台灣常見車牌配色一樣)：bg 底色、fg 字色、bd 外框；存在這支手機 snm_plate_color
+const SNM_PLATE_COLORS = {
+  white:  { name: '白底黑字', bg: '#FFFFFF', fg: '#000000', bd: '#1C1C1E' },
+  red:    { name: '白底紅字', bg: '#FFFFFF', fg: '#D0021B', bd: '#D0021B' },
+  green:  { name: '白底綠字', bg: '#FFFFFF', fg: '#0A8F3C', bd: '#0A8F3C' },
+  yellow: { name: '黃底黑字', bg: '#FFD60A', fg: '#000000', bd: '#1C1C1E' },
+  black:  { name: '黑底白字', bg: '#1C1C1E', fg: '#FFFFFF', bd: '#FFFFFF' },
+  blue:   { name: '藍底白字', bg: '#1F4FB8', fg: '#FFFFFF', bd: '#FFFFFF' }
+};
+function snmPlateColor() { let k = ''; try { k = localStorage.getItem('snm_plate_color') || ''; } catch (e) {} return SNM_PLATE_COLORS[k] ? k : 'white'; }
+// 顏色選擇小圓鈕：每個都畫成迷你車牌的配色；cur 目前選的，onPick(key) 選了之後
+function snmPlateColorChips(box, cur, onPick) {
+  box.innerHTML = '';
+  Object.keys(SNM_PLATE_COLORS).forEach(function (k) {
+    const p = SNM_PLATE_COLORS[k], b = document.createElement('button');
+    b.type = 'button'; b.title = p.name; b.setAttribute('aria-label', p.name); b.setAttribute('aria-pressed', k === cur);
+    b.textContent = 'A';
+    b.style.cssText = 'width:34px;height:24px;border-radius:5px;padding:0;cursor:pointer;font:800 13px ' + SNM_LABEL_FONT + ';background:' + p.bg + ';color:' + p.fg +
+      ';border:1.5px solid ' + p.bd + ';box-shadow:' + (k === cur ? '0 0 0 2px #fff,0 0 0 4px #2F80FF' : '0 1px 2px rgba(0,0,0,0.25)') + ';';
+    b.onclick = function () { snmPlateColorChips(box, k, onPick); onPick(k); };
+    box.appendChild(b);
+  });
+}
+function snmPlateBadge(text, R, colorKey) {
+  const c = document.createElement('canvas'), pc = SNM_PLATE_COLORS[colorKey] || SNM_PLATE_COLORS[snmPlateColor()];
   if (!text) { c.width = c.height = 1; return c; }
   const H = 20, PAD = 7, FS = 13, m = c.getContext('2d');
   m.font = '800 ' + FS * R + 'px ' + SNM_LABEL_FONT;
@@ -2242,9 +2266,9 @@ function snmPlateBadge(text, R) {
   c.width = W * R; c.height = (H + 4) * R;
   const x = c.getContext('2d'); x.scale(R, R);
   x.shadowColor = 'rgba(0,0,0,0.25)'; x.shadowBlur = 3; x.shadowOffsetY = 1;
-  snmRoundPath(x, 2, 1.5, W - 4, H, 4); x.fillStyle = '#FFFFFF'; x.fill();
-  x.shadowColor = 'transparent'; x.lineWidth = 1.2; x.strokeStyle = '#1C1C1E'; x.stroke();
-  x.font = '800 ' + FS + 'px ' + SNM_LABEL_FONT; x.fillStyle = '#000000'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  snmRoundPath(x, 2, 1.5, W - 4, H, 4); x.fillStyle = pc.bg; x.fill();
+  x.shadowColor = 'transparent'; x.lineWidth = 1.2; x.strokeStyle = pc.bd; x.stroke();
+  x.font = '800 ' + FS + 'px ' + SNM_LABEL_FONT; x.fillStyle = pc.fg; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillText(text, W / 2, 1.5 + H / 2 + 0.5);
   return c;
 }
@@ -3023,15 +3047,21 @@ function _flipCell(cell, from, to) {
       x.clearRect(0, 0, pv.width, pv.height);
       const carH = base.height / R, s = Math.min(1, 56 / carH); // 車子縮一點，留位置給車牌
       x.drawImage(base, (W - 40 * s) / 2 * R, 0, 40 * s * R, carH * s * R);
-      const plate = snmPlateBadge(snmCleanPlate(inp.value), R);
+      const plate = snmPlateBadge(snmCleanPlate(inp.value), R, color);
       if (plate.width > 1) x.drawImage(plate, Math.max(0, (pv.width - plate.width) / 2), (carH * s + 2) * R, Math.min(plate.width, pv.width), plate.height * Math.min(1, pv.width / plate.width));
     }
     inp.value = snmPlateText();
     inp.addEventListener('input', preview);
+    // 車牌顏色：跟車牌字一起按「儲存車牌」才套用
+    let color = snmPlateColor();
+    const chips = document.getElementById('plateColors');
+    const drawChips = function () { if (chips) snmPlateColorChips(chips, color, function (k) { color = k; preview(); }); };
+    drawChips();
+    window._snmPlateSettingsColor = function (k) { color = k; drawChips(); preview(); }; // 「我的資料」改了顏色，這裡也同步
     btn.addEventListener('click', () => {
       const t = snmCleanPlate(inp.value);
       inp.value = t;
-      try { if (t) localStorage.setItem('snm_plate', t); else localStorage.removeItem('snm_plate'); } catch (e) {}
+      try { if (t) localStorage.setItem('snm_plate', t); else localStorage.removeItem('snm_plate'); localStorage.setItem('snm_plate_color', color); } catch (e) {}
       if (window._snmApplyPlate) window._snmApplyPlate();
       preview();
       btn.textContent = t ? '已儲存 ✓' : '已清除';
@@ -10282,6 +10312,7 @@ setTimeout(() => {
     <input type="text" id="snmOnbName" maxlength="12" placeholder="你的名字" autocomplete="nickname" enterkeyhint="next">
     <label for="snmOnbPlate">車牌 <span>(可不填，會顯示在導航車子下面)</span></label>
     <input type="text" id="snmOnbPlate" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off" autocapitalize="characters" enterkeyhint="done">
+    <div id="snmOnbColors" style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:-4px 0 12px;" aria-label="車牌顏色"></div>
     <canvas id="snmOnbPlatePv" hidden aria-hidden="true"></canvas>
     <button id="snmOnbGo" disabled>開始使用</button>
   </div>
@@ -10292,7 +10323,7 @@ setTimeout(() => {
   var box = document.getElementById('snmOnb'), av = document.getElementById('snmOnbAv'), file = document.getElementById('snmOnbFile');
   var nameIn = document.getElementById('snmOnbName'), plateIn = document.getElementById('snmOnbPlate'), go = document.getElementById('snmOnbGo');
   var xBtn = document.getElementById('snmOnbX'), pv = document.getElementById('snmOnbPlatePv');
-  var avatar = '', editMode = false;
+  var avatar = '', editMode = false, plateColor = 'white', colorBox = document.getElementById('snmOnbColors');
   function cleanPlate(t) { return (typeof snmCleanPlate === 'function') ? snmCleanPlate(t) : String(t || '').trim().toUpperCase(); }
   function profile() { try { return JSON.parse(localStorage.getItem('ptt_profile') || 'null') || {}; } catch (e) { return {}; } }
   function showAv() {
@@ -10303,7 +10334,7 @@ setTimeout(() => {
   function showPlate() {
     var t = cleanPlate(plateIn.value);
     if (!t || typeof snmPlateBadge !== 'function') { pv.hidden = true; return; }
-    var R = Math.max(2, Math.ceil(window.devicePixelRatio || 1)), c = snmPlateBadge(t, R);
+    var R = Math.max(2, Math.ceil(window.devicePixelRatio || 1)), c = snmPlateBadge(t, R, plateColor);
     pv.width = c.width; pv.height = c.height; pv.style.width = (c.width / R) + 'px'; pv.style.height = (c.height / R) + 'px';
     pv.getContext('2d').drawImage(c, 0, 0); pv.hidden = false;
   }
@@ -10314,6 +10345,8 @@ setTimeout(() => {
     avatar = p.avatar || '';
     nameIn.value = (!editMode && /^駕駛\d{3}$/.test(n)) ? '' : n; // 系統自動取的「駕駛123」第一次不填進去，讓使用者自己取
     try { plateIn.value = localStorage.getItem('snm_plate') || ''; } catch (e) { plateIn.value = ''; }
+    plateColor = (typeof snmPlateColor === 'function') ? snmPlateColor() : 'white';
+    if (typeof snmPlateColorChips === 'function') snmPlateColorChips(colorBox, plateColor, function (k) { plateColor = k; showPlate(); });
     document.getElementById('snmOnbTitle').textContent = editMode ? '我的資料' : '歡迎使用智行地圖';
     document.getElementById('snmOnbSub').textContent = editMode ? '頭像會顯示在導航車子上面，車牌在下面' : '先設定一下你的資料，對講、留言時大家就認得你';
     go.textContent = editMode ? '儲存' : '開始使用';
@@ -10355,10 +10388,12 @@ setTimeout(() => {
     var plate = cleanPlate(plateIn.value);
     try {
       if (plate) localStorage.setItem('snm_plate', plate); else localStorage.removeItem('snm_plate');
+      localStorage.setItem('snm_plate_color', plateColor);
       localStorage.setItem('snm_onboarded', '1');
     } catch (e) {}
     var pi = document.getElementById('plateInput'); // 設定裡的車牌欄也同步
     if (pi) { pi.value = plate; pi.dispatchEvent(new Event('input')); }
+    if (window._snmPlateSettingsColor) window._snmPlateSettingsColor(plateColor);
     if (window._snmApplyCarLabels) window._snmApplyCarLabels();
     close();
   });
