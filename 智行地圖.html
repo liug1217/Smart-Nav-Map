@@ -665,21 +665,21 @@ body.searchOpen .searchResultsList{
 .rpModes::-webkit-scrollbar{ display:none; }
 .rpModes button{ flex:1 0 auto; border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:16px; padding:6px 10px;
   font-size:13px; font-family:inherit; white-space:nowrap; cursor:pointer; }
-.rpModes button.on{ background:#EAF2FF; border-color:#2F80FF; color:#1B5FC9; font-weight:700; }
+.rpModes button.on{ background:#E6F7F1; border-color:#009B65; color:#00764D; font-weight:700; }
 .rpGrab{ flex-shrink:0; margin:0 -16px; }
 /* 收起來：只留標題和開始導航 */
 .routePanel.rpMin .rpModes, .routePanel.rpMin .rpList{ display:none; }
 .routePanel.rpMin .rpHead{ margin-bottom:10px; }
 .rpLoading{ padding:16px 4px; font-size:13px; color:#888; text-align:center; }
 .rpItem{ display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:10px; border:2px solid transparent; cursor:pointer; }
-.rpItem.sel{ border-color:#2F80FF; background:#EEF4FF; }
+.rpItem.sel{ border-color:#16E098; background:#F0FBF7; }
 .rpBadge{ width:28px; height:28px; border-radius:50%; background:#9AA0A6; color:#fff; font-weight:800; font-size:14px;
   display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.rpItem.sel .rpBadge{ background:#2F80FF; }
+.rpItem.sel .rpBadge{ background:#009B65; }
 .rpMain{ flex:1; min-width:0; }
 .rpTime{ font-size:17px; font-weight:800; color:#000; }
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
-.rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#2F80FF; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
+.rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#009B65; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rpStart{ width:100%; flex:none; }
 
@@ -2041,6 +2041,19 @@ html, body {
       </div>
       <button id="voiceTestBtn" style="margin-top:12px;width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;">🔊 試聽</button>
 
+      <!-- ── 車牌(畫在導航車子的車尾) ── -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px;">🚗 我的車牌</div>
+        <div style="font-size:12px;color:#666;margin-bottom:10px;">顯示在導航車子的車尾。只存在這支手機，不會上傳或分享給別人；最多 8 個字(中英文、數字、-)，留空就不顯示。</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <canvas id="platePreview" width="80" height="110" style="width:56px;height:77px;flex-shrink:0;" aria-label="車牌預覽"></canvas>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
+            <input id="plateInput" type="text" maxlength="12" placeholder="例如 ABC-1234" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid #d1d1d6;border-radius:999px;font-size:15px;font-family:inherit;">
+            <button id="plateSaveBtn" style="width:100%;padding:10px;background:#2F80FF;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;">儲存車牌</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ── 音量控制 ── -->
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e5ea;">
         <div style="font-size:15px;font-weight:600;margin-bottom:10px;">🎚 音量控制</div>
@@ -2235,6 +2248,30 @@ function snmOutlineIcon(img, S, inset) {
 }
 // 地圖圖示畫好的 canvas → addImage 用的資料與像素比
 function snmTileImage(c) { return { data: c.getContext('2d').getImageData(0, 0, c.width, c.height), pixelRatio: 2 * (c._snmK || 1) }; }
+// ── 車尾車牌 ──
+// 存在這台手機(localStorage snm_plate)，不會上傳、不會分享給別人。沒設定就不畫。
+function snmPlateText() { try { return (localStorage.getItem('snm_plate') || '').trim(); } catch (e) { return ''; } }
+// 整理輸入：去掉頭尾空白、英文轉大寫，只留中英文、數字、空白、「-」「·」，最多 8 個字
+function snmCleanPlate(t) {
+  return Array.from(String(t || '').toUpperCase().replace(/[^0-9A-Z\u3400-\u9FFF\s\-·]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 8).join('');
+}
+// 在車子圖(車頭朝上、W×H 實際像素)的車尾、兩個尾燈之間的行李箱上畫白底黑字車牌；字太長自動縮小
+function snmDrawPlate(x, W, H, text) {
+  if (!text) return;
+  const pw = W * 0.56, ph = H * 0.12, cx = W / 2, cy = H * 0.885;
+  x.save();
+  snmRoundPath(x, cx - pw / 2, cy - ph / 2, pw, ph, ph * 0.22);
+  x.fillStyle = '#FFFFFF'; x.fill();
+  x.lineWidth = Math.max(1, ph * 0.08); x.strokeStyle = '#1C1C1E'; x.stroke();
+  const FONT = '"SF Pro Display","PingFang TC","Microsoft JhengHei","Noto Sans TC",Arial,sans-serif';
+  let fs = ph * 0.74;
+  x.font = '800 ' + fs + 'px ' + FONT;
+  const tw = x.measureText(text).width, maxW = pw * 0.88;
+  if (tw > maxW) { fs *= maxW / tw; x.font = '800 ' + fs + 'px ' + FONT; }
+  x.fillStyle = '#000000'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, cx, cy + fs * 0.05);
+  x.restore();
+}
 function snmRoundTile(draw, size, bg) {
   size = size || 60;
   const K = SNM_ICON_K;
@@ -2326,6 +2363,7 @@ function _flipCell(cell, from, to) {
       /^routeOpt-other-casing$/, /^routeOpt-other$/, /^routeOpt-sel-casing$/, /^routeOpt-sel$/,
       /^navRoute-outline$/, /^navRoute-line$/,
       /^snm-traffic-casing$/, /^snm-traffic-lines$/, /^snm-traffic-points$/,
+      /^navRoutePassed-outline$/, /^navRoutePassed-line$/,
       /^navRoute-arrows$/, /^navTurnArrow-casing$/, /^navTurnArrow-line$/, /^navTurnArrow-tail$/, /^navTurnArrow-head$/];
     const rank = id => ORDER.findIndex(re => re.test(id));
     function sink() {
@@ -2516,6 +2554,7 @@ function _flipCell(cell, from, to) {
     if (window.navRouteSource) {
       window.navRouteSource.setData({ type: 'FeatureCollection', features: [] });
     }
+    if (window._snmRoutePassedClear) window._snmRoutePassedClear(); // 已行駛的灰色也清掉
     window.plannedRouteCoordinates = [];
     window._navRouteGeometry = null;
     plannedRouteCoordinates = [];
@@ -2973,6 +3012,33 @@ function _flipCell(cell, from, to) {
       document.getElementById('voicePitchLabel').innerText = _voicePitch.toFixed(2);
     });
   }
+
+  // 車牌設定：輸入時即時預覽，按儲存才套用到導航車子並存起來
+  (function () {
+    const inp = document.getElementById('plateInput'), btn = document.getElementById('plateSaveBtn'), pv = document.getElementById('platePreview');
+    if (!inp || !btn || !pv) return;
+    function preview() {
+      const base = window._snmCarBase && window._snmCarBase();
+      const x = pv.getContext('2d');
+      x.clearRect(0, 0, pv.width, pv.height);
+      if (!base) { setTimeout(preview, 500); return; } // 車子圖還沒載好
+      pv.width = base.width; pv.height = base.height;
+      x.drawImage(base, 0, 0);
+      snmDrawPlate(x, pv.width, pv.height, snmCleanPlate(inp.value));
+    }
+    inp.value = snmPlateText();
+    inp.addEventListener('input', preview);
+    btn.addEventListener('click', () => {
+      const t = snmCleanPlate(inp.value);
+      inp.value = t;
+      try { if (t) localStorage.setItem('snm_plate', t); else localStorage.removeItem('snm_plate'); } catch (e) {}
+      if (window._snmApplyPlate) window._snmApplyPlate();
+      preview();
+      btn.textContent = t ? '已儲存 ✓' : '已清除';
+      setTimeout(() => { btn.textContent = '儲存車牌'; }, 1500);
+    });
+    preview();
+  })();
 
   // 試聽按鈕
   const _voiceTestBtn = document.getElementById('voiceTestBtn');
@@ -4859,6 +4925,52 @@ function _flipCell(cell, from, to) {
   }
   window._routePointAt = routePointAt; // 給 rAF 插值迴圈用
 
+  // ===== 已行駛的導航路線變灰(參考高德地圖) =====
+  // 導航路線本身會依路況切段上色，不能直接改它的顏色(會跟路況上色互相蓋掉)。
+  // 所以另外疊一層灰色，只畫「路線起點 → 車子目前在路線上的位置」：前方維持原本顏色，後方被灰色蓋住。
+  // 位置用車子畫面上的沿路線距離(跟車子圖示同一個值)，灰色永遠停在車子底下，不會跑到車子前面。
+  // 只會往前長：GPS 飄移、短暫往回投影時不回退，不會灰色/原色來回跳；換路線(重新規劃)就從頭算。
+  const PASSED_SRC = 'navRoutePassed';
+  const _passed = { geom: null, along: 0, drawn: -1, t: 0 };
+  function _ensurePassedLayers() {
+    if (map.getSource(PASSED_SRC)) return true;
+    if (!map.getLayer('navRoute-line')) return false;
+    map.addSource(PASSED_SRC, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    // 寬度、線頭、轉角跟導航路線一樣，只換成灰色
+    map.addLayer({ id: 'navRoutePassed-outline', type: 'line', source: PASSED_SRC,
+      layout: { 'line-join': 'round', 'line-cap': 'butt' }, paint: { 'line-color': '#9AA0A6', 'line-width': 15, 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'navRoutePassed-line', type: 'line', source: PASSED_SRC,
+      layout: { 'line-join': 'round', 'line-cap': 'butt' }, paint: { 'line-color': '#C9CDD2', 'line-width': 11, 'line-opacity': 0.95 } });
+    _passed.drawn = -1; // 換地圖樣式後圖層是新的，要重畫
+    if (window.snmSinkRouteLayers) window.snmSinkRouteLayers();
+    return true;
+  }
+  window._snmRoutePassedClear = function () {
+    _passed.geom = null; _passed.along = 0; _passed.drawn = -1;
+    const src = map.getSource(PASSED_SRC);
+    if (src) src.setData({ type: 'FeatureCollection', features: [] });
+  };
+  window._snmRoutePassed = function (geom, along) {
+    if (!isNavigating || !geom || !(along >= 0)) return;
+    if (geom !== _passed.geom) { _passed.geom = geom; _passed.along = 0; _passed.drawn = -1; }
+    if (along > _passed.along) _passed.along = Math.min(along, geom.total);
+    const now = Date.now();
+    // 省電：前進 2 公尺以上、而且距離上次重畫 120 毫秒以上才重畫
+    if (_passed.drawn >= 0 && (_passed.along - _passed.drawn < 2 || now - _passed.t < 120)) return;
+    if (!_ensurePassedLayers()) return;
+    const a = _passed.along, cum = geom.cum, coords = geom.coords;
+    const line = [coords[0]];
+    let i = 1;
+    for (; i < coords.length && cum[i] < a; i++) line.push(coords[i]);
+    const p = routePointAt(geom, a);
+    line.push([p.lng, p.lat]);
+    const src = map.getSource(PASSED_SRC);
+    if (src) src.setData(line.length >= 2 && a > 0.5
+      ? { type: 'Feature', geometry: { type: 'LineString', coordinates: line }, properties: {} }
+      : { type: 'FeatureCollection', features: [] });
+    _passed.drawn = a; _passed.t = now;
+  };
+
   // ===== ➡️ 轉彎箭頭：在「下一個轉彎」處沿導航路線畫大白色箭頭(箭身沿著實際要轉的路彎過去，箭頭指向轉進去的方向) =====
   // 箭身：轉彎點前 55 公尺 → 後 30 公尺(轉過去的那段要夠長，箭頭才看得出往哪彎)；箭頭接在箭身尾端。直行/路名改變/出發/到達不畫
   const TURN_ARROW_BEFORE_M = 55, TURN_ARROW_AFTER_M = 30;
@@ -5249,8 +5361,8 @@ function _flipCell(cell, from, to) {
     const lay = { 'line-join': 'round', 'line-cap': 'butt' };
     map.addLayer({ id: 'routeOpt-other-casing', type: 'line', source: RP_SRC, filter: other, layout: lay, paint: { 'line-color': '#6B7280', 'line-width': 13 } }, before);
     map.addLayer({ id: 'routeOpt-other', type: 'line', source: RP_SRC, filter: other, layout: lay, paint: { 'line-color': '#BDC1C6', 'line-width': 9 } }, before);
-    map.addLayer({ id: 'routeOpt-sel-casing', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#1B5FC9', 'line-width': 15 } }, before); // 選中的路線：藍色(跟開始導航同色)
-    map.addLayer({ id: 'routeOpt-sel', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#2F80FF', 'line-width': 11 } }, before);
+    map.addLayer({ id: 'routeOpt-sel-casing', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#009B65', 'line-width': 15 } }, before); // 選中的路線：跟導航路線一樣的綠色
+    map.addLayer({ id: 'routeOpt-sel', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#16E098', 'line-width': 11 } }, before);
     if (!map._snmRpClickBound) { // 點地圖上灰色的路線也能換選(換地圖樣式後圖層會重建，事件只綁一次)
       map._snmRpClickBound = true;
       const pick = (e) => { const i = e.features && e.features[0] && e.features[0].properties.idx; if (i != null) rpSelect(Number(i)); };
@@ -5462,6 +5574,7 @@ function _flipCell(cell, from, to) {
       window.plannedRouteCoordinates = plannedRouteCoordinates;
       window._navRouteGeometry = route.geometry; // 供樣式切換後重建圖層用
 
+      if (window._snmRoutePassedClear) window._snmRoutePassedClear(); // 新路線(含重新規劃)：已行駛從頭算
       if (window.navRouteSource) {
         window.navRouteSource.setData({
           type: 'FeatureCollection',
@@ -6212,15 +6325,33 @@ map.on('load', function() {
   // 原圖 導航車子1.png 1066×1475(透明 PNG)。以前一次縮到 80×120：縮 13 倍只取樣少數像素 → 邊緣鋸齒；
   // 而且 80×120 跟原圖比例(0.72)不同，車子被壓扁；又固定用 2 倍圖，3 倍螢幕的手機會再放大變糊。
   // 現在：寬 40(畫面上的大小跟原本一樣)、高照原圖比例，依螢幕解析度畫，分次減半縮小。只做一次，之後旋轉/移動都由地圖 GPU 處理。
+  let _carBase = null, _carRatio = 2; // 縮好、還沒加車牌的車子(換車牌時拿它重畫，不用重新縮圖)
   _carImg.onload = function() {
     const ratio = Math.min(4, Math.max(2, Math.ceil(window.devicePixelRatio || 1)));
     const CSS_W = 40, CSS_H = Math.round(CSS_W * _carImg.naturalHeight / _carImg.naturalWidth);
     const c = document.createElement('canvas');
     c.width = CSS_W * ratio; c.height = CSS_H * ratio;
     snmDrawHQ(c.getContext('2d'), _carImg, 0, 0, c.width, c.height);
-    _cachedCarImg = { data: c.getContext('2d').getImageData(0, 0, c.width, c.height), pixelRatio: ratio };
+    _carBase = c; _carRatio = ratio;
+    _cachedCarImg = { data: _carImageData(), pixelRatio: ratio };
     _addCarLayers(_cachedCarImg);
   };
+  // 車子＋車尾車牌(畫在同一張圖上，所以移動、轉彎、旋轉都跟車子完全同步)
+  function _carImageData() {
+    const c = document.createElement('canvas');
+    c.width = _carBase.width; c.height = _carBase.height;
+    const x = c.getContext('2d');
+    x.drawImage(_carBase, 0, 0);
+    if (window.snmDrawPlate) window.snmDrawPlate(x, c.width, c.height, window.snmPlateText());
+    return x.getImageData(0, 0, c.width, c.height);
+  }
+  // 換車牌：直接更新車子圖示(同樣大小)，不重建圖層
+  window._snmApplyPlate = function () {
+    if (!_carBase) return;
+    _cachedCarImg = { data: _carImageData(), pixelRatio: _carRatio };
+    if (map.hasImage('car-icon')) map.updateImage('car-icon', _cachedCarImg.data);
+  };
+  window._snmCarBase = function () { return _carBase; }; // 設定頁預覽用
   function _addCarLayers(_img) {
     if (map.getSource('user-pos')) return;
     // 切換地圖風格後舊圖可能還在,重複 addImage 會丟錯中斷,車子就整個不見
@@ -6451,6 +6582,7 @@ map.on('load', function() {
       _dispLng = p.lng + _joinLng;
       _dispLat = p.lat + _joinLat;
       _dispBearing = _lerpAngle(_dispBearing, p.bearing, alpha);
+      if (window._snmRoutePassed) window._snmRoutePassed(r.geom, _dispAlong); // 已行駛的路線變灰
     } else {
       _routeGeomRef = null; _dispAlong = null; // 離開吸附模式,回到原本的座標插值
       const alpha = 0.12;
