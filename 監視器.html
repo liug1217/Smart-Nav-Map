@@ -6,11 +6,10 @@
 <title>智行監視器</title>
 <link rel="icon" type="image/png" href="智行地圖.png">
 <style>
-  /* 顏色照截圖：綠色底、淺綠交流道橫條、黃色公里牌、車道依車速上色(深綠快、黃綠普通、橘慢、紅塞) */
+  /* 跟智行地圖同一套顏色：藍色按鈕 #2F80FF、白色磨砂卡片、膠囊按鈕 */
   :root {
-    --blue: #2E7D32; --blue-dark: #1B5E20; --blue-soft: #E3F2D5;
-    --page: #43A047; --card: #FFFFFF; --line: #2E7D32;
-    --ic-bg: #A5D66B; --ic-line: #6FAF3E; --ic-text: #1D3A10; --km-bg: #F6C915;
+    --blue: #2F80FF; --blue-dark: #1B5FC9; --blue-soft: #EAF2FF;
+    --page: #F2F2F7; --card: rgba(255,255,255,0.86); --line: #d9d9d9;
     --text: #1c1c1e; --text-2: #3c3c43; --muted: #8e8e93;
     --cms-bg: #FFF4D6; --cms-text: #6B4A00; --live: #FF3B30;
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
@@ -23,9 +22,7 @@
 
   /* ── 頂部(捲動時固定) ── */
   .top { position: sticky; top: 0; z-index: 20; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-    background: #388E3C; border-bottom: 1px solid #2E7D32; color: #fff; }
-  .bar h1 small { color: #DCEFD0 !important; }
-  .back { background: #fff !important; color: #1B5E20 !important; }
+    background: rgba(242,242,247,0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-bottom: 0.5px solid var(--line); }
   .bar { display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 0 auto; }
   .bar img { width: 34px; height: 34px; border-radius: 9px; }
   .bar h1 { margin: 0; font-size: 19px; flex: 1; min-width: 0; }
@@ -45,21 +42,18 @@
 
   /* ── 清單 ── */
   main { max-width: 1180px; margin: 0 auto; padding: 14px 16px calc(32px + env(safe-area-inset-bottom)); }
-  .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #E8F5E0; font-size: 13px; margin-bottom: 12px; }
-  .summary b { color: #fff; }
-  .empty { color: #E8F5E0 !important; }
-  .gap { color: #E8F5E0 !important; }
-  .gap::before, .gap::after { background: rgba(255,255,255,0.4) !important; }
+  .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .summary b { color: var(--text); }
 
   /* ── 國道示意圖：中間兩條車道(左邊往里程增加方向 ▼、右邊反方向 ▲)，兩旁是監視器，交流道是橫條 ── */
   #diagram { max-width: 560px; margin: 0 auto; }
-  .ic { position: relative; display: flex; align-items: center; justify-content: center; height: 34px; margin: 0 -4px;
-    background: var(--ic-bg); border: 1.5px solid var(--ic-line); border-radius: 6px; color: var(--ic-text); font-size: 16px; font-weight: 700; z-index: 2; }
-  .ic .km { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: var(--km-bg); color: #000;
-    border: 1.5px solid #000; border-radius: 3px; padding: 0 5px; font-size: 13px; font-weight: 800; line-height: 20px; }
+  .ic { position: relative; display: flex; align-items: center; justify-content: center; height: 36px; margin: 0 -4px;
+    background: #fff; border: 0.5px solid var(--line); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); color: var(--text); font-size: 16px; font-weight: 700; z-index: 2; }
+  .ic .km { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: var(--blue); color: #fff;
+    border-radius: 999px; padding: 0 9px; font-size: 12px; font-weight: 700; line-height: 22px; }
   .dseg { position: relative; min-height: 96px; padding: 6px 0; }
   .lane { position: absolute; top: 0; bottom: 0; width: 34px; display: flex; flex-direction: column; align-items: center; padding-top: 14px;
-    color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.35); font-size: 12px; line-height: 1.25; text-align: center; background: #7FB77E; }
+    color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.35); font-size: 12px; line-height: 1.25; text-align: center; background: #C7C7CC; }
   .lane.l { left: calc(50% - 38px); } .lane.r { left: calc(50% + 4px); }
   .lane b { font-size: 13px; } .lane i { font-style: normal; font-size: 13px; margin-top: 2px; }
   .lane.nodata b { font-size: 11px; }
@@ -70,15 +64,15 @@
   .card.dcam .shot { aspect-ratio: 16 / 11; border-radius: 4px; overflow: hidden; }
   .card.dcam .time { font-size: 9px; padding: 1px 5px; left: 3px; top: 3px; }
   .card.dcam .star { width: 24px; height: 24px; font-size: 12px; right: 3px; top: 3px; }
-  .card.dcam .lab { position: absolute; left: 0; right: 0; bottom: -18px; text-align: center; color: #fff; font-size: 12px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
+  .card.dcam .lab { position: absolute; left: 0; right: 0; bottom: -18px; text-align: center; color: var(--text-2); font-size: 12px; }
   .card.dcam { position: relative; margin-bottom: 18px; overflow: visible; border: none; }
-  .card.dcam.hl { box-shadow: 0 0 0 3px #F6C915; }
+  .card.dcam.hl { box-shadow: 0 0 0 3px var(--blue); }
   body.lanesOnly .drow { display: none; }
   body.lanesOnly .dseg { min-height: 78px; }
   .dfoot { position: sticky; bottom: 0; z-index: 15; display: flex; justify-content: center; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
   .dfoot .seg { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
-  .dfoot .seg button.on { background: #C5E1A5; color: #1B5E20; box-shadow: none; }
-  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; color: #fff; font-size: 12px; margin: -4px 0 12px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--text-2); font-size: 12px; margin: 2px 0 4px; width: 100%; }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
@@ -418,12 +412,13 @@
   let speedList = [];
   const BACK = { S: 'N', E: 'W' };
   function speedColor(v) {
-    if (v == null || v < 0) return '#7FB77E';   // 沒資料
-    if (v >= 80) return '#2E7D32';              // 順暢：深綠
-    if (v >= 60) return '#B8C82E';              // 車多：黃綠
-    if (v >= 40) return '#F2A51A';              // 緩慢：橘
-    if (v >= 20) return '#E5532D';              // 壅塞：紅
-    return '#B71C1C';                           // 嚴重壅塞：深紅
+    // 跟地圖上的路況顏色同一套(lib/traffic/config.js)
+    if (v == null || v < 0) return '#C7C7CC';   // 沒資料：灰
+    if (v >= 80) return '#16E098';              // 順暢
+    if (v >= 60) return '#FFB300';              // 車多
+    if (v >= 40) return '#FF6D00';              // 緩慢
+    if (v >= 20) return '#E53935';              // 壅塞
+    return '#8B0000';                           // 嚴重壅塞
   }
   function speedAt(road, dir, a, b) {
     const mid = (a + b) / 2;
@@ -489,7 +484,7 @@
     sum.appendChild(el('b', null, roadShort(st.road) + (st.region ? ' · ' + REGION[st.region] : '')));
     sum.appendChild(document.createTextNode('左邊' + DIR_NAME[fdir] + '、右邊' + DIR_NAME[bdir] + '，共 ' + rc.length + ' 支監視器。車道顏色是即時車速，點縮圖看即時影像'));
     const lg = el('div', 'legend');
-    [['#2E7D32', '80 以上'], ['#B8C82E', '60–79'], ['#F2A51A', '40–59'], ['#E5532D', '20–39'], ['#B71C1C', '20 以下'], ['#7FB77E', '沒資料']].forEach(function (x) {
+    [['#16E098', '順暢 80 以上'], ['#FFB300', '車多 60–79'], ['#FF6D00', '緩慢 40–59'], ['#E53935', '壅塞 20–39'], ['#8B0000', '20 以下'], ['#C7C7CC', '沒資料']].forEach(function (x) {
       const sp = el('span'); const i = el('i'); i.style.background = x[0]; sp.appendChild(i); sp.appendChild(document.createTextNode(x[1])); lg.appendChild(sp);
     });
     sum.appendChild(lg);
