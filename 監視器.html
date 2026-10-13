@@ -6,10 +6,11 @@
 <title>智行監視器</title>
 <link rel="icon" type="image/png" href="智行地圖.png">
 <style>
-  /* 跟智行地圖同一套顏色：藍色按鈕 #2F80FF、白色磨砂卡片、膠囊按鈕 */
+  /* 顏色照截圖：綠色底、淺綠交流道橫條、黃色公里牌、車道依車速上色(深綠快、黃綠普通、橘慢、紅塞) */
   :root {
-    --blue: #2F80FF; --blue-dark: #1B5FC9; --blue-soft: #EAF2FF;
-    --page: #F2F2F7; --card: rgba(255,255,255,0.86); --line: #d9d9d9;
+    --blue: #2E7D32; --blue-dark: #1B5E20; --blue-soft: #E3F2D5;
+    --page: #43A047; --card: #FFFFFF; --line: #2E7D32;
+    --ic-bg: #A5D66B; --ic-line: #6FAF3E; --ic-text: #1D3A10; --km-bg: #F6C915;
     --text: #1c1c1e; --text-2: #3c3c43; --muted: #8e8e93;
     --cms-bg: #FFF4D6; --cms-text: #6B4A00; --live: #FF3B30;
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
@@ -22,7 +23,9 @@
 
   /* ── 頂部(捲動時固定) ── */
   .top { position: sticky; top: 0; z-index: 20; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-    background: rgba(242,242,247,0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-bottom: 0.5px solid var(--line); }
+    background: #388E3C; border-bottom: 1px solid #2E7D32; color: #fff; }
+  .bar h1 small { color: #DCEFD0 !important; }
+  .back { background: #fff !important; color: #1B5E20 !important; }
   .bar { display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 0 auto; }
   .bar img { width: 34px; height: 34px; border-radius: 9px; }
   .bar h1 { margin: 0; font-size: 19px; flex: 1; min-width: 0; }
@@ -42,8 +45,42 @@
 
   /* ── 清單 ── */
   main { max-width: 1180px; margin: 0 auto; padding: 14px 16px calc(32px + env(safe-area-inset-bottom)); }
-  .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-bottom: 12px; }
-  .summary b { color: var(--text); }
+  .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #E8F5E0; font-size: 13px; margin-bottom: 12px; }
+  .summary b { color: #fff; }
+  .empty { color: #E8F5E0 !important; }
+  .gap { color: #E8F5E0 !important; }
+  .gap::before, .gap::after { background: rgba(255,255,255,0.4) !important; }
+
+  /* ── 國道示意圖：中間兩條車道(左邊往里程增加方向 ▼、右邊反方向 ▲)，兩旁是監視器，交流道是橫條 ── */
+  #diagram { max-width: 560px; margin: 0 auto; }
+  .ic { position: relative; display: flex; align-items: center; justify-content: center; height: 34px; margin: 0 -4px;
+    background: var(--ic-bg); border: 1.5px solid var(--ic-line); border-radius: 6px; color: var(--ic-text); font-size: 16px; font-weight: 700; z-index: 2; }
+  .ic .km { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: var(--km-bg); color: #000;
+    border: 1.5px solid #000; border-radius: 3px; padding: 0 5px; font-size: 13px; font-weight: 800; line-height: 20px; }
+  .dseg { position: relative; min-height: 96px; padding: 6px 0; }
+  .lane { position: absolute; top: 0; bottom: 0; width: 34px; display: flex; flex-direction: column; align-items: center; padding-top: 14px;
+    color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.35); font-size: 12px; line-height: 1.25; text-align: center; background: #7FB77E; }
+  .lane.l { left: calc(50% - 38px); } .lane.r { left: calc(50% + 4px); }
+  .lane b { font-size: 13px; } .lane i { font-style: normal; font-size: 13px; margin-top: 2px; }
+  .lane.nodata b { font-size: 11px; }
+  .drow { position: relative; display: grid; grid-template-columns: 1fr 84px 1fr; align-items: start; margin: 4px 0; z-index: 1; }
+  .drow .side { display: flex; }
+  .drow .side.l { justify-content: flex-start; } .drow .side.r { justify-content: flex-end; }
+  .card.dcam { width: min(150px, 100%); border-radius: 4px; background: #000; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .card.dcam .shot { aspect-ratio: 16 / 11; border-radius: 4px; overflow: hidden; }
+  .card.dcam .time { font-size: 9px; padding: 1px 5px; left: 3px; top: 3px; }
+  .card.dcam .star { width: 24px; height: 24px; font-size: 12px; right: 3px; top: 3px; }
+  .card.dcam .lab { position: absolute; left: 0; right: 0; bottom: -18px; text-align: center; color: #fff; font-size: 12px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
+  .card.dcam { position: relative; margin-bottom: 18px; overflow: visible; border: none; }
+  .card.dcam.hl { box-shadow: 0 0 0 3px #F6C915; }
+  body.lanesOnly .drow { display: none; }
+  body.lanesOnly .dseg { min-height: 78px; }
+  .dfoot { position: sticky; bottom: 0; z-index: 15; display: flex; justify-content: center; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
+  .dfoot .seg { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+  .dfoot .seg button.on { background: #C5E1A5; color: #1B5E20; box-shadow: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; color: #fff; font-size: 12px; margin: -4px 0 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
   @media (max-width: 560px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
   .gap { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin: 4px 0 -4px; }
@@ -108,8 +145,10 @@
 <main>
   <div class="summary" id="summary"></div>
   <div class="grid" id="grid"></div>
+  <div id="diagram" hidden></div>
   <button class="pill more" id="more" hidden>顯示更多</button>
 </main>
+<div class="dfoot" id="dfoot" hidden><div class="seg"><button id="showCctv">顯示CCTV</button><button id="lanesOnly">只顯示車道</button></div></div>
 
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true">
   <div class="vhead">
@@ -304,12 +343,7 @@
     });
     const f = $('filters'); f.innerHTML = '';
     if (st.tab === 'fw') {
-      const seg = el('div', 'seg');
-      dirsOf(st.road).forEach(function (d) {
-        const b = el('button', st.dir === d ? 'on' : '', DIR_NAME[d]); b.onclick = function () { st.dir = d; st.shown = PAGE; update(); }; seg.appendChild(b);
-      });
-      f.appendChild(seg);
-      const regs = {}; cams.forEach(function (c) { if (c.road === st.road && c.dir === st.dir && c.region) regs[c.region] = 1; });
+      const regs = {}; cams.forEach(function (c) { if (c.kind === 'fw' && c.road === st.road && c.region) regs[c.region] = 1; });
       const rk = ['NR', 'PL', 'CR', 'SR'].filter(function (k) { return regs[k]; });
       if (rk.length > 1) {
         const seg2 = el('div', 'seg');
@@ -319,9 +353,12 @@
         f.appendChild(seg2);
       }
     }
-    const s = el('input', 'search'); s.type = 'search'; s.placeholder = '搜尋交流道、里程…'; s.value = st.q;
-    s.oninput = function () { st.q = s.value; st.shown = PAGE; render(); };
-    f.appendChild(s);
+    if (st.tab !== 'fw') { // 國道是示意圖，從上往下照里程排，不需要搜尋
+      const s = el('input', 'search'); s.type = 'search'; s.placeholder = '搜尋交流道、里程…'; s.value = st.q;
+      s.oninput = function () { st.q = s.value; st.shown = PAGE; render(); };
+      f.appendChild(s);
+    }
+    f.hidden = !f.children.length;
   }
 
   function setCmsEl(info, c) {
@@ -351,6 +388,10 @@
 
   let lastList = [];
   function render(keepScroll) {
+    const diagram = st.tab === 'fw';
+    $('grid').hidden = diagram; $('diagram').hidden = !diagram; $('dfoot').hidden = !diagram;
+    if (diagram) { renderDiagram(keepScroll); return; }
+    $('diagram').innerHTML = '';
     const list = currentList(); lastList = list;
     const grid = $('grid'); grid.innerHTML = '';
     if (io) io.disconnect();
@@ -372,6 +413,126 @@
     appendCards(st.shown);
     if (!keepScroll) window.scrollTo(0, 0);
   }
+  // ── 國道示意圖(像截圖那樣)：從上到下照里程排；交流道是淺綠橫條＋黃色公里牌；
+  //    中間兩條車道依即時車速上色(左邊往里程增加方向 ▼，右邊反方向 ▲)；監視器照方向放在兩旁 ──
+  let speedList = [];
+  const BACK = { S: 'N', E: 'W' };
+  function speedColor(v) {
+    if (v == null || v < 0) return '#7FB77E';   // 沒資料
+    if (v >= 80) return '#2E7D32';              // 順暢：深綠
+    if (v >= 60) return '#B8C82E';              // 車多：黃綠
+    if (v >= 40) return '#F2A51A';              // 緩慢：橘
+    if (v >= 20) return '#E5532D';              // 壅塞：紅
+    return '#B71C1C';                           // 嚴重壅塞：深紅
+  }
+  function speedAt(road, dir, a, b) {
+    const mid = (a + b) / 2;
+    const x = speedList.find(function (t) { return t.road === road && t.dir === dir && Math.min(t.s, t.e) <= mid && mid < Math.max(t.s, t.e); });
+    return x ? x.speed : null;
+  }
+  function paintLane(ln) {
+    const v = speedAt(st.road, ln.dataset.dir, +ln.dataset.a, +ln.dataset.b);
+    ln.style.background = speedColor(v);
+    ln.classList.toggle('nodata', v == null || v < 0);
+    ln.firstChild.textContent = v == null || v < 0 ? '—' : v;
+  }
+  function loadSpeed() {
+    fetch(API + '/freeway-speed').then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) return;
+      const first = !speedList.length;
+      speedList = j.data.items || [];
+      if (st.tab !== 'fw') return;
+      if (first) renderDiagram(true); else document.querySelectorAll('.lane').forEach(paintLane); // 之後只換車道顏色，縮圖不重抓
+    }).catch(function () {});
+  }
+  // 交流道：優先用路段車速資料的起訖(最準)，沒有就從監視器的路段名稱推
+  function nodesOf(road, fdir) {
+    const secs = speedList.filter(function (t) { return t.road === road && t.dir === fdir; }).sort(function (a, b) { return a.s - b.s; });
+    const out = [];
+    const add = function (name, m) { if (!out.length || (out[out.length - 1].name !== name && m > out[out.length - 1].m + 50)) out.push({ name: name, m: m }); };
+    if (secs.length) { secs.forEach(function (t) { add(t.from, t.s); }); add(secs[secs.length - 1].to, secs[secs.length - 1].e); return out; }
+    const list = cams.filter(function (c) { return c.kind === 'fw' && c.road === road && c.dir === fdir; }).sort(function (a, b) { return a.m - b.m; });
+    list.forEach(function (c) { const p = c.sec.split(' → '); add(p[0], c.m); });
+    return out;
+  }
+  function dcam(c) {
+    const k = el('div', 'card dcam'); k.dataset.id = c.id; k._has = false;
+    const shot = el('div', 'shot');
+    shot.appendChild(el('canvas')); shot.appendChild(el('div', 'ph', '載入中…')); shot.appendChild(el('span', 'time', '—'));
+    const star = el('button', 'star' + (isFav(c) ? ' on' : ''), isFav(c) ? '★' : '☆'); star.setAttribute('aria-label', '收藏');
+    star.onclick = function (e) { e.stopPropagation(); toggleFav(c); star.classList.toggle('on', isFav(c)); star.textContent = isFav(c) ? '★' : '☆'; };
+    shot.appendChild(star);
+    k.appendChild(shot);
+    k.appendChild(el('div', 'lab', DIR_NAME[c.dir] + ' ' + String(+(c.m / 1000).toFixed(2))));
+    k.onclick = function () { openViewer(c); };
+    return k;
+  }
+  function renderDiagram(keepScroll) {
+    const box = $('diagram'); box.innerHTML = '';
+    $('grid').innerHTML = ''; $('more').hidden = true;
+    if (io) io.disconnect();
+    grabQueue.length = 0;
+    const dirs = dirsOf(st.road, 'fw');
+    const fdir = dirs.indexOf('S') >= 0 ? 'S' : dirs.indexOf('E') >= 0 ? 'E' : dirs[0];
+    const bdir = BACK[fdir] || (dirs.find(function (d) { return d !== fdir; }) || '');
+    let rc = cams.filter(function (c) { return c.kind === 'fw' && c.road === st.road; });
+    // 選了區域：只畫那個區域監視器所在的里程範圍
+    let lo = -Infinity, hi = Infinity;
+    if (st.region) {
+      const ms = rc.filter(function (c) { return c.region === st.region; }).map(function (c) { return c.m; });
+      lo = Math.min.apply(null, ms) - 1; hi = Math.max.apply(null, ms) + 1;
+      rc = rc.filter(function (c) { return c.m >= lo && c.m <= hi; });
+    }
+    let nodes = nodesOf(st.road, fdir).filter(function (n, i, a) { return (a[i + 1] ? a[i + 1].m : Infinity) >= lo && n.m <= hi; });
+    if (!nodes.length) nodes = [{ name: roadShort(st.road), m: 0 }];
+    const sum = $('summary'); sum.innerHTML = '';
+    sum.appendChild(el('b', null, roadShort(st.road) + (st.region ? ' · ' + REGION[st.region] : '')));
+    sum.appendChild(document.createTextNode('左邊' + DIR_NAME[fdir] + '、右邊' + DIR_NAME[bdir] + '，共 ' + rc.length + ' 支監視器。車道顏色是即時車速，點縮圖看即時影像'));
+    const lg = el('div', 'legend');
+    [['#2E7D32', '80 以上'], ['#B8C82E', '60–79'], ['#F2A51A', '40–59'], ['#E5532D', '20–39'], ['#B71C1C', '20 以下'], ['#7FB77E', '沒資料']].forEach(function (x) {
+      const sp = el('span'); const i = el('i'); i.style.background = x[0]; sp.appendChild(i); sp.appendChild(document.createTextNode(x[1])); lg.appendChild(sp);
+    });
+    sum.appendChild(lg);
+    let focusEl = null;
+    nodes.forEach(function (n, i) {
+      const ic = el('div', 'ic', n.name); ic.appendChild(el('span', 'km', String(+(n.m / 1000).toFixed(1)) + ' KM')); box.appendChild(ic);
+      const next = nodes[i + 1];
+      const a = i === 0 ? -Infinity : n.m, b = next ? next.m : Infinity;
+      const segCams = rc.filter(function (c) { return c.m >= a && c.m < b; }).sort(function (x, y) { return x.m - y.m; });
+      if (!next && !segCams.length) return;
+      const seg = el('div', 'dseg');
+      [['l', fdir, '▼'], ['r', bdir, '▲']].forEach(function (L) {
+        const ln = el('div', 'lane ' + L[0]); ln.dataset.dir = L[1]; ln.dataset.a = n.m; ln.dataset.b = next ? next.m : n.m + 1000;
+        ln.appendChild(el('b', null, '—')); ln.appendChild(el('small', null, 'km/h')); ln.appendChild(el('i', null, L[2]));
+        seg.appendChild(ln); paintLane(ln);
+      });
+      // 同一列左右各放一支(左邊這個方向、右邊反方向)，照里程由上往下
+      let row = null;
+      segCams.forEach(function (c) {
+        const side = c.dir === fdir ? 'l' : 'r';
+        if (!row || row[side].children.length) {
+          row = { el: el('div', 'drow'), l: el('div', 'side l'), r: el('div', 'side r') };
+          row.el.appendChild(row.l); row.el.appendChild(el('div')); row.el.appendChild(row.r); seg.appendChild(row.el);
+        }
+        const k = dcam(c); row[side].appendChild(k);
+        if (io) io.observe(k); else want(k);
+        if (c.id === st.hlId) k.classList.add('hl'); // 從地圖點進來的那支一直標著(車速資料到了重畫也一樣)
+        if (st.focus && c.id === st.focus) { focusEl = k; st.focus = null; }
+      });
+      box.appendChild(seg);
+    });
+    if (focusEl) setTimeout(function () { focusEl.scrollIntoView({ block: 'center' }); }, 50);
+    else if (!keepScroll) window.scrollTo(0, 0);
+  }
+  function setLanesOnly(on) {
+    document.body.classList.toggle('lanesOnly', on);
+    $('lanesOnly').classList.toggle('on', on); $('showCctv').classList.toggle('on', !on);
+    try { localStorage.setItem('snm_cctv_lanes_only', on ? '1' : ''); } catch (e) {}
+  }
+  $('showCctv').onclick = function () { setLanesOnly(false); };
+  $('lanesOnly').onclick = function () { setLanesOnly(true); };
+  setLanesOnly((function () { try { return localStorage.getItem('snm_cctv_lanes_only') === '1'; } catch (e) { return false; } })());
+
   // 把清單接著畫到 upTo 支(往下捲時只加新的，上面已經抓好的縮圖不動)
   let drawn = 0, prevSec = null;
   function appendCards(upTo) {
@@ -413,7 +574,8 @@
 
   // ── 大圖檢視：即時串流、‹ › 換上一支/下一支，「沿路巡航」自動一支一支往前看 ──
   let vCam = null, vTimer = null, vReload = null, cruising = false, cruiseStart = 0, progRaf = null;
-  function vList() { return lastList.length ? lastList : [vCam]; }
+  let viewList = [];
+  function vList() { return viewList.length ? viewList : [vCam]; }
   function showCam(c) {
     vCam = c;
     const i = vList().indexOf(c), n = vList().length;
@@ -453,7 +615,12 @@
     cancelAnimationFrame(progRaf);
     (function tick() { if (!cruising) return; bar.style.width = Math.min(100, (Date.now() - cruiseStart) / CRUISE_MS * 100) + '%'; progRaf = requestAnimationFrame(tick); })();
   }
-  function openViewer(c) { $('viewer').hidden = false; document.body.style.overflow = 'hidden'; showCam(c); }
+  function openViewer(c) {
+    viewList = st.tab === 'fw'
+      ? cams.filter(function (x) { return x.kind === 'fw' && x.road === c.road && x.dir === c.dir; }).sort(function (a, b) { return forward(c.dir) ? a.m - b.m : b.m - a.m; })
+      : lastList;
+    $('viewer').hidden = false; document.body.style.overflow = 'hidden'; showCam(c);
+  }
   function closeViewer() {
     setCruise(false); clearTimeout(vReload); $('vImg').removeAttribute('src'); vCam = null;
     $('viewer').hidden = true; document.body.style.overflow = '';
@@ -493,7 +660,7 @@
       focus = cams.find(function (c) { return c.url === camUrl; }) ||
         (key ? cams.find(function (c) { return c.kind === 'fw' && c.url.endsWith('camera=' + key); }) : null);
     }
-    if (focus) { st.tab = focus.kind; st.road = focus.road; st.dir = focus.dir; st.region = ''; st.focus = focus.id;
+    if (focus) { st.tab = focus.kind; st.road = focus.road; st.dir = focus.dir; st.region = ''; st.focus = st.hlId = focus.id;
       const idx = currentList().indexOf(focus); if (idx >= st.shown) st.shown = Math.ceil((idx + 1) / PAGE) * PAGE; }
     else if (p.get('road')) {
       const r = p.get('road'), k = cams.find(function (c) { return c.road === r; });
@@ -501,7 +668,8 @@
     }
     if (DATA.updated) $('upd').textContent = '國道 ' + DATA.fw.length + ' 支、省道 ' + DATA.thb.length + ' 支 · 資料 ' + DATA.updated;
     renderControls(); render(); if (focus) setTimeout(function () { openViewer(focus); }, 300);
-    loadCms();
+    loadCms(); loadSpeed();
+    setInterval(function () { if (!document.hidden && st.tab === 'fw') loadSpeed(); }, 60 * 1000); // 車速每分鐘更新
     setInterval(function () { if (!document.hidden) loadCms(); }, 5 * 60 * 1000); // 看板訊息 5 分鐘更新一次
   })();
 })();
