@@ -10455,7 +10455,8 @@ setTimeout(() => {
 <!-- 🚦 導航右側「全程路況條」(參考百度/高德)：由下往上讀，底部＝起點，頂端＝目的地，一次顯示整條路線；
      導航車子沿著路況條往上走，車子的位置就是目前在路線上的位置 -->
 <style>
-#snmTrafficBar{position:fixed;z-index:8;width:10px;pointer-events:none;display:flex;flex-direction:column;align-items:center;}
+#snmTrafficBar{position:fixed;z-index:8;width:10px;pointer-events:none;display:flex;flex-direction:column;align-items:center;
+  transition:height 0.42s cubic-bezier(0.34,1.2,0.64,1), opacity 0.25s ease;} /* 跟右下按鈕展開/收起一起動 */
 #snmTrafficBar[hidden]{display:none!important;}
 #snmTrafficBar .tbWrap{position:relative;flex:1;width:10px;}
 #snmTrafficBar .tbTrack{position:absolute;inset:0;border-radius:5px;background:#16E098;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);}
@@ -10487,10 +10488,15 @@ setTimeout(() => {
       if (b.height && cs.display !== 'none' && cs.visibility !== 'hidden') top = Math.max(top, b.bottom);
     });
     top = Math.max(top, 60) + 18;
-    var bottom = (r && r.height ? r.top : innerHeight * 0.6) - 30; // 車子會超出底部一點，多留一點
-    var cx = r && r.width ? r.left + r.width / 2 : innerWidth - 40;
+    // 右下按鈕收起來時只剩「＋」，路況條延伸到「＋」上面；展開時縮到最上面那顆按鈕上面(有動畫，跟按鈕一起動)
+    var tog = document.getElementById('mcToggle'), collapsed = ctrl && ctrl.classList.contains('mcCollapsed');
+    var tr = collapsed && tog ? tog.getBoundingClientRect() : null;
+    var edge = tr && tr.height ? tr.top : (r && r.height ? r.top : innerHeight * 0.6);
+    var bottom = edge - 30; // 車子會超出底部一點，多留一點
+    var tb = tog && tog.getBoundingClientRect();           // 左右位置一律對準「＋」，展開/收起時不會左右跳
+    var cx = tb && tb.width ? tb.left + tb.width / 2 : (r && r.width ? r.left + r.width / 2 : innerWidth - 40);
     var h = bottom - top;
-    bar.style.visibility = h < 110 ? 'hidden' : '';   // 太矮(例如手機橫放空間不夠)就先不顯示，不擠壓其他按鈕
+    bar.style.opacity = h < 110 ? '0' : '';   // 太矮(按鈕展開、或手機橫放空間不夠)就淡出，不擠壓按鈕
     bar.style.top = top + 'px'; bar.style.height = Math.max(0, h) + 'px'; bar.style.left = (cx - 7) + 'px';
   }
   // 整條路線由下往上畫：起點(0)在底部 0%，終點(1)在頂部 100%
