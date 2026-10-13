@@ -55,7 +55,8 @@
   .lane { position: absolute; top: 0; bottom: 0; width: 34px; display: flex; flex-direction: column; align-items: center; padding-top: 14px;
     color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.35); font-size: 12px; line-height: 1.25; text-align: center; background: #C7C7CC; }
   .lane.l { left: calc(50% - 38px); } .lane.r { left: calc(50% + 4px); }
-  .lane b { font-size: 13px; } .lane i { font-style: normal; font-size: 13px; margin-top: 2px; }
+  .lane b { font-size: 13px; }
+  .lane svg { width: 16px; height: 16px; margin-top: 4px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
   .lane.nodata b { font-size: 11px; }
   .drow { position: relative; display: grid; grid-template-columns: 1fr 84px 1fr; align-items: start; margin: 4px 0; z-index: 1; }
   .drow .side { display: flex; }
@@ -496,9 +497,11 @@
       const segCams = rc.filter(function (c) { return c.m >= a && c.m < b; }).sort(function (x, y) { return x.m - y.m; });
       if (!next && !segCams.length) return;
       const seg = el('div', 'dseg');
-      [['l', fdir, '▼'], ['r', bdir, '▲']].forEach(function (L) {
+      // 箭頭跟導航路線上的箭頭同一個形狀(白色圓角 ›，智行地圖 _buildNavArrow)，轉成朝下/朝上
+      [['l', fdir, '8,16 40,64 72,16'], ['r', bdir, '8,64 40,16 72,64']].forEach(function (L) {
         const ln = el('div', 'lane ' + L[0]); ln.dataset.dir = L[1]; ln.dataset.a = n.m; ln.dataset.b = next ? next.m : n.m + 1000;
-        ln.appendChild(el('b', null, '—')); ln.appendChild(el('small', null, 'km/h')); ln.appendChild(el('i', null, L[2]));
+        ln.appendChild(el('b', null, '—')); ln.appendChild(el('small', null, 'km/h'));
+        ln.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 80 80" aria-hidden="true"><polyline points="' + L[2] + '" fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/></svg>');
         seg.appendChild(ln); paintLane(ln);
       });
       // 同一列左右各放一支(左邊這個方向、右邊反方向)，照里程由上往下
