@@ -10461,7 +10461,7 @@ setTimeout(() => {
 #snmTrafficBar .tbWrap{position:relative;flex:1;width:10px;}
 #snmTrafficBar .tbTrack{position:absolute;inset:0;border-radius:5px;background:#16E098;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);}
 /* 終點：跟地圖上的目的地標記同一個(紅框圓形 logo 或紅色定位針)，縮小放在色帶頂端，尖端對準色帶頂 */
-#snmTrafficBar .tbEnd{z-index:1;margin-bottom:-3px;transform:scale(0.62);transform-origin:50% 100%;display:flex;justify-content:center;}
+#snmTrafficBar .tbEnd{z-index:1;margin-top:-17px;margin-bottom:-3px;transform:scale(0.62);transform-origin:50% 100%;display:flex;justify-content:center;} /* 縮小後上面空出來的約 17px 補回去，紅針緊貼金幣下面 */
 /* 導航車子(跟地圖上同一張圖)，車頭朝上；bottom 由程式依目前進度設定 */
 #snmTrafficBar .tbCar{position:absolute;left:50%;bottom:0;width:30px;transform:translate(-50%,50%);z-index:2;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45));will-change:bottom;}
@@ -10487,12 +10487,12 @@ setTimeout(() => {
       if (!e) return; var b = e.getBoundingClientRect(), cs = getComputedStyle(e);
       if (b.height && cs.display !== 'none' && cs.visibility !== 'hidden') top = Math.max(top, b.bottom);
     });
-    top = Math.max(top, 60) + 18;
+    top = Math.max(top, 60) + 6;   // 緊貼右上金幣下面，路況條盡量拉長
     // 右下按鈕收起來時只剩「＋」，路況條延伸到「＋」上面；展開時縮到最上面那顆按鈕上面(有動畫，跟按鈕一起動)
     var tog = document.getElementById('mcToggle'), collapsed = ctrl && ctrl.classList.contains('mcCollapsed');
     var tr = collapsed && tog ? tog.getBoundingClientRect() : null;
     var edge = tr && tr.height ? tr.top : (r && r.height ? r.top : innerHeight * 0.6);
-    var bottom = edge - 30; // 車子會超出底部一點，多留一點
+    var bottom = edge - 26; // 車子有一半會超出底部，留到剛好不碰到「＋」
     var tb = tog && tog.getBoundingClientRect();           // 靠最右邊：路況條右緣跟「＋」等右側按鈕的右緣對齊，展開/收起時不會左右跳
     var right = tb && tb.width ? tb.right : (r && r.width ? r.right : innerWidth - 12);
     var h = bottom - top;
