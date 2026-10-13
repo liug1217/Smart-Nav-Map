@@ -4274,6 +4274,8 @@ function _flipCell(cell, from, to) {
     }
     return el;
   }
+  // 導航右側路況條頂端的終點，用跟地圖上同一個目的地標記
+  window._snmDestMarkerEl = function () { return makeDestMarkerEl((selectedDest && selectedDest.logo) || ''); };
 
   window.selectDestination = function selectDestination(lat, lon, name, addr, logo){
     if (_settingPlace) { // 設定住家/公司：存起來、回到搜尋頁首頁
@@ -10413,9 +10415,10 @@ setTimeout(() => {
 #snmTrafficBar[hidden]{display:none!important;}
 #snmTrafficBar .tbWrap{position:relative;flex:1;width:10px;}
 #snmTrafficBar .tbTrack{position:absolute;inset:0;border-radius:5px;background:#16E098;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);}
-#snmTrafficBar .tbEnd{width:10px;height:10px;border-radius:50%;background:#1c1c1e;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.35);margin-bottom:-6px;z-index:1;}
+/* 終點：跟地圖上的目的地標記同一個(紅框圓形 logo 或紅色定位針)，縮小放在色帶頂端，尖端對準色帶頂 */
+#snmTrafficBar .tbEnd{z-index:1;margin-bottom:-3px;transform:scale(0.62);transform-origin:50% 100%;display:flex;justify-content:center;}
 /* 導航車子(跟地圖上同一張圖)，車頭朝上；bottom 由程式依目前進度設定 */
-#snmTrafficBar .tbCar{position:absolute;left:50%;bottom:0;width:20px;transform:translate(-50%,50%);z-index:2;
+#snmTrafficBar .tbCar{position:absolute;left:50%;bottom:0;width:30px;transform:translate(-50%,50%);z-index:2;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45));will-change:bottom;}
 </style>
 <div id="snmTrafficBar" hidden aria-hidden="true"><div class="tbEnd"></div><div class="tbWrap"><div class="tbTrack"></div><img class="tbCar" src="圖片/導航車子1.png" alt=""></div></div>
@@ -10440,7 +10443,7 @@ setTimeout(() => {
       if (b.height && cs.display !== 'none' && cs.visibility !== 'hidden') top = Math.max(top, b.bottom);
     });
     top = Math.max(top, 60) + 18;
-    var bottom = (r && r.height ? r.top : innerHeight * 0.6) - 24; // 車子會超出底部一點，多留一點
+    var bottom = (r && r.height ? r.top : innerHeight * 0.6) - 30; // 車子會超出底部一點，多留一點
     var cx = r && r.width ? r.left + r.width / 2 : innerWidth - 40;
     var h = bottom - top;
     bar.style.visibility = h < 110 ? 'hidden' : '';   // 太矮(例如手機橫放空間不夠)就先不顯示，不擠壓其他按鈕
@@ -10449,12 +10452,18 @@ setTimeout(() => {
   // 整條路線由下往上畫：起點(0)在底部 0%，終點(1)在頂部 100%
   function draw() {
     if (!parts || !navigating()) { bar.hidden = true; drawnKey = ''; return; }
-    if (bar.hidden) { bar.hidden = false; layout(); }
+    if (bar.hidden) { bar.hidden = false; setEnd(); layout(); }
     var stops = [];
     parts.forEach(function (p) { stops.push(p.color + ' ' + (p.fa * 100).toFixed(2) + '%', p.color + ' ' + (p.fb * 100).toFixed(2) + '%'); });
     var key = stops.join(',');
     if (key !== drawnKey) { drawnKey = key; track.style.background = 'linear-gradient(to top,' + key + ')'; }
     placeCar();
+  }
+  function setEnd() {
+    var end = bar.querySelector('.tbEnd');
+    end.innerHTML = '';
+    var el = window._snmDestMarkerEl && window._snmDestMarkerEl();
+    if (el) end.appendChild(el);
   }
   function placeCar() { car.style.bottom = (frac * 100).toFixed(2) + '%'; }
   window._snmTrafficBar = {
@@ -10462,7 +10471,7 @@ setTimeout(() => {
     setParts: function (p) { parts = p && p.length ? p : null; draw(); },
     // 進度改變時呼叫(0~1)：只移動車子，差不到 0.1% 不動
     setProgress: function (f) { f = Math.max(0, Math.min(1, f || 0)); if (Math.abs(f - frac) < 0.001) return; frac = f; placeCar(); },
-    reset: function () { frac = 0; parts = null; draw(); placeCar(); }
+    reset: function () { frac = 0; parts = null; draw(); placeCar(); bar.querySelector('.tbEnd').innerHTML = ''; }
   };
   // 轉向/改大小後按鈕位置要等版面排好才準：下一幀量一次，300 毫秒後再量一次
   var relayout = function () { requestAnimationFrame(layout); setTimeout(layout, 300); };
