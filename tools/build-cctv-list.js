@@ -44,14 +44,14 @@ const round5 = n => Math.round(n * 1e5) / 1e5;
   global.window = {};
   require(path.join(ROOT, 'thb_cctv_data.js'));
   const thb = [];
-  // 公路局的 road 欄位有時是國道或地方路名，統一改成「台X線」：先看本來的路名，再看說明文字，最後看影像網址裡的代碼(T2G → 台2庚線)
+  // 公路局的 road 欄位有時是國道、地方路名，或共線/路口的另一條路，統一改成「台X線」。
+  // 里程是照影像網址裡那條路算的(T2-0K+060 → 台2線 0K+060)，所以先看網址代碼(T2G → 台2庚線)，再看說明文字，最後才用 road 欄位
   const SUFFIX = { A: '甲', B: '乙', C: '丙', D: '丁', E: '戊', F: '己', G: '庚' };
   const roadOf = c => {
-    if (/^台\d+[甲乙丙丁戊己庚]?線$/.test(c.road)) return c.road;
-    const d = String(c.desc || '').match(/台\d+[甲乙丙丁戊己庚]?線/);
-    if (d) return d[0];
     const u = String(c.url).match(/\/T(\d+)([A-G]?)-\d/);
     if (u) return '台' + u[1] + (SUFFIX[u[2]] || '') + '線';
+    const d = String(c.desc || '').match(/台\d+[甲乙丙丁戊己庚]?線/);
+    if (d) return d[0];
     return c.road;
   };
   const DIRS = { 東: 'E', 西: 'W', 南: 'S', 北: 'N' };

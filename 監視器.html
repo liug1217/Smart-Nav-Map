@@ -58,7 +58,7 @@
   .lane.l { left: calc(50% - 38px); } .lane.r { left: calc(50% + 4px); }
   .lane b { font-size: 13px; }
   .lane svg { width: 16px; height: 16px; margin-top: 4px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
-  .lane.nodata b { font-size: 11px; }
+  .lane.nodata b { font-size: 11px; } .lane.nodata small { display: none; }
   .drow { position: relative; display: grid; grid-template-columns: 1fr 84px 1fr; align-items: start; margin: 4px 0; z-index: 1; }
   .drow .side { display: flex; }
   .drow .side.l { justify-content: flex-start; } .drow .side.r { justify-content: flex-end; }
@@ -208,13 +208,15 @@
 
   // ── 狀態 ──
   const st = { tab: 'fw', road: '國道1號', dir: 'S', region: '', q: '', shown: PAGE, near: null };
+  const roadsCache = {};
   const roadsOf = function (kind) {
+    if (roadsCache[kind]) return roadsCache[kind];
     const n = {}; cams.forEach(function (c) { if (c.kind === kind) n[c.road] = (n[c.road] || 0) + 1; });
-    return Object.keys(n).sort(function (a, b) {
+    return (roadsCache[kind] = Object.keys(n).sort(function (a, b) {
       const na = parseInt((a.match(/\d+/) || [999])[0], 10), nb = parseInt((b.match(/\d+/) || [999])[0], 10);
       const pre = kind === 'fw' ? '國道' : '台'; // 國道分頁國道排前面，省道分頁台X線排前面
       return (a.indexOf(pre) === 0 ? 0 : 1) - (b.indexOf(pre) === 0 ? 0 : 1) || na - nb || a.length - b.length || a.localeCompare(b, 'zh-Hant'); // 同號碼：主線(台1線)排在支線(台1甲線)前面
-    });
+    }));
   };
   const dirsOf = function (road, kind) {
     const s = {}; cams.forEach(function (c) { if (c.road === road && c.kind === (kind || st.tab)) s[c.dir] = 1; });
@@ -231,17 +233,19 @@
         return { road: x.road, dir: x.direction, m: mm ? (+mm[1]) * 1000 + (+mm[2]) : null,
           text: x.messages.map(function (t) { return t.text; }).filter(Boolean).join('　') };
       }).filter(function (x) { return x.m != null && x.text; });
+      cmsIdx = {};
+      cmsList.forEach(function (x) { (cmsIdx[x.road + '|' + x.dir] = cmsIdx[x.road + '|' + x.dir] || []).push(x); });
       // 只把看板訊息補進已經在畫面上的卡片，不重畫清單(已經抓好的縮圖不用重抓)
       document.querySelectorAll('.card').forEach(function (k) { setCmsEl(k.querySelector('.info'), byId[k.dataset.id]); });
       if (vCam) showCam(vCam);
     }).catch(function () {});
   }
   // 同一條路、同方向、在監視器「前面」10 公里內最近的看板
+  let cmsIdx = {};
   function cmsFor(c) {
     if (c.kind !== 'fw' || !cmsList.length) return null;
     let best = null, bd = 1e9;
-    cmsList.forEach(function (x) {
-      if (x.road !== c.road || x.dir !== c.dir) return;
+    (cmsIdx[c.road + '|' + c.dir] || []).forEach(function (x) {
       const d = forward(c.dir) ? c.m - x.m : x.m - c.m;
       if (d >= 0 && d <= 10000 && d < bd) { bd = d; best = x; }
     });
@@ -415,38 +419,48 @@
   const BACK = { S: 'N', E: 'W' };
   // [車道顏色, 外框顏色]：跟地圖上的路況同一套(lib/traffic/config.js)；
   // 外框跟導航路線一樣用同色系深色(順暢 #16E098 配 #009B65，塞車的外框照智行地圖 CASING_BY_LEVEL)
-  function speedColor(v) {
-    if (v == null || v < 0) return ['#C7C7CC', '#A1A1A6'];   // 沒資料：灰
-    if (v >= 80) return ['#16E098', '#009B65'];              // 順暢
-    if (v >= 60) return ['#FFB300', '#B07C00'];              // 車多
-    if (v >= 40) return ['#FF6D00', '#B34C00'];              // 緩慢
-    if (v >= 20) return ['#E53935', '#A32020'];              // 壅塞
-    return ['#8B0000', '#4F0000'];                           // 嚴重壅塞
+  //   車速/順暢車速 ≥ 0.75 順暢、≥ 0.55 車多、≥ 0.40 緩慢、≥ 0.25 壅塞、其他嚴重壅塞
+  const LEVELS = [
+    { min: 0.75, name: '順暢',     fill: '#16E098', line: '#009B65' },
+    { min: 0.55, name: '車多',     fill: '#FFB300', line: '#B07C00' },
+    { min: 0.40, name: '緩慢',     fill: '#FF6D00', line: '#B34C00' },
+    { min: 0.25, name: '壅塞',     fill: '#E53935', line: '#A32020' },
+    { min: 0,    name: '嚴重壅塞', fill: '#8B0000', line: '#4F0000' }
+  ];
+  const NO_DATA = { name: '沒資料', fill: '#C7C7CC', line: '#A1A1A6' };
+  function levelOf(x) {
+    if (!x || !(x.speed > 0)) return NO_DATA;
+    const r = x.speed / (x.limit || 100);
+    return LEVELS.find(function (L) { return r >= L.min; });
   }
+  // 車速資料依「路名|方向」分組，畫車道時不用每次掃全部路段
+  let speedIdx = {};
   function speedAt(road, dir, a, b) {
     const mid = (a + b) / 2;
-    const x = speedList.find(function (t) { return t.road === road && t.dir === dir && Math.min(t.s, t.e) <= mid && mid < Math.max(t.s, t.e); });
-    return x ? x.speed : null;
+    return (speedIdx[road + '|' + dir] || []).find(function (t) { return Math.min(t.s, t.e) <= mid && mid < Math.max(t.s, t.e); }) || null;
   }
   function paintLane(ln) {
-    const v = speedAt(st.road, ln.dataset.dir, +ln.dataset.a, +ln.dataset.b);
-    const col = speedColor(v);
-    ln.style.background = col[0]; ln.style.borderColor = col[1];
-    ln.classList.toggle('nodata', v == null || v < 0);
-    ln.firstChild.textContent = v == null || v < 0 ? '—' : v;
+    const x = speedAt(st.road, ln.dataset.dir, +ln.dataset.a, +ln.dataset.b), L = levelOf(x), has = L !== NO_DATA;
+    ln.style.background = L.fill; ln.style.borderColor = L.line;
+    ln.classList.toggle('nodata', !has);
+    ln.title = has ? L.name + ' ' + x.speed + ' km/h(速限 ' + (x.limit || '—') + ')' : '這段沒有車速資料';
+    ln.firstChild.textContent = has ? x.speed : '—';
   }
   function loadSpeed() {
     fetch(API + '/freeway-speed').then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return;
       const first = !speedList.length;
-      speedList = j.data.items || [];
+      const ALIAS = { '臺76線': '快速公路76號' };
+      speedList = (j.data.items || []).map(function (t) { if (ALIAS[t.road]) t.road = ALIAS[t.road]; return t; });
+      speedIdx = {};
+      speedList.forEach(function (t) { (speedIdx[t.road + '|' + t.dir] = speedIdx[t.road + '|' + t.dir] || []).push(t); });
       if (st.tab !== 'fw') return;
       if (first) renderDiagram(true); else document.querySelectorAll('.lane').forEach(paintLane); // 之後只換車道顏色，縮圖不重抓
     }).catch(function () {});
   }
   // 交流道：優先用路段車速資料的起訖(最準)，沒有就從監視器的路段名稱推
   function nodesOf(road, fdir) {
-    const secs = speedList.filter(function (t) { return t.road === road && t.dir === fdir; }).sort(function (a, b) { return a.s - b.s; });
+    const secs = (speedIdx[road + '|' + fdir] || []).slice().sort(function (a, b) { return a.s - b.s; });
     const out = [];
     const add = function (name, m) { if (!out.length || (out[out.length - 1].name !== name && m > out[out.length - 1].m + 50)) out.push({ name: name, m: m }); };
     if (secs.length) { secs.forEach(function (t) { add(t.from, t.s); }); add(secs[secs.length - 1].to, secs[secs.length - 1].e); return out; }
@@ -486,10 +500,10 @@
     if (!nodes.length) nodes = [{ name: roadShort(st.road), m: 0 }];
     const sum = $('summary'); sum.innerHTML = '';
     sum.appendChild(el('b', null, roadShort(st.road) + (st.region ? ' · ' + REGION[st.region] : '')));
-    sum.appendChild(document.createTextNode('左邊' + DIR_NAME[fdir] + '、右邊' + DIR_NAME[bdir] + '，共 ' + rc.length + ' 支監視器。車道顏色是即時車速，點縮圖看即時影像'));
+    sum.appendChild(document.createTextNode('左邊' + DIR_NAME[fdir] + '、右邊' + DIR_NAME[bdir] + '，共 ' + rc.length + ' 支監視器。車道顏色跟地圖路況一樣(依車速占速限的比例)，點縮圖看即時影像'));
     const lg = el('div', 'legend');
-    [[80, '順暢 80 以上'], [60, '車多 60–79'], [40, '緩慢 40–59'], [20, '壅塞 20–39'], [0, '20 以下'], [-1, '沒資料']].forEach(function (x) {
-      const sp = el('span'); const i = el('i'), col = speedColor(x[0]); i.style.background = col[0]; i.style.border = '1.5px solid ' + col[1]; i.style.boxSizing = 'border-box'; sp.appendChild(i); sp.appendChild(document.createTextNode(x[1])); lg.appendChild(sp);
+    LEVELS.concat([NO_DATA]).forEach(function (L) {
+      const sp = el('span'); const i = el('i'); i.style.background = L.fill; i.style.border = '1.5px solid ' + L.line; i.style.boxSizing = 'border-box'; sp.appendChild(i); sp.appendChild(document.createTextNode(L.name)); lg.appendChild(sp);
     });
     sum.appendChild(lg);
     let focusEl = null;
