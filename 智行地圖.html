@@ -767,6 +767,32 @@ body.searchOpen .searchResultsList{
   -webkit-tap-highlight-color:transparent;
 }
 .mapCtrlBtn:active{ background:rgba(230,230,230,0.95); }
+
+/* ── 右下按鈕收合：平常只有「＋」，點開 6 顆按鈕從「＋」的位置依序往上彈出，「＋」轉成「×」 ──
+   按鈕收起時仍佔著原本的位置(只是縮小、透明、點不到)，所以整排高度不變，其他東西不會跟著跳 */
+.mapCtrlGroup{ pointer-events:none; }               /* 空白處讓給地圖，可以直接點、拖曳 */
+.mapCtrlGroup > *{ pointer-events:auto; }
+.mapCtrlGroup .mapCtrlBtn:not(.mcToggle){
+  /* --k：離「＋」第幾顆(最下面那顆是 1)；收起時往下移到「＋」的位置 */
+  transition:transform 0.46s cubic-bezier(0.34,1.45,0.64,1), opacity 0.26s ease, visibility 0s, background 0.15s;
+  transition-delay:calc((6 - var(--k)) * 0ms + var(--k) * 32ms);
+}
+.mapCtrlGroup.mcCollapsed .mapCtrlBtn:not(.mcToggle){
+  transform:translateY(calc(var(--k) * 67px)) scale(0.35);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  /* 收回比較快、由上往下依序縮回 */
+  transition:transform 0.3s cubic-bezier(0.55,0,0.75,0.2), opacity 0.22s ease, visibility 0s linear 0.3s, background 0.15s;
+  transition-delay:calc((7 - var(--k)) * 22ms);
+}
+.mcToggle svg{ transition:transform 0.42s cubic-bezier(0.34,1.45,0.64,1); }
+.mapCtrlGroup:not(.mcCollapsed) .mcToggle svg{ transform:rotate(135deg); }
+.mcToggle:active{ transform:scale(0.92); }
+.mcToggle{ transition:transform 0.15s, background 0.15s; }
+@media (prefers-reduced-motion: reduce){
+  .mapCtrlGroup .mapCtrlBtn, .mcToggle svg{ transition-duration:0.01s !important; transition-delay:0s !important; }
+}
 #shareCarBtn, #styleBtn{ color:#000; } /* 車子、地圖用黑色；只有定位、AI 用藍色(同一個藍) */
 
 .compassBtn svg{
@@ -1596,7 +1622,10 @@ html, body {
     flex-direction:row;
     flex-wrap:wrap;
     justify-content:flex-end;
-    width:160px;
+    width:216px; /* 一排 4 顆，加上收合的「＋」還是兩排 */
+  }
+  .mapCtrlGroup.mcCollapsed .mapCtrlBtn:not(.mcToggle){
+    transform:translateY(14px) scale(0.35);
   }
   .mapCtrlBtn{
     width:48px;
@@ -1895,13 +1924,13 @@ html, body {
 </div>
 
 <!-- 自訂地圖控制按鈕群 -->
-<div class="mapCtrlGroup">
+<div class="mapCtrlGroup mcCollapsed">
   <!-- 即時路況 -->
-  <button class="mapCtrlBtn" id="trafficBtn" title="即時路況" style="font-size:17px;">🚦</button>
+  <button class="mapCtrlBtn" id="trafficBtn" title="即時路況" style="font-size:17px;--k:6;">🚦</button>
   <!-- 分享我的車給其他車友看(要本人同意) -->
-  <button class="mapCtrlBtn" id="shareCarBtn" title="分享我的車給車友" style="font-size:17px;">🚗</button>
+  <button class="mapCtrlBtn" id="shareCarBtn" title="分享我的車給車友" style="font-size:17px;--k:5;">🚗</button>
   <!-- 指南針 -->
-  <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向">
+  <button class="mapCtrlBtn compassBtn" id="compassBtn" title="重設方向" style="--k:4;">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" id="compassSvg">
       <circle cx="12" cy="12" r="10" fill="none" stroke="#ddd" stroke-width="1.5"/>
       <polygon points="12,3 10,12 12,10 14,12" fill="#E53935"/>
@@ -1909,7 +1938,7 @@ html, body {
     </svg>
   </button>
   <!-- 定位 -->
-  <button class="mapCtrlBtn" id="locateBtn" title="定位">
+  <button class="mapCtrlBtn" id="locateBtn" title="定位" style="--k:3;">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="4"/>
       <line x1="12" y1="2" x2="12" y2="6"/>
@@ -1919,10 +1948,25 @@ html, body {
     </svg>
   </button>
   <!-- 地圖風格 -->
-  <button class="mapCtrlBtn" id="styleBtn" title="切換地圖">🗺</button>
+  <button class="mapCtrlBtn" id="styleBtn" title="切換地圖" style="--k:2;">🗺</button>
   <!-- AI 助理 -->
-  <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;">AI</button>
+  <button class="mapCtrlBtn" id="aiBtn" title="AI 助理" style="font-size:16px;font-weight:600;letter-spacing:-0.5px;color:#007AFF;--k:1;">AI</button>
+  <!-- 收合按鈕：平常只看得到這顆，點開/收起上面 6 顆 -->
+  <button class="mapCtrlBtn mcToggle" id="mcToggle" title="更多按鈕" aria-label="展開按鈕" aria-expanded="false">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
 </div>
+<script>
+(function () {
+  var g = document.querySelector('.mapCtrlGroup'), t = document.getElementById('mcToggle');
+  t.addEventListener('click', function () {
+    var open = g.classList.toggle('mcCollapsed') === false;
+    t.setAttribute('aria-expanded', open); t.setAttribute('aria-label', open ? '收起按鈕' : '展開按鈕');
+  });
+})();
+</script>
 
 <div class="bottomBar">
   <div class="appBrand" id="appBrand"><img src="智行地圖.png" alt=""><span>智行地圖</span></div>
