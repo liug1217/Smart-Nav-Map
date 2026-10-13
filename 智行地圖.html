@@ -4978,6 +4978,7 @@ function _flipCell(cell, from, to) {
   }
   window._snmRoutePassedClear = function () {
     _passed.geom = null; _passed.along = 0; _passed.drawn = -1;
+    if (window._snmTrafficBar) window._snmTrafficBar.reset(); // 結束導航/換新路線：路況條也從頭來，不留上一條路線的顏色
     const src = map.getSource(PASSED_SRC);
     if (src) src.setData({ type: 'FeatureCollection', features: [] });
   };
@@ -4988,6 +4989,7 @@ function _flipCell(cell, from, to) {
     const now = Date.now();
     // 省電：前進 2 公尺以上、而且距離上次重畫 120 毫秒以上才重畫
     if (_passed.drawn >= 0 && (_passed.along - _passed.drawn < 2 || now - _passed.t < 120)) return;
+    if (window._snmTrafficBar && geom.total > 0) window._snmTrafficBar.setProgress(_passed.along / geom.total); // 右側全程路況條跟著走
     if (!_ensurePassedLayers()) return;
     const a = _passed.along, cum = geom.cum, coords = geom.coords;
     const line = [coords[0]];
@@ -10404,6 +10406,74 @@ setTimeout(() => {
 })();
 </script>
 
+<!-- 🚦 導航右側「全程路況條」(參考百度/高德)：由下往上讀，底部＝起點，頂端＝目的地，一次顯示整條路線；
+     導航車子沿著路況條往上走，車子的位置就是目前在路線上的位置 -->
+<style>
+#snmTrafficBar{position:fixed;z-index:8;width:10px;pointer-events:none;display:flex;flex-direction:column;align-items:center;}
+#snmTrafficBar[hidden]{display:none!important;}
+#snmTrafficBar .tbWrap{position:relative;flex:1;width:10px;}
+#snmTrafficBar .tbTrack{position:absolute;inset:0;border-radius:5px;background:#16E098;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);}
+#snmTrafficBar .tbEnd{width:10px;height:10px;border-radius:50%;background:#1c1c1e;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.35);margin-bottom:-6px;z-index:1;}
+/* 導航車子(跟地圖上同一張圖)，車頭朝上；bottom 由程式依目前進度設定 */
+#snmTrafficBar .tbCar{position:absolute;left:50%;bottom:0;width:20px;transform:translate(-50%,50%);z-index:2;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45));will-change:bottom;}
+</style>
+<div id="snmTrafficBar" hidden aria-hidden="true"><div class="tbEnd"></div><div class="tbWrap"><div class="tbTrack"></div><img class="tbCar" src="圖片/導航車子1.png" alt=""></div></div>
+<script>
+// 資料：導航路線上色同一份路況(colorizeNavRoute 算好呼叫 setParts)。
+// 進度：「已行駛路線變灰」同一個值(車子畫面上的沿路線距離，只會往前、2 公尺/120 毫秒節流)，不另算進度。
+// 路況改變時只改一個元素的背景漸層；車子前進時只改車子的位置。不重建 DOM、不加地圖圖層。
+(function () {
+  var bar = document.getElementById('snmTrafficBar'), track = bar.querySelector('.tbTrack'), car = bar.querySelector('.tbCar');
+  var parts = null;   // [{ fa, fb, color }] 整條路線的比例位置(0=起點,1=終點)
+  var frac = 0;       // 車子在路線上的比例位置
+  var drawnKey = '';
+  function navigating() { return document.body.classList.contains('navigating'); }
+  // 位置：右側按鈕欄正上方的空位(右上時間/金幣下面 ~ 右側按鈕上面)，照實際元素位置量，不寫死座標
+  function layout() {
+    if (bar.hidden) return;
+    var ctrl = document.querySelector('.mapCtrlGroup'), coin = document.getElementById('coinDisplay'), clock = document.getElementById('mapClock');
+    var r = ctrl && ctrl.getBoundingClientRect();
+    var top = 0;
+    [coin, clock].forEach(function (e) { // 這兩個是 position:fixed，用實際大小判斷有沒有顯示
+      if (!e) return; var b = e.getBoundingClientRect(), cs = getComputedStyle(e);
+      if (b.height && cs.display !== 'none' && cs.visibility !== 'hidden') top = Math.max(top, b.bottom);
+    });
+    top = Math.max(top, 60) + 18;
+    var bottom = (r && r.height ? r.top : innerHeight * 0.6) - 24; // 車子會超出底部一點，多留一點
+    var cx = r && r.width ? r.left + r.width / 2 : innerWidth - 40;
+    var h = bottom - top;
+    bar.style.visibility = h < 110 ? 'hidden' : '';   // 太矮(例如手機橫放空間不夠)就先不顯示，不擠壓其他按鈕
+    bar.style.top = top + 'px'; bar.style.height = Math.max(0, h) + 'px'; bar.style.left = (cx - 7) + 'px';
+  }
+  // 整條路線由下往上畫：起點(0)在底部 0%，終點(1)在頂部 100%
+  function draw() {
+    if (!parts || !navigating()) { bar.hidden = true; drawnKey = ''; return; }
+    if (bar.hidden) { bar.hidden = false; layout(); }
+    var stops = [];
+    parts.forEach(function (p) { stops.push(p.color + ' ' + (p.fa * 100).toFixed(2) + '%', p.color + ' ' + (p.fb * 100).toFixed(2) + '%'); });
+    var key = stops.join(',');
+    if (key !== drawnKey) { drawnKey = key; track.style.background = 'linear-gradient(to top,' + key + ')'; }
+    placeCar();
+  }
+  function placeCar() { car.style.bottom = (frac * 100).toFixed(2) + '%'; }
+  window._snmTrafficBar = {
+    // 路況分段改變(路況更新、重新規劃路線、開始/結束導航)時呼叫；null = 收起來
+    setParts: function (p) { parts = p && p.length ? p : null; draw(); },
+    // 進度改變時呼叫(0~1)：只移動車子，差不到 0.1% 不動
+    setProgress: function (f) { f = Math.max(0, Math.min(1, f || 0)); if (Math.abs(f - frac) < 0.001) return; frac = f; placeCar(); },
+    reset: function () { frac = 0; parts = null; draw(); placeCar(); }
+  };
+  // 轉向/改大小後按鈕位置要等版面排好才準：下一幀量一次，300 毫秒後再量一次
+  var relayout = function () { requestAnimationFrame(layout); setTimeout(layout, 300); };
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', relayout);
+  // 卡片拉高/收合時右側按鈕會跟著移動，路況條的下緣也要跟著
+  var ctrl = document.querySelector('.mapCtrlGroup');
+  if (ctrl) new MutationObserver(function () { layout(); }).observe(ctrl, { attributes: true, attributeFilter: ['style', 'class'] });
+})();
+</script>
+
 <div id="ios-home-guard"></div>
 
 <!-- ===== Smart Nav Traffic Engine ===== -->
@@ -11479,20 +11549,21 @@ setTimeout(() => {
     return out;
   }
   // 路線上有哪些塞車路段：把路況對齊到這條路線(方向要相同)，回傳 { spans:[{a,b(沿線公尺),rank,color,casing,kmh}], total }
-  function spansOnRoute(route, features) {
+  // withFree：連「確定順暢」的路段也回傳(rank 0)，給右側全程路況條區分「順暢」跟「沒資料」用；其他呼叫不帶，結果不變
+  function spansOnRoute(route, features, withFree) {
     alongRoute(route, route[0]);
     var total = _routeCum[_routeCum.length - 1], spans = [];
     var cands = [{ coords: route, oneway: true }];
     features.forEach(function (f) {
       var p = f.properties || {};
-      if (!LEVEL_RANK[p.trafficLevel]) return;  // 順暢：維持綠色
+      if (!LEVEL_RANK[p.trafficLevel] && !(withFree && p.trafficLevel === 'free')) return;  // 順暢：維持綠色
       var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
       if (!nearRoute(mid, route)) return;
       var piece = matchRoadPiece(f, cands);
       if (!piece) return;
       var a = alongRoute(route, piece[0]), b = alongRoute(route, piece[piece.length - 1]);
       if (b < a) { var t = a; a = b; b = t; }
-      if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel], color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel],
+      if (b - a >= 5) spans.push({ a: a, b: b, rank: LEVEL_RANK[p.trafficLevel] || 0, color: p.color, casing: CASING_BY_LEVEL[p.trafficLevel],
                                    kmh: Number(p.averageSpeed) || 0 });
     });
     return { spans: spans, total: total };
@@ -11545,9 +11616,36 @@ setTimeout(() => {
       })
       .catch(function () { return routes.map(function () { return 0; }); });
   };
+  // 右側全程路況條的分段：整條路線依所有路況切開，每小段取覆蓋它的最嚴重等級；
+  // 沒有路況資料的路段先用順暢的綠色(用戶指定，之後會有新的做法)。顏色跟地圖路況同一套(路段資料本身的 color)
+  var BAR_NO_DATA = '#16E098';
+  function updateTrafficBar(route) {
+    var bar = window._snmTrafficBar;
+    if (!bar) return;
+    // 沒在導航、或使用者關掉路況(🚦)：收起來
+    if (!isNavigating() || !route || route.length < 2 || !_trafficOn) { bar.setParts(null); return; }
+    // 路況資料還沒拿到(例如伺服器沒開)：整條先用綠色
+    if (!_trafficData || !_trafficData.features) { bar.setParts([{ fa: 0, fb: 1, color: BAR_NO_DATA }]); return; }
+    var sr = spansOnRoute(route, _trafficData.features, true), spans = sr.spans, total = sr.total;
+    if (!(total > 0)) { bar.setParts(null); return; }
+    var cuts = [0, total];
+    spans.forEach(function (s) { cuts.push(s.a, s.b); });
+    cuts = cuts.filter(function (c, i, arr) { return arr.indexOf(c) === i; }).sort(function (x, y) { return x - y; });
+    var parts = [];
+    for (var i = 1; i < cuts.length; i++) {
+      var a = cuts[i - 1], b = cuts[i];
+      if (b - a < 0.5) continue;
+      var midD = (a + b) / 2, worst = null;
+      spans.forEach(function (s) { if (s.a <= midD && s.b >= midD && (!worst || s.rank > worst.rank)) worst = s; });
+      var color = (worst && worst.color) || BAR_NO_DATA, last = parts[parts.length - 1];
+      if (last && last.color === color) last.fb = b / total; else parts.push({ fa: a / total, fb: b / total, color: color }); // 相鄰同色合併，位置照實際距離
+    }
+    bar.setParts(parts);
+  }
   function colorizeNavRoute() {
     var m = window.map, route = window.plannedRouteCoordinates;
     var src = m && m.getSource('navRoute');
+    updateTrafficBar(route);
     // 只在導航中處理：結束導航時主程式會把路線清掉，這裡不能再把它畫回來
     if (!isNavigating() || !src || !route || route.length < 2 || !m.getLayer('navRoute-line')) return;
     // 每一段路線的顏色由資料決定，沒有顏色的就是原本的綠色
