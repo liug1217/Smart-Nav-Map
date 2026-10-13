@@ -10493,11 +10493,11 @@ setTimeout(() => {
     var tr = collapsed && tog ? tog.getBoundingClientRect() : null;
     var edge = tr && tr.height ? tr.top : (r && r.height ? r.top : innerHeight * 0.6);
     var bottom = edge - 30; // 車子會超出底部一點，多留一點
-    var tb = tog && tog.getBoundingClientRect();           // 左右位置一律對準「＋」，展開/收起時不會左右跳
-    var cx = tb && tb.width ? tb.left + tb.width / 2 : (r && r.width ? r.left + r.width / 2 : innerWidth - 40);
+    var tb = tog && tog.getBoundingClientRect();           // 靠最右邊：路況條右緣跟「＋」等右側按鈕的右緣對齊，展開/收起時不會左右跳
+    var right = tb && tb.width ? tb.right : (r && r.width ? r.right : innerWidth - 12);
     var h = bottom - top;
     bar.style.opacity = h < 110 ? '0' : '';   // 太矮(按鈕展開、或手機橫放空間不夠)就淡出，不擠壓按鈕
-    bar.style.top = top + 'px'; bar.style.height = Math.max(0, h) + 'px'; bar.style.left = (cx - 7) + 'px';
+    bar.style.top = top + 'px'; bar.style.height = Math.max(0, h) + 'px'; bar.style.left = (right - 10) + 'px'; // 色帶寬 10px(含白框)，右緣貼齊按鈕右緣
   }
   // 整條路線由下往上畫：起點(0)在底部 0%，終點(1)在頂部 100%
   function draw() {
