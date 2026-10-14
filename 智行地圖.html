@@ -688,6 +688,18 @@ body.searchOpen .searchResultsList{
 .snmLeaf{ width:1em; height:1em; display:inline-block; vertical-align:-0.15em; }
 .rpTime .rpLeaf{ margin-left:4px; font-size:16px; }
 .rpAvoidBtn .snmLeaf, .rpEcoRow .snmLeaf{ font-size:15px; }
+/* 點店家時冒出的紅框 logo 標記：從上方落下、落地回彈；收起時縮小淡出(底部尖端當支點) */
+.snmPickPin{ transform-origin:50% 100%; }
+.snmPickPin.in{ animation:snmPinDrop .55s cubic-bezier(.22,.9,.3,1.25) both; }
+.snmPickPin.out{ animation:snmPinOut .2s ease-in both; }
+@keyframes snmPinDrop{
+  0%{ transform:translateY(-46px) scale(.55); opacity:0; filter:drop-shadow(0 0 0 rgba(0,0,0,0)); }
+  55%{ transform:translateY(3px) scale(1.06,.94); opacity:1; }
+  75%{ transform:translateY(-4px) scale(.98,1.03); }
+  100%{ transform:translateY(0) scale(1); opacity:1; filter:drop-shadow(0 3px 3px rgba(0,0,0,.25)); }
+}
+@keyframes snmPinOut{ to{ transform:scale(.4); opacity:0; } }
+@media (prefers-reduced-motion: reduce){ .snmPickPin.in, .snmPickPin.out{ animation-duration:.01s; } }
 .rpTime .rpEco{ font-size:11px; font-weight:700; color:#0A7A3E; background:#E3F7EA; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpAvoidBtn.eco{ background:#E3F7EA; border-color:#16A34A; color:#0A7A3E; font-weight:700; }
 .rpEcoRow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#F1FBF4; border:1px solid #CFEFD9; cursor:pointer; margin-top:6px; }
@@ -4391,6 +4403,7 @@ function _flipCell(cell, from, to) {
   }
   // 導航右側路況條頂端的終點，用跟地圖上同一個目的地標記
   window._snmDestMarkerEl = function () { return makeDestMarkerEl((selectedDest && selectedDest.logo) || ''); };
+  window._snmMakeDestMarkerEl = makeDestMarkerEl;   // 點有 logo 的店家時，卡片打開就先顯示同一個紅框 logo 標記
 
   window.selectDestination = function selectDestination(lat, lon, name, addr, logo){
     if (_settingPlace) { // 設定住家/公司：存起來、回到搜尋頁首頁
@@ -10694,6 +10707,7 @@ setTimeout(() => {
   }
   function runOnClose() { if (cur && typeof cur.onClose === 'function') { try { cur.onClose(); } catch (_) {} } } // 例如停掉監視器影像
   function close() {
+    hidePickPin();
     if (!sheet.classList.contains('open')) return;
     runOnClose();
     setH(0);
@@ -10835,6 +10849,27 @@ setTimeout(() => {
     if (!p.noSocial) loadPosts();
   }
 
+  // ── 點有店家圖片的地點：卡片一打開，位置上就冒出跟規劃路線時一樣的紅框 logo 標記(落下＋回彈動畫)，關卡片時縮小淡出 ──
+  // 只給店家圖檔(圖片/…、網址)；監視器、測速、紅綠燈等地圖上本來就有自己的圖示，不另外加
+  var _pickPin = null;
+  function hidePickPin() {
+    var pin = _pickPin; _pickPin = null;
+    if (!pin) return;
+    var inner = pin.getElement().firstChild;
+    if (inner) { inner.classList.remove('in'); inner.classList.add('out'); }
+    setTimeout(function () { pin.remove(); }, 220);
+  }
+  function showPickPin(p) {
+    hidePickPin();
+    var logo = p && p.logo;
+    if (!logo || typeof logo !== 'string' || !/^(圖片\/|https?:)/.test(logo) || p.lat == null || p.lng == null) return;
+    if (!window._snmMakeDestMarkerEl || !window.maplibregl || !window.map) return;
+    var wrap = document.createElement('div');
+    var inner = document.createElement('div'); inner.className = 'snmPickPin in';
+    inner.appendChild(window._snmMakeDestMarkerEl(logo));
+    wrap.appendChild(inner);
+    _pickPin = new maplibregl.Marker({ element: wrap, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(window.map);
+  }
   window._snmOpenPlace = function (p) {
     if (window._snmAvoidPicking) return; // 正在地圖上點選要避開的道路
     if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
@@ -10843,6 +10878,7 @@ setTimeout(() => {
     cur = p;
     window._snmLastPlace = p;
     render(p);
+    showPickPin(p);
     body.scrollTop = 0;
     sheet.classList.add('open');
     sheet.setAttribute('aria-hidden', 'false');
@@ -10853,6 +10889,13 @@ setTimeout(() => {
       if (actsEl) _peekFit = Math.min(Math.round(window.innerHeight * 0.85), actsEl.offsetTop + actsEl.offsetHeight + 18 + 26);
     }
     requestAnimationFrame(function () { setH(peekH()); });
+    // 點了以後地圖平滑移到那個地點：放在「卡片上面那塊看得到的地圖」正中間(不被卡片蓋住)；導航中鏡頭跟著車子，不動
+    if (p.lat != null && p.lng != null && window.map && !document.body.classList.contains('navigating')) {
+      if (window._setFollowUser) window._setFollowUser(false);
+      var top = 60, bottom = peekH();   // 上面留給搜尋列，下面是卡片
+      window.map.easeTo({ center: [p.lng, p.lat], padding: { top: top, bottom: bottom, left: 0, right: 0 }, duration: 650, essential: true,
+        easing: function (t) { return 1 - Math.pow(1 - t, 3); } });   // 先快後慢，停得很順
+    }
   };
 
   // 拖拉：往上拉展開、往下拉收起/關閉(放手時吸到最近的高度)
