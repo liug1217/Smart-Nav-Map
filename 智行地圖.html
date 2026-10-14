@@ -679,6 +679,10 @@ body.searchOpen .searchResultsList{
 .rpMain{ flex:1; min-width:0; }
 .rpTime{ font-size:17px; font-weight:800; color:#000; }
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
+/* 到達時間右邊：收費門架數(圓圈裡的數字)、最節能的綠葉 */
+.rpSub .rpToll{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 3px; box-sizing:border-box;
+  margin-left:6px; border-radius:8px; border:1.5px solid #5F6368; color:#3C4043; font-size:10px; font-weight:800; line-height:1; vertical-align:1px; }
+.rpSub .rpLeaf{ margin-left:4px; font-size:13px; vertical-align:-1px; }
 .rpTime .rpEco{ font-size:11px; font-weight:700; color:#0A7A3E; background:#E3F7EA; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpAvoidBtn.eco{ background:#E3F7EA; border-color:#16A34A; color:#0A7A3E; font-weight:700; }
 .rpEcoRow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#F1FBF4; border:1px solid #CFEFD9; cursor:pointer; margin-top:6px; }
@@ -5542,6 +5546,43 @@ function _flipCell(cell, from, to) {
     if (!steps.length) fuel = r.distance / 1000 * ecoGramPerKm(r.duration > 0 ? r.distance / r.duration * 3.6 : 40);
     return fuel + turns * 12 + (delaySec || 0) * 0.4;
   }
+  // ── 經過幾個國道 ETC 收費門架(台灣國道依門架計程收費，經過一個門架就收一段) ──
+  // 門架位置資料 etc_gantry_data.js(tools/build-etc-gantry.js 從高公局 ETag.xml 產生)，第一次選路線時才載入
+  let _etcLoading = false;
+  function etcGantries() {
+    if (window.ETC_GANTRY) return window.ETC_GANTRY;
+    if (!_etcLoading) {
+      _etcLoading = true;
+      const sc = document.createElement('script'); sc.src = 'etc_gantry_data.js?v=1';
+      sc.onload = () => { if (_routeChoice) rpRender(); };   // 載好再補上數字
+      document.head.appendChild(sc);
+    }
+    return null;
+  }
+  const ETC_DIR_BEARING = { N: 0, E: 90, S: 180, W: 270 };
+  // 路線離門架 25 公尺內、而且行進方向跟門架的方向一致(差 90 度內)才算經過；對向車道的門架不算
+  function countTollGantries(r) {
+    const G = etcGantries(), c = r && r.geometry && r.geometry.coordinates;
+    if (!G || !c || c.length < 2) return null;
+    let n = -90, so = 90, e = -180, w = 180;
+    c.forEach(p => { if (p[1] > n) n = p[1]; if (p[1] < so) so = p[1]; if (p[0] > e) e = p[0]; if (p[0] < w) w = p[0]; });
+    let count = 0;
+    G.forEach(g => {
+      if (g[0] < w - 0.001 || g[0] > e + 0.001 || g[1] < so - 0.001 || g[1] > n + 0.001) return;
+      const kx = 111320 * Math.cos(g[1] * Math.PI / 180), ky = 110540;
+      for (let i = 0; i < c.length - 1; i++) {
+        const ax = (c[i][0] - g[0]) * kx, ay = (c[i][1] - g[1]) * ky, bx = (c[i + 1][0] - g[0]) * kx, by = (c[i + 1][1] - g[1]) * ky;
+        const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+        if (!L2) continue;
+        const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2));
+        if (Math.hypot(ax + t * dx, ay + t * dy) > 25) continue;
+        const brg = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+        const diff = Math.abs(((brg - ETC_DIR_BEARING[g[2]]) % 360 + 540) % 360 - 180);
+        if (diff < 90) { count++; break; }
+      }
+    });
+    return count;
+  }
   function ecoIndex(c) {
     if (!c || c.routes.length < 2 || !NAV_MODES[navMode].traffic) return -1;   // 開車、機車才算
     let best = -1, bf = Infinity;
@@ -5573,12 +5614,15 @@ function _flipCell(cell, from, to) {
       el.className = 'rpItem' + (i === c.sel ? ' sel' : '');
       const jam = c.delays[i] >= 60 ? '<span class="rpJam">塞車 +' + Math.round(c.delays[i] / 60) + ' 分</span>' : '';
       const fast = c.routes.length > 1 && i === fastest ? '<span class="rpFast">最快</span>' : '';
-      const eco = i === ecoI ? '<span class="rpEco">🍃 最節能</span>' : '';
+      const eco = i === ecoI ? '<span class="rpEco">最節能</span>' : '';
+      if (r._tolls == null) r._tolls = countTollGantries(r);   // 每條路線只算一次(門架資料還沒載好時是 null，載好會重畫)
+      const tolls = r._tolls ? '<span class="rpToll" title="經過 ' + r._tolls + ' 個國道收費門架">' + r._tolls + '</span>' : '';
+      const leaf = i === ecoI ? '<span class="rpLeaf" title="最節能">🍃</span>' : '';
       const via = (r.legs && r.legs[0] && r.legs[0].summary) ? r.legs[0].summary.split(',').map(x => x.trim()).filter(x => x && !/^[\d\s]+$/.test(x)).slice(0, 2).join('、') : ''; // 機車路線摘要有純數字的道路編號(例如 5 = 台5線)，不顯示
       const eta = new Date(Date.now() + tot[i] * 1000);
       el.innerHTML = '<div class="rpBadge">' + String.fromCharCode(65 + i) + '</div>' +
         '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + jam + fast + eco + '</div>' +
-        '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' +
+        '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' + tolls + leaf +
         (via ? ' · 經由 ' + via : '') + '</div></div>';
       el.addEventListener('click', () => rpSelect(i));
       rpList.appendChild(el);
