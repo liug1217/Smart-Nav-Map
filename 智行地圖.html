@@ -682,6 +682,46 @@ body.searchOpen .searchResultsList{
 .rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#2F80FF; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rpStart{ width:100%; flex:none; }
+/* 🚫 避開道路：路線面板裡的入口、清單；地圖點選時上方的提示列 */
+.rpAvoidBtn{ flex-shrink:0; align-self:flex-start; border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:16px; padding:6px 12px;
+  font-size:13px; font-family:inherit; cursor:pointer; margin:0 0 8px; }
+.rpAvoidBtn.on{ background:#FDECEA; border-color:#E53935; color:#B71C1C; font-weight:700; }
+.routePanel.rpMin .rpAvoidBtn{ display:none; }
+.routePanel.avoidOpen .rpModes, .routePanel.avoidOpen .rpList, .routePanel.avoidOpen .rpAvoidBtn, .routePanel.avoidOpen .rpStart{ display:none; }
+.rpAvoid{ display:none; flex-direction:column; min-height:0; overflow-y:auto; margin:0 -4px 6px; padding:0 4px; }
+.routePanel.avoidOpen .rpAvoid{ display:flex; }
+.rpAvoid h4{ margin:10px 0 6px; font-size:13px; color:#5F6368; font-weight:700; }
+.rpAvRow{ display:flex; align-items:center; gap:8px; padding:8px 6px; border-radius:10px; font-size:14px; }
+.rpAvRow + .rpAvRow{ border-top:1px solid #F1F3F4; }
+.rpAvRow .nm{ flex:1; min-width:0; }
+.rpAvRow .nm small{ display:block; color:#80868B; font-size:12px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rpAvRow input{ width:20px; height:20px; accent-color:#E53935; flex-shrink:0; }
+.rpAvRow .rm{ border:none; background:#FDECEA; color:#B71C1C; border-radius:14px; padding:5px 12px; font-size:13px; font-family:inherit; cursor:pointer; flex-shrink:0; }
+.rpAvEmpty{ color:#80868B; font-size:13px; padding:6px; }
+.rpAvChips{ display:flex; flex-wrap:wrap; gap:6px; }
+.rpAvChip{ border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:999px; padding:6px 12px; font-size:13px; font-family:inherit; cursor:pointer; }
+.rpAvChip.on{ background:#FDECEA; border-color:#E53935; color:#B71C1C; font-weight:700; }
+.rpAvBtns{ display:flex; gap:8px; margin-top:10px; flex-shrink:0; position:sticky; bottom:0; background:#fff; padding:8px 0 2px; } /* 清單很長時按鈕也一直看得到 */
+.rpAvBtns button{ flex:1; border:none; border-radius:999px; padding:11px 0; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; }
+.rpAvBtns .pick{ background:#EAF2FF; color:#1B5FC9; }
+.rpAvBtns .apply{ background:#E53935; color:#fff; }
+.rpAvBtns .apply:disabled{ background:#F4B7B5; cursor:default; }
+.rpAvBtns .done{ background:#2F80FF; color:#fff; }
+.rpAvWarn{ background:#FFF4D6; color:#6B4A00; border-radius:10px; padding:8px 10px; font-size:13px; line-height:1.45; margin:4px 0; }
+.avoidPickBar{ position:fixed; left:50%; top:calc(12px + env(safe-area-inset-top)); transform:translateX(-50%); z-index:1200; display:none; align-items:center; gap:10px;
+  background:rgba(255,255,255,0.95); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:0.5px solid #d9d9d9; box-shadow:0 4px 12px rgba(0,0,0,0.25);
+  border-radius:999px; padding:8px 8px 8px 16px; font-size:14px; color:#1c1c1e; max-width:calc(100vw - 32px); }
+.avoidPickBar.on{ display:flex; }
+.avoidPickBar button{ border:none; background:#2F80FF; color:#fff; border-radius:999px; padding:7px 14px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; flex-shrink:0; }
+.avoidPop{ font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif; min-width:200px; }
+.avoidPop .t{ font-size:13px; color:#5F6368; margin-bottom:6px; }
+.avoidPop .c{ display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid #F1F3F4; }
+.avoidPop .c:first-of-type{ border-top:none; }
+.avoidPop .c .n{ flex:1; font-size:14px; font-weight:700; color:#1c1c1e; }
+.avoidPop .c .n small{ display:block; font-weight:400; color:#80868B; font-size:12px; }
+.avoidPop button{ border:none; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; background:#E53935; color:#fff; }
+.avoidPop button.un{ background:#EAF2FF; color:#1B5FC9; }
+.avoidPop .x{ display:block; width:100%; margin-top:6px; background:#F1F3F4; color:#3C4043; }
 
 .searchResultsEmpty{
   padding:14px;
@@ -1703,9 +1743,13 @@ html, body {
     <button type="button" data-mode="bike">🚲 單車</button>
     <button type="button" data-mode="foot">🚶 步行</button>
   </div>
+  <!-- 🚫 避開道路：地圖點選或從目前路線的道路清單選，兩邊共用同一份避開清單 -->
+  <button type="button" class="rpAvoidBtn" id="rpAvoidBtn">🚫 避開道路</button>
   <div class="rpList" id="rpList"></div>
+  <div class="rpAvoid" id="rpAvoid"></div>
   <button type="button" class="navigateBtn rpStart" id="rpStart">開始導航</button>
 </div>
+<div class="avoidPickBar" id="avoidPickBar"><span>點地圖上要避開的道路</span><button type="button" id="avoidPickDone">完成</button></div>
 
 <!-- 📍 選定地點後的導航面板 -->
 <div class="destPanel" id="destPanel">
@@ -2801,6 +2845,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._reloadTrafficLayer === 'function') window._reloadTrafficLayer();
     if (typeof window._reloadCarsLayer === 'function') window._reloadCarsLayer();
     if (typeof window._reloadFwShields === 'function') window._reloadFwShields();
+    if (typeof window._snmReloadAvoidLayer === 'function') window._snmReloadAvoidLayer();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -5391,6 +5436,8 @@ function _flipCell(cell, from, to) {
   let navMode = (function () { try { const m = localStorage.getItem('snm_nav_mode'); return NAV_MODES[m] ? m : 'car'; } catch (_) { return 'car'; } })();
   window._navMode = () => navMode;
   async function fetchRoutes(mode, origin, destLat, destLon, alternatives) {
+    // 有設避開道路：OSRM 不能排除指定路段，改用 Valhalla 的 exclude_polygons 真正排除，算完再逐條檢查(見下方避開道路)
+    if (_avoids.length || avoidOptsOn(mode).length) return fetchRoutesAvoiding(mode, origin, destLat, destLon, alternatives);
     const ll = origin.lon + ',' + origin.lat + ';' + destLon + ',' + destLat;
     const q = '?overview=full&geometries=geojson&steps=true' + (alternatives ? '&alternatives=3' : '');
     let url;
@@ -5444,7 +5491,7 @@ function _flipCell(cell, from, to) {
     map.addLayer({ id: 'routeOpt-sel', type: 'line', source: RP_SRC, filter: sel, layout: lay, paint: { 'line-color': '#16E098', 'line-width': 11 } }, before);
     if (!map._snmRpClickBound) { // 點地圖上灰色的路線也能換選(換地圖樣式後圖層會重建，事件只綁一次)
       map._snmRpClickBound = true;
-      const pick = (e) => { const i = e.features && e.features[0] && e.features[0].properties.idx; if (i != null) rpSelect(Number(i)); };
+      const pick = (e) => { if (_avoidPicking) return; const i = e.features && e.features[0] && e.features[0].properties.idx; if (i != null) rpSelect(Number(i)); };
       map.on('click', 'routeOpt-other', pick);
       map.on('click', 'routeOpt-other-casing', pick);
     }
@@ -5462,6 +5509,12 @@ function _flipCell(cell, from, to) {
   function rpRender() {
     const c = _routeChoice;
     if (!c) return;
+    paintAvoidBtn();
+    rpStart.disabled = !c.routes.length;
+    if (!c.routes.length) {
+      rpList.innerHTML = '<div class="rpAvWarn">' + AVOID_NO_ROUTE + '。可以點上面的「🚫 避開」取消部分避開條件。</div>';
+      return;
+    }
     const tot = c.routes.map((r, i) => r.duration + (c.delays[i] || 0));
     const fastest = tot.indexOf(Math.min.apply(null, tot));
     rpList.innerHTML = '';
@@ -5486,7 +5539,8 @@ function _flipCell(cell, from, to) {
     rpRender(); rpDraw();
   }
   function rpHide() {
-    routePanel.classList.remove('open');
+    setAvoidPicking(false);
+    routePanel.classList.remove('open', 'avoidOpen');
     document.body.classList.remove('choosingRoute');
     const src = map.getSource(RP_SRC);
     if (src) src.setData({ type: 'FeatureCollection', features: [] });
@@ -5508,7 +5562,10 @@ function _flipCell(cell, from, to) {
     try {
       const data = await fetchRoutes(navMode, c.origin, c.dest.lat, c.dest.lon, true);
       if (_routeChoice !== mine) return;
-      if (!data.routes || !data.routes.length) { rpList.innerHTML = '<div class="rpLoading">找不到' + NAV_MODES[navMode].label + '可走的路線</div>'; return; }
+      if (!data.routes || !data.routes.length) {
+        if (data.avoidFailed) { showRouteChooser([], c.origin, c.dest.lat, c.dest.lon, c.opts); return; }
+        rpList.innerHTML = '<div class="rpLoading">找不到' + NAV_MODES[navMode].label + '可走的路線</div>'; return;
+      }
       showRouteChooser(data.routes, c.origin, c.dest.lat, c.dest.lon, c.opts);
     } catch (_) {
       if (_routeChoice === mine) rpList.innerHTML = '<div class="rpLoading">路線規劃失敗，請檢查網路</div>';
@@ -5532,6 +5589,7 @@ function _flipCell(cell, from, to) {
     // 所有路線都看得到；下面留給路線面板
     const lons = [], lats = [];
     routes.forEach(r => r.geometry.coordinates.forEach(c => { lons.push(c[0]); lats.push(c[1]); }));
+    if (!lons.length) { lons.push(origin.lon, destLon); lats.push(origin.lat, destLat); } // 避開條件下找不到路線：起訖點都看得到
     if (window._setFollowUser) window._setFollowUser(false);
     // 選路線用正上方俯視(像 Google)：3D 傾斜時路線會被壓扁、躲在面板後面；下方留出路線面板實際的高度
     // 跟隨鏡頭會在地圖上設很大的留白(讓車子停在畫面下方)；fitBounds 會把它跟這裡的留白加在一起、超過畫面就直接不動，要先清掉
@@ -5554,7 +5612,7 @@ function _flipCell(cell, from, to) {
   });
   if (rpStart) rpStart.addEventListener('click', async () => {
     const c = _routeChoice;
-    if (!c) return;
+    if (!c || !c.routes.length || _avoidBusy) return;
     let chosen = { route: c.routes[c.sel], origin: c.origin };
     // 起點不是目前位置(例如看「住家到台中市」)：開始導航時改從目前位置出發(同 Google)
     if (c.opts && c.opts.fromName) {
@@ -5581,10 +5639,410 @@ function _flipCell(cell, from, to) {
     destMarker = new maplibregl.Marker({ element: makeDestMarkerEl(''), anchor: 'bottom' }).setLngLat([to.lon, to.lat]).addTo(map);
     try {
       const data = await fetchRoutes(navMode, origin, to.lat, to.lon, true);
-      if (!data.routes || !data.routes.length) { alert('找不到可行的路線'); return; }
+      if (!data.routes || !data.routes.length) { alert(data.avoidFailed ? AVOID_NO_ROUTE : '找不到可行的路線'); if (data.avoidFailed) showRouteChooser([], origin, to.lat, to.lon, { fromName: from ? (from.name || '起點') : null }); return; }
       showRouteChooser(data.routes, origin, to.lat, to.lon, { fromName: from ? (from.name || '起點') : null });
     } catch (_) { alert('路線規劃失敗,請檢查網路連線'); }
   };
+
+  // ═══════════════════ 🚫 避開指定道路 ═══════════════════
+  // 路線服務：沒有避開道路時照舊(開車 OSRM、機車 Valhalla…)；有避開道路時一律用 Valhalla，
+  //   用 exclude_polygons 把「要避開的路段」所在的小範圍交給它，Valhalla 不會走任何經過那裡的路段(到前後路口為止)。
+  // 算完再檢查：每條路線都確認沒有「順著」避開的路段走(重疊 12 公尺以上就算經過)，沒通過的丟掉，不拿來冒充。
+  // 避開清單只存在這次使用(重新整理就清掉)，地圖點選、道路清單共用同一份。
+  // 每一筆：{ id, name, sub(哪裡/哪一層), line(檢查用：真的要排除的那一小段), show(地圖上標示的範圍), rings(交給 Valhalla 的範圍) }
+  const AVOID_NO_ROUTE = '找不到符合目前避開條件的路線';
+  const AVOID_OVERLAP_M = 12;               // 路線順著避開路段走超過這麼長就算經過
+  let _avoids = [];
+  // 路線服務原生的「避開」選項(Valhalla costing_options)；沒有「山路」這種分類，最接近的是未鋪裝道路。
+  // 國道、收費、渡輪在 Valhalla 只是「盡量不走」，沒別的路還是會走 → 算完用路線資料標的類別(cls)檢查，走到的路線丟掉
+  const AVOID_OPTS = [
+    { k: 'highways', label: '國道(高速公路)', modes: ['car'], cls: 'motorway' },   // 機車本來就避開；只管國道，台61 這類快速道路不算
+    { k: 'tolls',    label: '收費路段',     modes: ['car'], cls: 'toll' },
+    { k: 'ferry',    label: '渡輪',         modes: ['car', 'scooter', 'bike', 'foot'], cls: 'ferry' },
+    { k: 'unpaved',  label: '未鋪裝道路(產業道路、山區小路常見)', modes: ['car', 'scooter', 'bike'] }
+  ];
+  let _avoidOpts = {};
+  try { _avoidOpts = JSON.parse(localStorage.getItem('snm_avoid_opts') || '{}') || {}; } catch (_) {}
+  function avoidOptsOn(mode) { return AVOID_OPTS.filter(o => _avoidOpts[o.k] && o.modes.indexOf(mode) >= 0); }
+  function avoidCostingOptions(mode) {
+    const name = { car: 'auto', scooter: 'motorcycle', bike: 'bicycle', foot: 'pedestrian' }[mode] || 'auto';
+    const o = {};
+    if (mode === 'scooter') o.use_highways = 0;   // 跟原本的機車路線一樣避開國道、快速道路
+    avoidOptsOn(mode).forEach(x => {
+      if (x.k === 'highways') o.use_highways = 0;
+      if (x.k === 'tolls') o.use_tolls = 0;
+      if (x.k === 'ferry') o.use_ferry = 0;
+      if (x.k === 'unpaved') o.exclude_unpaved = true;
+    });
+    return Object.keys(o).length ? { [name]: o } : null;
+  }
+  let _avoidPicking = false, _avoidBusy = false, _avoidPop = null;
+  const _avKx = lat => 111320 * Math.cos(lat * Math.PI / 180), _avKy = 110540;
+  // 經緯度 → 以 o 為原點的公尺座標
+  function avXY(p, o) { return [(p[0] - o[0]) * _avKx(o[1]), (p[1] - o[1]) * _avKy]; }
+  function avLL(xy, o) { return [o[0] + xy[0] / _avKx(o[1]), o[1] + xy[1] / _avKy]; }
+  // 線上離點最近的位置：{ i(第幾段), t, d(公尺), along(從起點算的距離) }
+  function avNearest(line, p) {
+    let best = null, acc = 0;
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = avXY(line[i], p), b = avXY(line[i + 1], p), dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy, L = Math.sqrt(L2);
+      const t = L2 ? Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / L2)) : 0;
+      const d = Math.hypot(a[0] + t * dx, a[1] + t * dy);
+      if (!best || d < best.d) best = { i, t, d, along: acc + t * L };
+      acc += L;
+    }
+    return best;
+  }
+  function avLen(line) { let L = 0; for (let i = 1; i < line.length; i++) { const v = avXY(line[i], line[i - 1]); L += Math.hypot(v[0], v[1]); } return L; }
+  // 線上從 a 到 b 公尺的那一段
+  function avSub(line, a, b) {
+    const out = []; let acc = 0;
+    a = Math.max(0, a);
+    for (let i = 0; i < line.length - 1; i++) {
+      const v = avXY(line[i + 1], line[i]), L = Math.hypot(v[0], v[1]);
+      const at = d => [line[i][0] + (line[i + 1][0] - line[i][0]) * (d - acc) / (L || 1), line[i][1] + (line[i + 1][1] - line[i][1]) * (d - acc) / (L || 1)];
+      if (acc + L >= a && acc <= b) {
+        if (!out.length) out.push(at(Math.max(a, acc)));
+        if (acc + L <= b) out.push(line[i + 1]); else { out.push(at(b)); break; }
+      }
+      acc += L;
+    }
+    return out.length >= 2 ? out : null;
+  }
+  // 沿著線、以 c 為中心的長方形範圍(長 len、半寬 hw 公尺)，dir 是方向向量
+  function avRect(c, dir, len, hw) {
+    const n = Math.hypot(dir[0], dir[1]) || 1, ux = dir[0] / n, uy = dir[1] / n, px = -uy, py = ux, h = len / 2;
+    const pts = [[h, hw], [h, -hw], [-h, -hw], [-h, hw]].map(([a, b]) => avLL([ux * a + px * b, uy * a + py * b], c));
+    pts.push(pts[0]);
+    return pts;
+  }
+  // 沿著一段線每隔 step 公尺放一個小長方形(放在路段中間，盡量不碰到交叉路口)
+  function avRingsAlong(line, step, len, hw) {
+    const L = avLen(line), rings = [];
+    const n = Math.max(1, Math.round(L / step));
+    for (let k = 0; k < n; k++) {
+      const d = (k + 0.5) * L / n, seg = avSub(line, Math.max(0, d - 3), Math.min(L, d + 3));
+      if (!seg) continue;
+      const at = avSub(line, d, d + 0.01), c = at ? at[0] : seg[0], dir = avXY(seg[seg.length - 1], seg[0]);
+      rings.push(avRect(c, dir, len, hw));
+    }
+    return rings;
+  }
+  // 路線順著 line 走了多少公尺(兩邊距離 8 公尺內、方向差 35 度內才算；交叉穿過不算)
+  function avOverlapM(coords, line) { return avOverlap(coords, line).len; }
+  function avOverlap(coords, line) {
+    let n = -90, so = 90, e = -180, w = 180;   // 避開路段的範圍(先用它篩掉離很遠的路線段，省計算)
+    line.forEach(p => { n = Math.max(n, p[1]); so = Math.min(so, p[1]); e = Math.max(e, p[0]); w = Math.min(w, p[0]); });
+    const padLat = 20 / _avKy, padLon = 20 / _avKx(line[0][1]);
+    let over = 0, at = null;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const a = coords[i], b = coords[i + 1];
+      if (Math.max(a[0], b[0]) < w - padLon || Math.min(a[0], b[0]) > e + padLon || Math.max(a[1], b[1]) < so - padLat || Math.min(a[1], b[1]) > n + padLat) continue;
+      const v = avXY(b, a), L = Math.hypot(v[0], v[1]);
+      if (L < 0.5) continue;
+      const k = Math.max(1, Math.ceil(L / 4));
+      for (let j = 0; j < k; j++) {
+        const t = (j + 0.5) / k, p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        const q = avNearest(line, p);
+        if (!q || q.d > 8) continue;
+        const sv = avXY(line[q.i + 1], line[q.i]);
+        const cos = Math.abs(v[0] * sv[0] + v[1] * sv[1]) / (L * (Math.hypot(sv[0], sv[1]) || 1));
+        if (cos > Math.cos(35 * Math.PI / 180)) { over += L / k; if (!at) at = { p, dir: v }; }
+      }
+    }
+    return { len: over, at };
+  }
+  // 起點、終點附近不算：車子正在避開的路上時，一定要先沿著它開出去；目的地只能從那條路到時也一樣
+  const AVOID_END_FREE_M = 80;
+  function avNearEnds(p, ends) { return ends.some(e => { const v = avXY(p, e); return Math.hypot(v[0], v[1]) < AVOID_END_FREE_M; }); }
+  function routeCoreCoords(route, ends) {
+    const c = (route && route.geometry && route.geometry.coordinates) || [];
+    return ends && ends.length ? c.filter(p => !avNearEnds(p, ends)) : c;
+  }
+  function routeAvoidsAll(route, ends) {
+    const c = routeCoreCoords(route, ends);
+    if (!route || !route.geometry) return false;
+    const opts = avoidOptsOn(navMode).filter(o => o.cls);
+    if (opts.length) {
+      const cls = new Set();
+      ((route.legs && route.legs[0] && route.legs[0].steps) || []).forEach(st => {
+        if (st.mode === 'ferry') cls.add('ferry');
+        (st.intersections || []).forEach(i => (i.classes || []).forEach(x => cls.add(x)));
+      });
+      if (opts.some(o => cls.has(o.cls))) return false;
+    }
+    return c.length < 2 || _avoids.every(a => avOverlapM(c, a.line) < AVOID_OVERLAP_M);
+  }
+  const AVOID_MAX_RINGS = 18;   // 公開伺服器對排除範圍的限制不穩定(實測 20 個以內最穩)，留一點餘裕
+  const AVOID_MAX_TRIES = 5;
+  function avoidRingsNow() { return [].concat.apply([], _avoids.map(a => a.rings.concat(a.extra || []))); }
+  async function fetchRoutesAvoiding(mode, origin, destLat, destLon, alternatives) {
+    const costing = { car: 'auto', scooter: 'motorcycle', bike: 'bicycle', foot: 'pedestrian' }[mode] || 'auto';
+    let ok = [], all = [];
+    for (let tryN = 0; tryN < AVOID_MAX_TRIES; tryN++) {
+      const body = { locations: [{ lat: origin.lat, lon: origin.lon }, { lat: destLat, lon: destLon }], costing,
+        format: 'osrm', shape_format: 'geojson', alternates: alternatives ? 2 : 0 };
+      const ends = [[origin.lon, origin.lat], [destLon, destLat]];
+      const rings = avoidRingsNow().filter(rg => !avNearEnds(rg[0], ends)); // 起訖點旁邊不排除(見上)
+      if (rings.length) body.exclude_polygons = rings;
+      const co = avoidCostingOptions(mode);
+      if (co) body.costing_options = co;
+      // 用 POST：避開的路段多時，放在網址裡會太長
+      const data = await (await fetch('https://valhalla1.openstreetmap.de/route', { method: 'POST', body: JSON.stringify(body) })).json();
+      if (data && data.code === 'PerimeterExceeded') throw new Error('避開的範圍超過路線服務的上限');
+      all = (data && data.routes) || [];
+      ok = all.filter(r => routeAvoidsAll(r, ends));   // 每條都檢查，沒真的避開的不要
+      if (!all.length || ok.length === all.length) break;
+      // 有路線還是順著避開的路走：在它實際走到的地方補一個排除點(用路線本身的座標，最準)，再算一次
+      let added = 0;
+      all.forEach(r => {
+        if (ok.indexOf(r) >= 0) return;
+        _avoids.forEach(a => {
+          const ov = avOverlap(routeCoreCoords(r, ends), a.line);
+          if (ov.len < AVOID_OVERLAP_M || !ov.at || avoidRingsNow().length >= AVOID_MAX_RINGS) return;
+          (a.extra = a.extra || []).push(avRect(ov.at.p, ov.at.dir, 6, 3)); added++;
+        });
+      });
+      if (!added) break;   // 沒辦法再補(到上限)：用目前通過檢查的
+    }
+    if (all.length !== ok.length) console.warn('[避開道路] 有 ' + (all.length - ok.length) + ' 條路線沒有完全避開，已丟掉');
+    return { routes: ok, avoidFailed: !ok.length, avoidChecked: true };
+  }
+
+  // ── 地圖上標示已避開的路段：紅色虛線(不改原本路線的樣式) ──
+  const AV_SRC = 'snmAvoidRoads';
+  function avDraw() {
+    if (!map.getSource(AV_SRC)) {
+      map.addSource(AV_SRC, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      const before = map.getLayer('user-car') ? 'user-car' : undefined;
+      map.addLayer({ id: 'snmAvoid-casing', type: 'line', source: AV_SRC, layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#FFFFFF', 'line-width': 9 } }, before);
+      map.addLayer({ id: 'snmAvoid-line', type: 'line', source: AV_SRC, layout: { 'line-cap': 'butt', 'line-join': 'round' },
+        paint: { 'line-color': '#E53935', 'line-width': 5, 'line-dasharray': [1.6, 1.1] } }, before);
+    }
+    map.getSource(AV_SRC).setData({ type: 'FeatureCollection', features: _avoids.map(a => (
+      { type: 'Feature', geometry: { type: 'LineString', coordinates: a.show }, properties: { id: a.id } })) });
+  }
+  window._snmReloadAvoidLayer = function () { if (_avoids.length) avDraw(); }; // 換地圖樣式後圖層會被清掉，重畫
+
+  // ── 改了避開清單：重新規劃(路線面板開著時) ──
+  async function avoidChanged() {
+    avDraw(); paintAvoidBtn(); renderAvoidPanel();
+    const c = _routeChoice;
+    if (!c) return;
+    const mine = c;
+    _avoidBusy = true; rpStart.disabled = true;
+    rpList.innerHTML = '<div class="rpLoading">依避開條件重新規劃路線中…</div>';
+    renderAvoidPanel();
+    try {
+      const data = await fetchRoutes(navMode, c.origin, c.dest.lat, c.dest.lon, true);
+      if (_routeChoice !== mine) return;
+      showRouteChooser(data.routes || [], c.origin, c.dest.lat, c.dest.lon, c.opts);
+      if (routePanel.classList.contains('avoidOpen')) renderAvoidPanel();
+    } catch (e) {
+      console.warn('[避開道路] 重新規劃失敗', e);
+      if (_routeChoice === mine) { rpList.innerHTML = '<div class="rpLoading">' + (/上限/.test(e && e.message) ? '避開的道路太多，超過路線服務的上限，請移除一些' : '路線規劃失敗，請檢查網路') + '</div>'; rpStart.disabled = true; }
+    } finally { _avoidBusy = false; renderAvoidPanel(); }
+  }
+  function addAvoids(items) {
+    let added = 0;
+    for (const it of items) {
+      if (_avoids.some(a => a.id === it.id)) continue;
+      if (avoidRingsNow().length + it.rings.length > AVOID_MAX_RINGS - 4) {
+        alert('避開的範圍太長了(路線服務有上限)，「' + it.name + '」沒有加入。可以先移除一些避開的道路。'); break;
+      }
+      _avoids.push(it); added++;
+    }
+    if (added) avoidChanged();
+  }
+  function removeAvoid(id) {
+    const n = _avoids.length;
+    _avoids = _avoids.filter(a => a.id !== id);
+    if (_avoids.length !== n) avoidChanged();
+  }
+  function paintAvoidBtn() {
+    const b = document.getElementById('rpAvoidBtn');
+    if (!b) return;
+    const n = _avoids.length + avoidOptsOn(navMode).length;
+    b.textContent = n ? '🚫 避開 ' + n + ' 項' : '🚫 避開道路';
+    b.classList.toggle('on', n > 0);
+  }
+
+  // ── 道路清單：目前選中的路線經過哪些道路(路線服務回傳的步驟，名稱照實際資料，沒名稱就寫未命名道路) ──
+  function routeRoadItems() {
+    const c = _routeChoice, r = c && c.routes[c.sel];
+    const steps = (r && r.legs && r.legs[0] && r.legs[0].steps) || [];
+    const out = [];
+    steps.forEach((st, i) => {
+      const g = st.geometry && st.geometry.coordinates;
+      if (!g || g.length < 2 || !(st.distance >= 40)) return;
+      if (st.maneuver && st.maneuver.type === 'arrive') return;
+      const name = (st.name || '').trim() || '未命名道路';
+      const id = 'step:' + name + ':' + g[0][0].toFixed(5) + ',' + g[0][1].toFixed(5) + ':' + g[g.length - 1][0].toFixed(5) + ',' + g[g.length - 1][1].toFixed(5);
+      out.push({ id, name, sub: '第 ' + (out.length + 1) + ' 段 · ' + (st.distance >= 1000 ? (st.distance / 1000).toFixed(1) + ' 公里' : Math.round(st.distance) + ' 公尺') + (st.ref ? ' · ' + st.ref : ''),
+        coords: g });
+    });
+    return out;
+  }
+  function stepAvoidItem(x) {
+    // 整段都要避開：在路上放 6×6 公尺的小方塊(碰到那條路就把那一段排除，方塊小才不會碰到別條路)；
+    // 兩頭各留 12 公尺，避免碰到交叉路口的別條路；檢查用整段
+    const L = avLen(x.coords);
+    const inner = L > 40 ? avSub(x.coords, 12, L - 12) : x.coords;
+    return { id: x.id, name: x.name, sub: x.sub.replace(/^第 d+ 段 · /, '路線上 '), line: inner || x.coords, show: x.coords,
+      rings: avRingsAlong(inner || x.coords, 1e9, 6, 3), from: 'list' };   // 一開始只放中間 1 個，路線還走到再補
+  }
+  function renderAvoidPanel() {
+    const box = document.getElementById('rpAvoid');
+    if (!box || !routePanel.classList.contains('avoidOpen')) return;
+    box.innerHTML = '';
+    const h0 = document.createElement('h4'); h0.textContent = '避開這類道路'; box.appendChild(h0);
+    const chips = document.createElement('div'); chips.className = 'rpAvChips';
+    AVOID_OPTS.forEach(o => {
+      if (o.modes.indexOf(navMode) < 0) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rpAvChip' + (_avoidOpts[o.k] ? ' on' : '');
+      b.textContent = (_avoidOpts[o.k] ? '✓ ' : '') + o.label; b.disabled = _avoidBusy;
+      b.onclick = () => {
+        _avoidOpts[o.k] = !_avoidOpts[o.k];
+        try { localStorage.setItem('snm_avoid_opts', JSON.stringify(_avoidOpts)); } catch (_) {}
+        avoidChanged();
+      };
+      chips.appendChild(b);
+    });
+    box.appendChild(chips);
+    const h1 = document.createElement('h4'); h1.textContent = '已避開的道路(' + _avoids.length + ')'; box.appendChild(h1);
+    if (!_avoids.length) { const e = document.createElement('div'); e.className = 'rpAvEmpty'; e.textContent = '還沒有。可以在地圖上點道路，或從下面目前路線經過的道路勾選。'; box.appendChild(e); }
+    _avoids.forEach(a => {
+      const row = document.createElement('div'); row.className = 'rpAvRow';
+      row.innerHTML = '<div class="nm"></div><button type="button" class="rm">取消避開</button>';
+      row.querySelector('.nm').textContent = a.name; const sm = document.createElement('small'); sm.textContent = a.sub; row.querySelector('.nm').appendChild(sm);
+      const rm = row.querySelector('.rm'); rm.disabled = _avoidBusy; rm.onclick = () => removeAvoid(a.id);
+      box.appendChild(row);
+    });
+    if (_avoidBusy) { const w = document.createElement('div'); w.className = 'rpLoading'; w.textContent = '依避開條件重新規劃路線中…'; box.appendChild(w); }
+    const c = _routeChoice;
+    if (c && !c.routes.length && !_avoidBusy) { const w = document.createElement('div'); w.className = 'rpAvWarn'; w.textContent = AVOID_NO_ROUTE + '，請取消部分避開條件(上面的選項或下面的道路)。'; box.appendChild(w); }
+    const items = routeRoadItems();
+    const h2 = document.createElement('h4'); h2.textContent = '目前路線(' + (c && c.routes.length ? String.fromCharCode(65 + c.sel) : '—') + ')經過的道路'; box.appendChild(h2);
+    if (!items.length) { const e = document.createElement('div'); e.className = 'rpAvEmpty'; e.textContent = c && c.routes.length ? '這條路線沒有可辨識的道路資料。' : '目前沒有路線。'; box.appendChild(e); }
+    const checked = new Set();
+    items.forEach(x => {
+      const done = _avoids.some(a => a.id === x.id);
+      const row = document.createElement('label'); row.className = 'rpAvRow';
+      row.innerHTML = '<input type="checkbox"><div class="nm"></div>';
+      const cb = row.querySelector('input'); cb.checked = done; cb.disabled = done || _avoidBusy;
+      row.querySelector('.nm').textContent = x.name; const sm = document.createElement('small'); sm.textContent = done ? '已避開' : x.sub; row.querySelector('.nm').appendChild(sm);
+      cb.onchange = () => { if (cb.checked) checked.add(x); else checked.delete(x); apply.disabled = !checked.size || _avoidBusy; apply.textContent = checked.size ? '避開勾選的 ' + checked.size + ' 條' : '避開勾選的道路'; };
+      box.appendChild(row);
+    });
+    const btns = document.createElement('div'); btns.className = 'rpAvBtns';
+    btns.innerHTML = '<button type="button" class="pick">📍 在地圖上點選</button><button type="button" class="apply" disabled>避開勾選的道路</button><button type="button" class="done">完成</button>';
+    const apply = btns.querySelector('.apply');
+    btns.querySelector('.pick').onclick = () => setAvoidPicking(true);
+    btns.querySelector('.pick').disabled = _avoidBusy;
+    apply.onclick = () => { if (_avoidBusy || !checked.size) return; addAvoids([...checked].map(stepAvoidItem)); };
+    btns.querySelector('.done').onclick = () => { routePanel.classList.remove('avoidOpen'); rpRender(); };
+    box.appendChild(btns);
+  }
+  const rpAvoidBtn = document.getElementById('rpAvoidBtn');
+  if (rpAvoidBtn) rpAvoidBtn.addEventListener('click', () => {
+    if (!_routeChoice) return;
+    routePanel.classList.remove('rpMin');
+    routePanel.classList.add('avoidOpen');
+    renderAvoidPanel();
+  });
+
+  // ── 地圖點選道路：找出點到的道路(底圖的道路圖層)，名稱用旁邊的道路名稱資料對，對不到就寫未命名道路 ──
+  const AV_LEVEL = { bridge: '高架/橋', tunnel: '隧道' };
+  function avRoadLayers() {
+    return (map.getStyle().layers || []).filter(l => l.type === 'line' && l['source-layer'] === 'transportation' && l.source === 'openmaptiles' &&
+      /^(road|bridge|tunnel)_/.test(l.id) && !/casing|rail|hatching|path|pedestrian/.test(l.id)).map(l => l.id);
+  }
+  function avLinesOf(g) { return g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []; }
+  function avCandidatesAt(e) {
+    const p = [e.lngLat.lng, e.lngLat.lat], pt = e.point;
+    const feats = map.queryRenderedFeatures([[pt.x - 10, pt.y - 10], [pt.x + 10, pt.y + 10]], { layers: avRoadLayers() });
+    const names = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' });
+    const out = [];
+    feats.forEach(f => {
+      let best = null;
+      avLinesOf(f.geometry).forEach(line => { if (line.length < 2) return; const q = avNearest(line, p); if (q && (!best || q.d < best.q.d)) best = { line, q }; });
+      if (!best || best.q.d > 25) return;
+      const level = f.layer.id.split('_')[0];   // road / bridge / tunnel
+      const cls = f.properties.class;
+      // 名稱：同一種道路、離點的位置 12 公尺內最近的那條有名字的線
+      let nm = null, nd = 12;
+      names.forEach(n => {
+        if (n.properties.class !== cls || !n.properties.name) return;
+        avLinesOf(n.geometry).forEach(line => { if (line.length < 2) return; const q = avNearest(line, p); if (q && q.d < nd) { nd = q.d; nm = n.properties; } });
+      });
+      const name = nm ? (nm['name:zh'] || nm.name) + (nm.ref ? '(' + nm.ref + ')' : '') : '未命名道路';
+      // 檢查用：點的位置前後各 15 公尺；地圖標示：前後各 60 公尺；交給 Valhalla：點的位置一個 8×8 公尺的小方塊(地圖圖磚的線有簡化，比路線資料寬一點)
+      const L = avLen(best.line), at = best.q.along;
+      const line = avSub(best.line, at - 15, at + 15), show = avSub(best.line, at - 60, at + 60);
+      if (!line) return;
+      const dir = avXY(line[line.length - 1], line[0]);
+      const cp = avSub(best.line, at, Math.min(L, at + 0.01)), center = (cp && cp[0]) || line[0];
+      out.push({ d: best.q.d, name, level, cls, line, show: show || line,
+        rings: [avRect(center, dir, 8, 4)],
+        id: 'map:' + level + ':' + cls + ':' + center[0].toFixed(5) + ',' + center[1].toFixed(5) });
+    });
+    // 同名、同一層的只留最近的一條(雙向分隔道路、圖磚切開的同一條路)
+    out.sort((a, b) => a.d - b.d);
+    const seen = new Set();
+    return out.filter(c => { const k = c.name + '|' + c.level; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4);
+  }
+  function avClosePop() { if (_avoidPop) { _avoidPop.remove(); _avoidPop = null; } }
+  function avOnMapClick(e) {
+    if (!_avoidPicking) return;
+    avClosePop();
+    const p = [e.lngLat.lng, e.lngLat.lat];
+    const box = document.createElement('div'); box.className = 'avoidPop';
+    // 點到已經避開的路段：可以取消避開
+    const hit = _avoids.filter(a => { const q = avNearest(a.show, p); return q && q.d < 15; });
+    if (hit.length) {
+      box.innerHTML = '<div class="t">已經避開的道路</div>';
+      hit.forEach(a => {
+        const row = document.createElement('div'); row.className = 'c';
+        row.innerHTML = '<div class="n"></div><button type="button" class="un">取消避開</button>';
+        row.querySelector('.n').textContent = a.name;
+        row.querySelector('button').onclick = () => { avClosePop(); removeAvoid(a.id); };
+        box.appendChild(row);
+      });
+    } else {
+      const cands = avCandidatesAt(e);
+      if (!cands.length) {
+        box.innerHTML = '<div class="t">這裡沒有可以辨識的道路，請點在道路上</div>';
+      } else {
+        box.innerHTML = '<div class="t">' + (cands.length > 1 ? '這裡有好幾條道路，選要避開哪一條' : '避開這段道路？(到前後路口為止)') + '</div>';
+        cands.forEach(cd => {
+          const row = document.createElement('div'); row.className = 'c';
+          row.innerHTML = '<div class="n"></div><button type="button">避開</button>';
+          row.querySelector('.n').textContent = cd.name;
+          const sm = document.createElement('small'); sm.textContent = AV_LEVEL[cd.level] || '平面道路'; row.querySelector('.n').appendChild(sm);
+          row.querySelector('button').onclick = () => {
+            avClosePop();
+            addAvoids([{ id: cd.id, name: cd.name, sub: '地圖點選 · ' + (AV_LEVEL[cd.level] || '平面道路'), line: cd.line, show: cd.show, rings: cd.rings, from: 'map' }]);
+          };
+          box.appendChild(row);
+        });
+      }
+    }
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '取消'; x.onclick = avClosePop; box.appendChild(x);
+    _avoidPop = new maplibregl.Popup({ closeButton: false, maxWidth: '280px', offset: 8 }).setLngLat(e.lngLat).setDOMContent(box).addTo(map);
+  }
+  map.on('click', avOnMapClick);
+  function setAvoidPicking(on) {
+    on = !!on && !!_routeChoice;
+    if (_avoidPicking === on) return;
+    _avoidPicking = on;
+    window._snmAvoidPicking = on;
+    document.getElementById('avoidPickBar').classList.toggle('on', on);
+    avClosePop();
+    if (on) { routePanel.classList.remove('avoidOpen'); routePanel.classList.add('rpMin'); }
+    else if (_routeChoice) { routePanel.classList.remove('rpMin'); routePanel.classList.add('avoidOpen'); renderAvoidPanel(); }
+  }
+  document.getElementById('avoidPickDone').addEventListener('click', () => setAvoidPicking(false));
 
   // chosen：路線選擇面板選好的路線 { route, origin }(有它就不再向路線服務查詢)
   async function planRouteTo(destLat, destLon, fromPosition = null, chosen = null){
@@ -5624,7 +6082,9 @@ function _flipCell(cell, from, to) {
       if (mySession !== _navSession) return false;
 
       if (!data.routes || !data.routes.length) {
-        if (!fromPosition) alert('找不到可行的路線');
+        // 避開條件下找不到：第一次規劃時打開路線面板，讓使用者直接取消部分避開條件
+        if (!fromPosition && data.avoidFailed && !chosen) { showRouteChooser([], origin, destLat, destLon); return 'choosing'; }
+        if (!fromPosition) alert(data.avoidFailed ? AVOID_NO_ROUTE : '找不到可行的路線');
         return;
       }
 
@@ -10192,6 +10652,7 @@ setTimeout(() => {
   }
 
   window._snmOpenPlace = function (p) {
+    if (window._snmAvoidPicking) return; // 正在地圖上點選要避開的道路
     if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
     document.querySelectorAll('.maplibregl-popup').forEach(function (e) { e.remove(); });
     runOnClose(); // 換到另一個地點：前一張卡片的收尾(停影像)
