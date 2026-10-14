@@ -680,8 +680,11 @@ body.searchOpen .searchResultsList{
 .rpTime{ font-size:17px; font-weight:800; color:#000; }
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
 /* 時間右邊(第一行，跟導航卡片一樣)：收費門架數(圓圈裡的數字)、最節能的綠葉 */
-.rpTime .rpToll{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 3px; box-sizing:border-box;
-  margin-left:6px; border-radius:9px; border:1.6px solid currentColor; color:inherit; font-size:11px; font-weight:800; line-height:1; vertical-align:2px; } /* 跟旁邊的文字同色(黑) */
+/* 收費門架數：做成金幣(金色漸層、深金外框、內圈一道淺色邊當錢幣邊緣)，中間寫門架數 */
+.rpTime .rpToll, .navTollBadge{ display:inline-flex; align-items:center; justify-content:center; min-width:19px; height:19px; padding:0 4px; box-sizing:border-box; flex-shrink:0;
+  border-radius:10px; background:radial-gradient(circle at 35% 30%, #FFF1B0 0%, #FFD24A 38%, #F2B200 70%, #D99600 100%); border:1.5px solid #A86F00; color:#5A3B00; /* 金幣：金色漸層＋深金外框 */
+  font:800 11px/1 "SF Pro Display",Arial,sans-serif; font-variant-numeric:tabular-nums; }
+.rpTime .rpToll{ margin-left:6px; vertical-align:2px; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0.55); }
 .snmLeaf{ width:1em; height:1em; display:inline-block; vertical-align:-0.15em; }
 .rpTime .rpLeaf{ margin-left:4px; font-size:16px; }
 .rpAvoidBtn .snmLeaf, .rpEcoRow .snmLeaf{ font-size:15px; }
@@ -1287,9 +1290,7 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
 .infoRow{ display:flex; align-items:center; justify-content:center; gap:4px; max-width:100%; }
 .navExitBtn, .navOverviewBtn{ flex-shrink:0; white-space:nowrap; } /* 這一行變長時，退出/全覽不要被擠成直的 */
 .rect1Center{ min-width:0; }
-.navTollBadge{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 3px; box-sizing:border-box; flex-shrink:0;
-  text-shadow:0 4px 4px rgba(0,0,0,0.25); box-shadow:0 4px 4px rgba(0,0,0,0.25); /* 數字與外框都跟上面文字同樣的陰影 */
-  border-radius:9px; border:1.6px solid #000; color:#000; font:800 11px/1 "SF Pro Display",Arial,sans-serif; font-variant-numeric:tabular-nums; }
+.navTollBadge{ text-shadow:0 4px 4px rgba(0,0,0,0.25); box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0.55), 0 4px 4px rgba(0,0,0,0.25); } /* 數字與外框都跟上面文字同樣的陰影 */
 .navLeaf{ font-size:17px; line-height:1; flex-shrink:0; display:inline-flex; filter:drop-shadow(0 4px 4px rgba(0,0,0,0.25)); }
 .navTollBadge[hidden], .navLeaf[hidden]{ display:none; } /* 沒有門架/不是最節能時要真的藏起來 */
 .arrivalText{
@@ -5701,6 +5702,7 @@ function _flipCell(cell, from, to) {
   function rpHide() {
     setAvoidPicking(false);
     routePanel.classList.remove('open', 'avoidOpen');
+    window._snmChoiceRoutes = null;
     document.body.classList.remove('choosingRoute');
     const src = map.getSource(RP_SRC);
     if (src) src.setData({ type: 'FeatureCollection', features: [] });
@@ -5740,7 +5742,9 @@ function _flipCell(cell, from, to) {
     _navState = 'idle';
     if (window._snmClosePlace) window._snmClosePlace(); // 地點卡片收起來
     // 選路線時：只顯示路線(其他道路的綠色底圖收起來)；店家、地名、群集照常顯示、照常可以點
+    window._snmChoiceRoutes = routes.map(r => r.geometry.coordinates);
     document.body.classList.add('choosingRoute');
+    if (window._snmApplyTraffic) window._snmApplyTraffic();   // class 沒變(已經在選路線)時也要重新篩選路況
     destPanel.style.display = 'none';
     const toName = (selectedDest && selectedDest.name) || '目的地';
     rpTitle.textContent = (opts.fromName ? opts.fromName + ' → ' + toName : '到 ' + toName) + (routes.length > 1 ? '：' + routes.length + ' 條路線' : '');
@@ -11691,11 +11695,21 @@ setTimeout(() => {
   function trafficDataForDisplay() {
     var data = _trafficData || { type: 'FeatureCollection', features: [] };
     var route = window.plannedRouteCoordinates, nav = isNavigating() && route && route.length > 1;
+    // 規劃路線時：只看 A/B/C 候選路線上的塞車，並且直接裁在路線上(同方向)，旁邊沒走的道路不畫
+    var choice = !nav && document.body.classList.contains('choosingRoute') && window._snmChoiceRoutes && window._snmChoiceRoutes.length ? window._snmChoiceRoutes : null;
     var cands = null, out = [];
     data.features.forEach(function (f) {
       var p = f.properties || {};
       if (p.trafficLevel === 'free') return;                       // 順暢：道路本來就是綠色
       var g = f.geometry, mid = g.type === 'LineString' ? g.coordinates[Math.floor(g.coordinates.length / 2)] : g.coordinates;
+      if (choice) {
+        for (var k = 0; k < choice.length; k++) {
+          if (!nearRoute(mid, choice[k])) continue;
+          var pc = matchRoadPiece(f, [{ coords: choice[k], oneway: true }]);
+          if (pc) { out.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: pc }, properties: Object.assign({}, p, { roadClass: '' }) }); return; }
+        }
+        return;
+      }
       if (nav && !nearRoute(mid, route)) return;                   // 導航中只看路線上的
       if (!cands) cands = roadCandidates();
       var piece = matchRoadPiece(f, cands);
@@ -11706,6 +11720,7 @@ setTimeout(() => {
     });
     return { type: 'FeatureCollection', features: out };
   }
+  window._snmApplyTraffic = function () { applyTrafficDisplay(); };   // 候選路線換了(交通方式、避開條件)時由路線面板呼叫
   function applyTrafficDisplay() {
     var m = window.map;
     if (!m) return;
