@@ -10851,9 +10851,31 @@ setTimeout(() => {
 
   // ── 點有店家圖片的地點：卡片一打開，位置上就冒出跟規劃路線時一樣的紅框 logo 標記(落下＋回彈動畫)，關卡片時縮小淡出 ──
   // 只給店家圖檔(圖片/…、網址)；監視器、測速、紅綠燈等地圖上本來就有自己的圖示，不另外加
-  var _pickPin = null;
+  var _pickPin = null, _pickHidden = null;
+  // 標記出現時，地圖上那間店原本的圖示先藏起來(只藏這一間：用同一層、同位置那個圖示的店名)，標記收掉再顯示回來
+  function hideBaseIcon(p) {
+    var m = window.map;
+    if (!m || !p.layer || !m.getLayer(p.layer)) return;
+    var kx = 111320 * Math.cos(p.lat * Math.PI / 180), best = null, bd = 6;
+    m.queryRenderedFeatures({ layers: [p.layer] }).forEach(function (f) {
+      if (!f.geometry || f.geometry.type !== 'Point' || !f.properties || !f.properties.name) return;
+      var c = f.geometry.coordinates, d = Math.hypot((c[0] - p.lng) * kx, (c[1] - p.lat) * 110540);
+      if (d < bd) { bd = d; best = f; }
+    });
+    if (!best) return;
+    var prevI = m.getPaintProperty(p.layer, 'icon-opacity'), prevT = m.getPaintProperty(p.layer, 'text-opacity');
+    var hide = function (prev) { return ['case', ['==', ['get', 'name'], best.properties.name], 0, prev == null ? 1 : prev]; };
+    try { m.setPaintProperty(p.layer, 'icon-opacity', hide(prevI)); m.setPaintProperty(p.layer, 'text-opacity', hide(prevT)); } catch (_) { return; }
+    _pickHidden = { layer: p.layer, prevI: prevI, prevT: prevT };
+  }
+  function restoreBaseIcon(h) {
+    var m = window.map;
+    if (!h || !m || !m.getLayer(h.layer)) return;
+    try { m.setPaintProperty(h.layer, 'icon-opacity', h.prevI == null ? 1 : h.prevI); m.setPaintProperty(h.layer, 'text-opacity', h.prevT == null ? 1 : h.prevT); } catch (_) {}
+  }
   function hidePickPin() {
-    var pin = _pickPin; _pickPin = null;
+    var pin = _pickPin, hidden = _pickHidden; _pickPin = null; _pickHidden = null;
+    restoreBaseIcon(hidden);   // 馬上放回(連續點好幾間時，下一間才會記到正確的原始值)
     if (!pin) return;
     var inner = pin.getElement().firstChild;
     if (inner) { inner.classList.remove('in'); inner.classList.add('out'); }
@@ -10869,6 +10891,7 @@ setTimeout(() => {
     inner.appendChild(window._snmMakeDestMarkerEl(logo));
     wrap.appendChild(inner);
     _pickPin = new maplibregl.Marker({ element: wrap, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(window.map);
+    hideBaseIcon(p);
   }
   window._snmOpenPlace = function (p) {
     if (window._snmAvoidPicking) return; // 正在地圖上點選要避開的道路
