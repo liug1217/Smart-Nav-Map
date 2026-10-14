@@ -690,6 +690,8 @@ body.searchOpen .searchResultsList{
 .rpAvoidBtn .snmLeaf, .rpEcoRow .snmLeaf{ font-size:15px; }
 /* 點店家時冒出的紅框 logo 標記：從上方落下、落地回彈；收起時縮小淡出(底部尖端當支點) */
 .snmPickPin{ transform-origin:50% 100%; }
+/* 紅框標記裡的圖示：蓋過 .maplibregl-marker img 的 40px(那會讓圖示超出紅框)；26px 正方形的對角線剛好放得進紅圈裡 */
+.maplibregl-marker img.snmPinTile{ width:26px !important; height:26px !important; object-fit:contain; display:block; }
 .snmPickPin.in{ animation:snmPinDrop .55s cubic-bezier(.22,.9,.3,1.25) both; }
 .snmPickPin.out{ animation:snmPinOut .2s ease-in both; }
 @keyframes snmPinDrop{
@@ -2582,6 +2584,7 @@ function _flipCell(cell, from, to) {
   let followUser = true;
   window._cameraFollow = true;
   window._setFollowUser = function(v){ followUser = v; window._cameraFollow = v; };
+  window._snmWasFollowing = function(){ return !!(followUser || (_ptrDown ? _prevFollow : false) || _prevFollow && Date.now() - _ptrUpAt < 400); }; // 點地點卡片時用：跟隨中就不要移地圖
 
   // bug45: touchstart/mousedown 時立即暫停鏡頭跟隨，讓 MapLibre 能正常辨識拖曳手勢。
   // dragstart 觸發時機太晚（需要先移動一段距離），在那之前 _rafLoop 的 easeTo({duration:0})
@@ -2606,9 +2609,10 @@ function _flipCell(cell, from, to) {
     var p = _ptrPos(e);
     _ptrMoved = Math.max(_ptrMoved, Math.hypot(p[0] - _ptrX, p[1] - _ptrY));
   }
+  var _ptrUpAt = 0;
   function _onMapPointerUp(e) {
     if (e.touches && e.touches.length) return; // 還有手指在螢幕上
-    _ptrDown = false;
+    _ptrDown = false; _ptrUpAt = Date.now();
     var moved = _ptrMoved;
     setTimeout(function() {
       if (moved < TAP_MOVE_PX && _prevFollow) {
@@ -4392,11 +4396,11 @@ function _flipCell(cell, from, to) {
       // 紅框裡面放跟地圖上一模一樣的圓角加框圖示：點過的店記下地圖圖示(window._snmLogoTile)；沒有就用 CSS 畫同樣的圓角＋細灰框
       const tile = /^data:image/.test(logo) ? logo : (window._snmLogoTile && window._snmLogoTile[logo]);
       const inner = tile
-        ? '<img src="' + tile + '" alt="" style="width:30px;height:30px;display:block">'
-        : '<div style="width:30px;height:30px;box-sizing:border-box;border-radius:7px;border:1px solid #d9d9d9;background:#fff url(\'' + logo + '\') center/cover no-repeat"></div>';
+        ? '<img class="snmPinTile" src="' + tile + '" alt="">'
+        : '<div style="width:26px;height:26px;box-sizing:border-box;border-radius:6px;border:1px solid #d9d9d9;background:#fff url(\'' + logo + '\') center/cover no-repeat"></div>';
       el.style.cssText = 'display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));';
       el.innerHTML = (isImg
-          ? '<div style="width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #E53935;box-sizing:border-box;display:flex;align-items:center;justify-content:center">' + inner + '</div>'
+          ? '<div style="width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #E53935;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden">' + inner + '</div>'
           : '<div style="width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #E53935;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1">' + logo + '</div>') +
         '<div style="width:0;height:0;margin-top:-2px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #E53935"></div>';
     } else {
@@ -10858,7 +10862,7 @@ setTimeout(() => {
   // 只給店家圖檔(圖片/…、網址)；監視器、測速、紅綠燈等地圖上本來就有自己的圖示，不另外加
   var _pickPin = null, _pickHidden = null;
   // 卡片用的名稱 → 地圖上實際的圖層；監視器、測速照相地圖上本來就有自己的立體圖示，不另外放標記
-  var PIN_LAYER_ALIAS = { 'signal-points': 'signal-single' }, PIN_SKIP = { 'cctv-point': 1, 'speed-point': 1 };
+  var PIN_LAYER_ALIAS = { 'signal-points': 'signal-single' }, PIN_SKIP = {};
   var _tileCache = {};
   window._snmLogoTile = window._snmLogoTile || {};
   // 地圖上離這個地點最近的那個圖示(同一層、6 公尺內)
@@ -10867,7 +10871,7 @@ setTimeout(() => {
     if (!m || !layer || !m.getLayer(layer) || p.lat == null) return null;
     var kx = 111320 * Math.cos(p.lat * Math.PI / 180), best = null, bd = 6;
     m.queryRenderedFeatures({ layers: [layer] }).forEach(function (f) {
-      if (!f.geometry || f.geometry.type !== 'Point' || !f.properties || !f.properties.name) return;
+      if (!f.geometry || f.geometry.type !== 'Point' || (f.properties && f.properties.point_count)) return;
       var c = f.geometry.coordinates, d = Math.hypot((c[0] - p.lng) * kx, (c[1] - p.lat) * 110540);
       if (d < bd) { bd = d; best = f; }
     });
@@ -10895,7 +10899,9 @@ setTimeout(() => {
     var m = window.map;
     if (!best) return;
     var prevI = m.getPaintProperty(layer, 'icon-opacity'), prevT = m.getPaintProperty(layer, 'text-opacity');
-    var hide = function (prev) { return ['case', ['==', ['get', 'name'], best.properties.name], 0, prev == null ? 1 : prev]; };
+    var c = best.geometry.coordinates, dl = 1.5 / 110540, dg = 1.5 / (111320 * Math.cos(c[1] * Math.PI / 180));
+    var box = { type: 'Polygon', coordinates: [[[c[0] - dg, c[1] - dl], [c[0] + dg, c[1] - dl], [c[0] + dg, c[1] + dl], [c[0] - dg, c[1] + dl], [c[0] - dg, c[1] - dl]]] };
+    var hide = function (prev) { return ['case', ['within', box], 0, prev == null ? 1 : prev]; };   // 只藏這個位置上的那一個
     try { m.setPaintProperty(layer, 'icon-opacity', hide(prevI)); m.setPaintProperty(layer, 'text-opacity', hide(prevT)); } catch (_) { return; }
     _pickHidden = { layer: layer, prevI: prevI, prevT: prevT };
   }
@@ -10918,7 +10924,7 @@ setTimeout(() => {
     if (p.lat == null || p.lng == null || PIN_SKIP[p.layer]) return;
     var layer = PIN_LAYER_ALIAS[p.layer] || p.layer, base = plain ? null : baseFeature(p, layer);
     var tile = base ? tileUrl(iconIdFor(layer, base)) : null;   // 地圖上那個圖示(圓角加框)，標記裡放同一張
-    var imgLogo = typeof logo === 'string' && /^(圖片\/|https?:)/.test(logo);
+    var imgLogo = typeof logo === 'string' && /^(圖片\/|https?:|data:image)/.test(logo);   // data:image：監視器、測速照相卡片上畫好的圖示
     if (!plain && !tile && !imgLogo) return;
     if (tile && imgLogo) window._snmLogoTile[logo] = tile;   // 之後規劃路線的目的地標記也用同一張
     if (!window._snmMakeDestMarkerEl || !window.maplibregl || !window.map) return;
@@ -10949,7 +10955,9 @@ setTimeout(() => {
     }
     requestAnimationFrame(function () { setH(peekH()); });
     // 點了以後地圖平滑移到那個地點：放在「卡片上面那塊看得到的地圖」正中間(不被卡片蓋住)；導航中鏡頭跟著車子，不動
-    if (p.lat != null && p.lng != null && window.map && !document.body.classList.contains('navigating')) {
+    // 定位跟隨中(例如點到道路開了路況卡片)：不移地圖、不關跟隨，地圖照樣跟著你轉
+    if (p.lat != null && p.lng != null && window.map && !document.body.classList.contains('navigating') &&
+        !(window._snmWasFollowing && window._snmWasFollowing())) {
       if (window._setFollowUser) window._setFollowUser(false);
       var top = 60, bottom = peekH();   // 上面留給搜尋列，下面是卡片
       window.map.easeTo({ center: [p.lng, p.lat], padding: { top: top, bottom: bottom, left: 0, right: 0 }, duration: 650, essential: true,
