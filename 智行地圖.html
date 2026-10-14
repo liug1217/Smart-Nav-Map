@@ -698,8 +698,8 @@ body.searchOpen .searchResultsList{
 .rpAvRow input{ width:20px; height:20px; accent-color:#E53935; flex-shrink:0; }
 .rpAvRow .rm{ border:none; background:#FDECEA; color:#B71C1C; border-radius:14px; padding:5px 12px; font-size:13px; font-family:inherit; cursor:pointer; flex-shrink:0; }
 .rpAvEmpty{ color:#80868B; font-size:13px; padding:6px; }
-.rpAvChips{ display:flex; flex-wrap:nowrap; gap:4px; margin-top:4px; } /* 四個選項排一行 */
-.rpAvChip{ flex:1 1 auto; min-width:0; white-space:nowrap; border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:999px; padding:6px 5px; font-size:12px; font-family:inherit; cursor:pointer; }
+.rpAvChips{ display:flex; flex-wrap:wrap; gap:6px; }
+.rpAvChip{ border:1px solid #DADCE0; background:#fff; color:#3C4043; border-radius:999px; padding:6px 12px; font-size:13px; font-family:inherit; cursor:pointer; }
 .rpAvChip.on{ background:#FDECEA; border-color:#E53935; color:#B71C1C; font-weight:700; }
 .rpAvBtns{ display:flex; gap:8px; margin-top:10px; flex-shrink:0; position:sticky; bottom:0; background:#fff; padding:8px 0 2px; } /* 清單很長時按鈕也一直看得到 */
 .rpAvBtns button{ flex:1; border:none; border-radius:999px; padding:11px 0; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; }
@@ -5901,7 +5901,7 @@ function _flipCell(cell, from, to) {
     AVOID_OPTS.forEach(o => {
       if (o.modes.indexOf(navMode) < 0) return;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'rpAvChip' + (_avoidOpts[o.k] ? ' on' : '');
-      b.textContent = o.label; b.setAttribute('aria-pressed', !!_avoidOpts[o.k]); // 選了就變紅底(不加 ✓，四個才排得下一行) b.disabled = _avoidBusy;
+      b.textContent = (_avoidOpts[o.k] ? '✓ ' : '') + o.label; b.disabled = _avoidBusy;
       b.onclick = () => {
         _avoidOpts[o.k] = !_avoidOpts[o.k];
         try { localStorage.setItem('snm_avoid_opts', JSON.stringify(_avoidOpts)); } catch (_) {}
