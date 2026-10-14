@@ -1281,11 +1281,13 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
-/* 到達時間右邊：前面還有幾個收費門架(圓圈數字)、最節能綠葉(跟路線清單同樣式) */
-.arrivalRow{ display:flex; align-items:center; justify-content:center; gap:6px; }
-.navTollBadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 4px; box-sizing:border-box;
-  border-radius:10px; border:1.8px solid #5F6368; color:#3C4043; font:800 12px/1 "SF Pro Display",Arial,sans-serif; font-variant-numeric:tabular-nums; }
-.navLeaf{ font-size:17px; line-height:1; }
+/* 「幾小時幾分鐘 幾公里」右邊：前面還有幾個收費門架(圓圈數字)、最節能綠葉 */
+.infoRow{ display:flex; align-items:center; justify-content:center; gap:4px; max-width:100%; }
+.navExitBtn, .navOverviewBtn{ flex-shrink:0; white-space:nowrap; } /* 這一行變長時，退出/全覽不要被擠成直的 */
+.rect1Center{ min-width:0; }
+.navTollBadge{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 3px; box-sizing:border-box; flex-shrink:0;
+  border-radius:9px; border:1.6px solid #5F6368; color:#3C4043; font:800 11px/1 "SF Pro Display",Arial,sans-serif; font-variant-numeric:tabular-nums; }
+.navLeaf{ font-size:15px; line-height:1; flex-shrink:0; }
 .arrivalText{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
@@ -2055,8 +2057,8 @@ html, body {
       <div class="rect1NavRow">
         <button type="button" class="navExitBtn" id="navExitBtn">退出</button>
         <div class="rect1Center">
-          <div class="info">0小時0分鐘  0公里</div>
-          <div class="arrivalRow"><div class="arrivalText" id="arrivalText">00:00到達</div><span class="navTollBadge" id="navTollBadge" hidden></span><span class="navLeaf" id="navLeaf" title="最節能路線" hidden>🍃</span></div>
+          <div class="infoRow"><div class="info">0小時0分鐘  0公里</div><span class="navTollBadge" id="navTollBadge" hidden></span><span class="navLeaf" id="navLeaf" title="最節能路線" hidden>🍃</span></div>
+          <div class="arrivalText" id="arrivalText">00:00到達</div>
         </div>
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
