@@ -1281,6 +1281,11 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
 
 
 /* ===== 🆕 底部面板大改版新增元件 ===== */
+/* 到達時間右邊：前面還有幾個收費門架(圓圈數字)、最節能綠葉(跟路線清單同樣式) */
+.arrivalRow{ display:flex; align-items:center; justify-content:center; gap:6px; }
+.navTollBadge{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 4px; box-sizing:border-box;
+  border-radius:10px; border:1.8px solid #5F6368; color:#3C4043; font:800 12px/1 "SF Pro Display",Arial,sans-serif; font-variant-numeric:tabular-nums; }
+.navLeaf{ font-size:17px; line-height:1; }
 .arrivalText{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   font-weight:500;
@@ -2051,7 +2056,7 @@ html, body {
         <button type="button" class="navExitBtn" id="navExitBtn">退出</button>
         <div class="rect1Center">
           <div class="info">0小時0分鐘  0公里</div>
-          <div class="arrivalText" id="arrivalText">00:00到達</div>
+          <div class="arrivalRow"><div class="arrivalText" id="arrivalText">00:00到達</div><span class="navTollBadge" id="navTollBadge" hidden></span><span class="navLeaf" id="navLeaf" title="最節能路線" hidden>🍃</span></div>
         </div>
         <button type="button" class="navOverviewBtn" id="navOverviewBtn">全覽</button>
       </div>
@@ -4758,7 +4763,21 @@ function _flipCell(cell, from, to) {
 
   // 底部行程資訊(剩餘時間/公里 + 預計到達):起點與每次 GPS 更新都走這一個函式
   let _navTotals = null; // { dist: 全程公尺, dur: 全程秒 },每次(重新)規劃時更新
-  function renderNavTripInfo(remainMeters, remainSec){
+  let _navTollFracs = null, _navEco = false, _navTollShown = '';
+  function renderNavTollBadges(carFrac){
+    const tb = document.getElementById('navTollBadge'), lf = document.getElementById('navLeaf');
+    if (!tb || !lf) return;
+    if (!_navTollFracs && window._snmTollGantryFracs && plannedRouteCoordinates && plannedRouteCoordinates.length > 1)
+      _navTollFracs = window._snmTollGantryFracs({ geometry: { coordinates: plannedRouteCoordinates } }); // 門架資料剛載好
+    const ahead = _navTollFracs && carFrac != null ? _navTollFracs.filter(f => f > carFrac + 0.0005).length : (_navTollFracs ? _navTollFracs.length : 0);
+    const key = ahead + '|' + _navEco;
+    if (key === _navTollShown) return;   // 沒變就不動畫面
+    _navTollShown = key;
+    tb.textContent = ahead; tb.hidden = !ahead; tb.title = '前面還有 ' + ahead + ' 個國道收費門架';
+    lf.hidden = !_navEco;
+  }
+  function renderNavTripInfo(remainMeters, remainSec, carFrac){
+    renderNavTollBadges(carFrac == null ? 0 : carFrac);
     const infoEl = document.querySelector('.info');
     if (infoEl) {
       const min = Math.round(remainSec / 60);
@@ -4785,7 +4804,7 @@ function _flipCell(cell, from, to) {
     }
     remain = Math.max(0, Math.min(remain, _navTotals.dist));
     const carFrac = pos ? pos.along / pos.g.total : 1 - remain / _navTotals.dist;
-    renderNavTripInfo(remain, _navTotals.dur * remain / _navTotals.dist + navTrafficDelaySec(carFrac));
+    renderNavTripInfo(remain, _navTotals.dur * remain / _navTotals.dist + navTrafficDelaySec(carFrac), carFrac);
   }
 
   // 塞車多花的時間：車子前方每一段塞車路段，用「實際車速」開完要多久 − 路線規劃原本估的時間(該段所在路段的規劃車速)。
@@ -5561,12 +5580,19 @@ function _flipCell(cell, from, to) {
   }
   const ETC_DIR_BEARING = { N: 0, E: 90, S: 180, W: 270 };
   // 路線離門架 25 公尺內、而且行進方向跟門架的方向一致(差 90 度內)才算經過；對向車道的門架不算
-  function countTollGantries(r) {
+  function countTollGantries(r) { const fr = tollGantryFracs(r); return fr ? fr.length : null; }
+  function tollGantryFracs(r) {
     const G = etcGantries(), c = r && r.geometry && r.geometry.coordinates;
     if (!G || !c || c.length < 2) return null;
+    // 路線累積長度(公尺)，算門架在路線上的位置
+    const cum = [0];
+    for (let i = 1; i < c.length; i++) {
+      const kx0 = 111320 * Math.cos(c[i][1] * Math.PI / 180);
+      cum.push(cum[i - 1] + Math.hypot((c[i][0] - c[i - 1][0]) * kx0, (c[i][1] - c[i - 1][1]) * 110540));
+    }
+    const total = cum[cum.length - 1] || 1, fracs = [];
     let n = -90, so = 90, e = -180, w = 180;
     c.forEach(p => { if (p[1] > n) n = p[1]; if (p[1] < so) so = p[1]; if (p[0] > e) e = p[0]; if (p[0] < w) w = p[0]; });
-    let count = 0;
     G.forEach(g => {
       if (g[0] < w - 0.001 || g[0] > e + 0.001 || g[1] < so - 0.001 || g[1] > n + 0.001) return;
       const kx = 111320 * Math.cos(g[1] * Math.PI / 180), ky = 110540;
@@ -5578,11 +5604,12 @@ function _flipCell(cell, from, to) {
         if (Math.hypot(ax + t * dx, ay + t * dy) > 25) continue;
         const brg = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
         const diff = Math.abs(((brg - ETC_DIR_BEARING[g[2]]) % 360 + 540) % 360 - 180);
-        if (diff < 90) { count++; break; }
+        if (diff < 90) { fracs.push((cum[i] + t * (cum[i + 1] - cum[i])) / total); break; }
       }
     });
-    return count;
+    return fracs.sort((a, b) => a - b);
   }
+  window._snmTollGantryFracs = tollGantryFracs;   // 導航卡片用
   function ecoIndex(c) {
     if (!c || c.routes.length < 2 || !NAV_MODES[navMode].traffic) return -1;   // 開車、機車才算
     let best = -1, bf = Infinity;
@@ -5710,7 +5737,7 @@ function _flipCell(cell, from, to) {
   if (rpStart) rpStart.addEventListener('click', async () => {
     const c = _routeChoice;
     if (!c || !c.routes.length || _avoidBusy) return;
-    let chosen = { route: c.routes[c.sel], origin: c.origin };
+    let chosen = { route: c.routes[c.sel], origin: c.origin, eco: c.sel === ecoIndex(c) };
     // 起點不是目前位置(例如看「住家到台中市」)：開始導航時改從目前位置出發(同 Google)
     if (c.opts && c.opts.fromName) {
       try {
@@ -5718,7 +5745,7 @@ function _flipCell(cell, from, to) {
         const far = Math.hypot((here.lon - c.origin.lon) * 101000, (here.lat - c.origin.lat) * 111000) > 300;
         if (far) {
           const data = await fetchRoutes(navMode, here, c.dest.lat, c.dest.lon, false);
-          if (data.routes && data.routes.length) chosen = { route: data.routes[0], origin: here };
+          if (data.routes && data.routes.length) chosen = { route: data.routes[0], origin: here };   // 改從目前位置出發的新路線，沒比較過節能，不放綠葉
         }
       } catch (_) {}
     }
@@ -6207,6 +6234,10 @@ function _flipCell(cell, from, to) {
       }
 
       const route = data.routes[0];
+      _navTollFracs = window._snmTollGantryFracs ? window._snmTollGantryFracs(route) : null;
+      _navTollShown = '';
+      if (!fromPosition) _navEco = !!(chosen && chosen.eco);
+      else _navEco = false;
       plannedRouteCoordinates = route.geometry.coordinates;
       window.plannedRouteCoordinates = plannedRouteCoordinates;
       window._navRouteGeometry = route.geometry; // 供樣式切換後重建圖層用
