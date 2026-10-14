@@ -679,11 +679,11 @@ body.searchOpen .searchResultsList{
 .rpMain{ flex:1; min-width:0; }
 .rpTime{ font-size:17px; font-weight:800; color:#000; }
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
-/* 到達時間右邊：收費門架數(圓圈裡的數字)、最節能的綠葉 */
-.rpSub .rpToll{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 3px; box-sizing:border-box;
-  margin-left:6px; border-radius:8px; border:1.5px solid currentColor; color:inherit; font-size:10px; font-weight:800; line-height:1; vertical-align:1px; } /* 跟旁邊的文字同色 */
+/* 時間右邊(第一行，跟導航卡片一樣)：收費門架數(圓圈裡的數字)、最節能的綠葉 */
+.rpTime .rpToll{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 3px; box-sizing:border-box;
+  margin-left:6px; border-radius:9px; border:1.6px solid currentColor; color:inherit; font-size:11px; font-weight:800; line-height:1; vertical-align:2px; } /* 跟旁邊的文字同色(黑) */
 .snmLeaf{ width:1em; height:1em; display:inline-block; vertical-align:-0.15em; }
-.rpSub .rpLeaf{ margin-left:4px; font-size:14px; }
+.rpTime .rpLeaf{ margin-left:4px; font-size:16px; }
 .rpAvoidBtn .snmLeaf, .rpEcoRow .snmLeaf{ font-size:15px; }
 .rpTime .rpEco{ font-size:11px; font-weight:700; color:#0A7A3E; background:#E3F7EA; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpAvoidBtn.eco{ background:#E3F7EA; border-color:#16A34A; color:#0A7A3E; font-weight:700; }
@@ -5685,8 +5685,8 @@ function _flipCell(cell, from, to) {
       const via = (r.legs && r.legs[0] && r.legs[0].summary) ? r.legs[0].summary.split(',').map(x => x.trim()).filter(x => x && !/^[\d\s]+$/.test(x)).slice(0, 2).join('、') : ''; // 機車路線摘要有純數字的道路編號(例如 5 = 台5線)，不顯示
       const eta = new Date(Date.now() + tot[i] * 1000);
       el.innerHTML = '<div class="rpBadge">' + String.fromCharCode(65 + i) + '</div>' +
-        '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + jam + fast + eco + '</div>' +
-        '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' + tolls + leaf +
+        '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + tolls + leaf + jam + fast + eco + '</div>' +
+        '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' +
         (via ? ' · 經由 ' + via : '') + '</div></div>';
       el.addEventListener('click', () => rpSelect(i));
       rpList.appendChild(el);
