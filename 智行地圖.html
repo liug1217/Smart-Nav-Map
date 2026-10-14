@@ -6477,7 +6477,7 @@ function _flipCell(cell, from, to) {
     function showNavHerePopup(lngLat, closeOnClick) {
       var lat = lngLat.lat, lon = lngLat.lng;
       if (window._snmOpenPlace) {
-        window._snmOpenPlace({ layer: 'place-points', name: '地圖上選的位置', kind: lat.toFixed(5) + ', ' + lon.toFixed(5), logo: '📍', lat: lat, lng: lon });
+        window._snmOpenPlace({ layer: 'place-points', name: '地圖上選的位置', kind: lat.toFixed(5) + ', ' + lon.toFixed(5), logo: '📍', lat: lat, lng: lon, pin: 'plain' }); // 長按：放原本的紅色定位針
         return null;
       }
       if (window._ctxPopup) { window._ctxPopup.remove(); window._ctxPopup = null; }
@@ -10883,12 +10883,13 @@ setTimeout(() => {
   }
   function showPickPin(p) {
     hidePickPin();
-    var logo = p && p.logo;
-    if (!logo || typeof logo !== 'string' || !/^(圖片\/|https?:)/.test(logo) || p.lat == null || p.lng == null) return;
+    var logo = p && p.logo, plain = p && p.pin === 'plain';   // plain：長按地圖，用原本的紅色定位針(不包 logo)
+    if (!plain && (!logo || typeof logo !== 'string' || !/^(圖片\/|https?:)/.test(logo))) return;
+    if (p.lat == null || p.lng == null) return;
     if (!window._snmMakeDestMarkerEl || !window.maplibregl || !window.map) return;
     var wrap = document.createElement('div');
     var inner = document.createElement('div'); inner.className = 'snmPickPin in';
-    inner.appendChild(window._snmMakeDestMarkerEl(logo));
+    inner.appendChild(window._snmMakeDestMarkerEl(plain ? '' : logo));
     wrap.appendChild(inner);
     _pickPin = new maplibregl.Marker({ element: wrap, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(window.map);
     hideBaseIcon(p);
