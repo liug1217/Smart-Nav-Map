@@ -679,6 +679,15 @@ body.searchOpen .searchResultsList{
 .rpMain{ flex:1; min-width:0; }
 .rpTime{ font-size:17px; font-weight:800; color:#000; }
 .rpTime .rpJam{ font-size:12px; font-weight:600; color:#E53935; margin-left:4px; }
+.rpTime .rpEco{ font-size:11px; font-weight:700; color:#0A7A3E; background:#E3F7EA; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
+.rpAvoidBtn.eco{ background:#E3F7EA; border-color:#16A34A; color:#0A7A3E; font-weight:700; }
+.rpEcoRow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#F1FBF4; border:1px solid #CFEFD9; cursor:pointer; margin-top:6px; }
+.rpEcoRow .t{ flex:1; font-size:14px; font-weight:700; color:#0A7A3E; }
+.rpEcoRow .t small{ display:block; font-size:12px; font-weight:400; color:#5F6368; margin-top:1px; }
+.rpEcoSw{ width:44px; height:26px; border-radius:13px; background:#C7C7CC; position:relative; flex-shrink:0; transition:background .2s; }
+.rpEcoSw::after{ content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .2s; }
+.rpEcoRow.on .rpEcoSw{ background:#16A34A; }
+.rpEcoRow.on .rpEcoSw::after{ transform:translateX(18px); }
 .rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#2F80FF; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rpStart{ width:100%; flex:none; }
@@ -1744,7 +1753,7 @@ html, body {
     <button type="button" data-mode="foot">🚶 步行</button>
   </div>
   <!-- 🚫 避開道路：地圖點選或從目前路線的道路清單選，兩邊共用同一份避開清單 -->
-  <button type="button" class="rpAvoidBtn" id="rpAvoidBtn">🚫 避開道路</button>
+  <button type="button" class="rpAvoidBtn" id="rpAvoidBtn">路線選項</button>
   <div class="rpList" id="rpList"></div>
   <div class="rpAvoid" id="rpAvoid"></div>
   <button type="button" class="navigateBtn rpStart" id="rpStart">開始導航</button>
@@ -5506,27 +5515,57 @@ function _flipCell(cell, from, to) {
     const m = Math.max(1, Math.round(sec / 60)), h = Math.floor(m / 60);
     return (h ? h + ' 小時 ' : '') + (m % 60) + ' 分鐘';
   }
+  // 估一條路線的耗油(只用來比較哪條比較省，不是真實油量)：
+  //   每段依平均車速算每公里耗油(太慢走走停停、太快風阻都比較耗，大約 50~60 km/h 最省)＋每次轉彎減速再加速＋塞車多花的時間怠速
+  function ecoFuel(r, delaySec) {
+    const steps = (r.legs && r.legs[0] && r.legs[0].steps) || [];
+    let fuel = 0, turns = 0;
+    const perKm = v => (3 + 120 / Math.max(v, 5) + 0.00055 * v * v) / 100;   // 公升/公里(U 型曲線)
+    steps.forEach(st => {
+      const d = st.distance || 0, t = st.duration || 0;
+      if (d > 0) fuel += d / 1000 * perKm(t > 0 ? d / t * 3.6 : 40);
+      const m = st.maneuver || {};
+      if (m.type && m.type !== 'depart' && m.type !== 'arrive' && m.modifier && m.modifier !== 'straight') turns++;
+    });
+    if (!steps.length) fuel = r.distance / 1000 * perKm(r.duration > 0 ? r.distance / r.duration * 3.6 : 40);
+    return fuel + turns * 0.015 + (delaySec || 0) * 0.0002;
+  }
+  function ecoIndex(c) {
+    if (!c || c.routes.length < 2 || !NAV_MODES[navMode].traffic) return -1;   // 開車、機車才算
+    let best = -1, bf = Infinity;
+    c.routes.forEach((r, i) => { const f = ecoFuel(r, c.delays[i]); if (f < bf) { bf = f; best = i; } });
+    return best;
+  }
+  function ecoOn() { try { return localStorage.getItem('snm_eco_pref') === '1'; } catch (_) { return false; } }
+  // 節能路線優先：使用者還沒自己選過時，預先選最節能的那條
+  function ecoAutoSelect(c) {
+    if (!c || c.userPicked || !ecoOn()) return;
+    const i = ecoIndex(c);
+    if (i >= 0 && i !== c.sel) { c.sel = i; rpDraw(); }
+  }
   function rpRender() {
     const c = _routeChoice;
     if (!c) return;
     paintAvoidBtn();
     rpStart.disabled = !c.routes.length;
     if (!c.routes.length) {
-      rpList.innerHTML = '<div class="rpAvWarn">' + AVOID_NO_ROUTE + '。可以點上面的「🚫 避開」取消部分避開條件。</div>';
+      rpList.innerHTML = '<div class="rpAvWarn">' + AVOID_NO_ROUTE + '。可以點上面的「路線選項」取消部分避開條件。</div>';
       return;
     }
     const tot = c.routes.map((r, i) => r.duration + (c.delays[i] || 0));
     const fastest = tot.indexOf(Math.min.apply(null, tot));
+    const ecoI = ecoIndex(c);
     rpList.innerHTML = '';
     c.routes.forEach((r, i) => {
       const el = document.createElement('div');
       el.className = 'rpItem' + (i === c.sel ? ' sel' : '');
       const jam = c.delays[i] >= 60 ? '<span class="rpJam">塞車 +' + Math.round(c.delays[i] / 60) + ' 分</span>' : '';
       const fast = c.routes.length > 1 && i === fastest ? '<span class="rpFast">最快</span>' : '';
+      const eco = i === ecoI ? '<span class="rpEco">🍃 最節能</span>' : '';
       const via = (r.legs && r.legs[0] && r.legs[0].summary) ? r.legs[0].summary.split(',').map(x => x.trim()).filter(x => x && !/^[\d\s]+$/.test(x)).slice(0, 2).join('、') : ''; // 機車路線摘要有純數字的道路編號(例如 5 = 台5線)，不顯示
       const eta = new Date(Date.now() + tot[i] * 1000);
       el.innerHTML = '<div class="rpBadge">' + String.fromCharCode(65 + i) + '</div>' +
-        '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + jam + fast + '</div>' +
+        '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + jam + fast + eco + '</div>' +
         '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' +
         (via ? ' · 經由 ' + via : '') + '</div></div>';
       el.addEventListener('click', () => rpSelect(i));
@@ -5536,6 +5575,7 @@ function _flipCell(cell, from, to) {
   function rpSelect(i) {
     if (!_routeChoice || i === _routeChoice.sel) return;
     _routeChoice.sel = i;
+    _routeChoice.userPicked = true;   // 自己選過就不再自動換成最節能的
     rpRender(); rpDraw();
   }
   function rpHide() {
@@ -5575,6 +5615,7 @@ function _flipCell(cell, from, to) {
   function showRouteChooser(routes, origin, destLat, destLon, opts) {
     opts = opts || {};
     _routeChoice = { routes, delays: routes.map(() => 0), sel: 0, origin, dest: { lat: destLat, lon: destLon }, opts };
+    ecoAutoSelect(_routeChoice);
     rpPaintModes();
     _navState = 'idle';
     if (window._snmClosePlace) window._snmClosePlace(); // 地點卡片收起來
@@ -5600,7 +5641,7 @@ function _flipCell(cell, from, to) {
     // 背景估各路線目前塞車多花的時間，估好再更新時間與「最快」
     const mine = _routeChoice;
     if (NAV_MODES[navMode].traffic && typeof window._snmEstimateRouteDelays === 'function') {
-      window._snmEstimateRouteDelays(routes).then(d => { if (_routeChoice === mine) { mine.delays = d; rpRender(); } });
+      window._snmEstimateRouteDelays(routes).then(d => { if (_routeChoice === mine) { mine.delays = d; ecoAutoSelect(mine); rpRender(); } }); // 塞車算進去後最節能的可能換一條
     }
   }
   if (rpClose) rpClose.addEventListener('click', () => {
@@ -5863,9 +5904,10 @@ function _flipCell(cell, from, to) {
   function paintAvoidBtn() {
     const b = document.getElementById('rpAvoidBtn');
     if (!b) return;
-    const n = _avoids.length + avoidOptsOn(navMode).length;
-    b.textContent = n ? '🚫 避開 ' + n + ' 項' : '🚫 避開道路';
+    const n = _avoids.length + avoidOptsOn(navMode).length, eco = ecoOn();
+    b.textContent = (eco ? '🍃 ' : '') + '路線選項' + (n ? ' · 避開 ' + n + ' 項' : '');
     b.classList.toggle('on', n > 0);
+    b.classList.toggle('eco', eco && !n);
   }
 
   // ── 道路清單：目前選中的路線經過哪些道路(路線服務回傳的步驟，名稱照實際資料，沒名稱就寫未命名道路) ──
@@ -5897,7 +5939,21 @@ function _flipCell(cell, from, to) {
     if (!box || !routePanel.classList.contains('avoidOpen')) return;
     box.innerHTML = '';
     
+    if (NAV_MODES[navMode].traffic) {
+      const eco = document.createElement('div'); eco.className = 'rpEcoRow' + (ecoOn() ? ' on' : '');
+      eco.setAttribute('role', 'switch'); eco.setAttribute('aria-checked', ecoOn());
+      eco.innerHTML = '<div class="t">🍃 節能路線優先<small>依車速、轉彎、塞車估算哪條最省油，預先選它</small></div><div class="rpEcoSw"></div>';
+      eco.onclick = () => {
+        const on = !ecoOn();
+        try { localStorage.setItem('snm_eco_pref', on ? '1' : ''); } catch (_) {}
+        const c = _routeChoice;
+        if (c) { c.userPicked = false; if (on) ecoAutoSelect(c); else { c.sel = 0; rpDraw(); } }  // 不用重新規劃，只換選哪一條
+        paintAvoidBtn(); renderAvoidPanel();
+      };
+      box.appendChild(eco);
+    }
     const chips = document.createElement('div'); chips.className = 'rpAvChips';
+    chips.style.marginTop = '10px';
     AVOID_OPTS.forEach(o => {
       if (o.modes.indexOf(navMode) < 0) return;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'rpAvChip' + (_avoidOpts[o.k] ? ' on' : '');
