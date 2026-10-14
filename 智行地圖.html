@@ -1288,8 +1288,9 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
 .navExitBtn, .navOverviewBtn{ flex-shrink:0; white-space:nowrap; } /* 這一行變長時，退出/全覽不要被擠成直的 */
 .rect1Center{ min-width:0; }
 .navTollBadge{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 3px; box-sizing:border-box; flex-shrink:0;
+  text-shadow:0 4px 4px rgba(0,0,0,0.25); box-shadow:0 4px 4px rgba(0,0,0,0.25); /* 數字與外框都跟上面文字同樣的陰影 */
   border-radius:9px; border:1.6px solid #000; color:#000; font:800 11px/1 "SF Pro Display",Arial,sans-serif; font-variant-numeric:tabular-nums; }
-.navLeaf{ font-size:17px; line-height:1; flex-shrink:0; display:inline-flex; }
+.navLeaf{ font-size:17px; line-height:1; flex-shrink:0; display:inline-flex; filter:drop-shadow(0 4px 4px rgba(0,0,0,0.25)); }
 .navTollBadge[hidden], .navLeaf[hidden]{ display:none; } /* 沒有門架/不是最節能時要真的藏起來 */
 .arrivalText{
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
@@ -5578,14 +5579,17 @@ function _flipCell(cell, from, to) {
     if (window.ETC_GANTRY) return window.ETC_GANTRY;
     if (!_etcLoading) {
       _etcLoading = true;
-      const sc = document.createElement('script'); sc.src = 'etc_gantry_data.js?v=1';
+      const sc = document.createElement('script'); sc.src = 'etc_gantry_data.js?v=2';
       sc.onload = () => { if (_routeChoice) rpRender(); };   // 載好再補上數字
       document.head.appendChild(sc);
     }
     return null;
   }
   const ETC_DIR_BEARING = { N: 0, E: 90, S: 180, W: 270 };
-  // 路線離門架 25 公尺內、而且行進方向跟門架的方向一致(差 90 度內)才算經過；對向車道的門架不算
+  // 路線離門架 25 公尺內、而且行進方向跟門架「真正的行車方向」一致(差 50 度內)才算經過，對向車道的門架不算。
+  // 行車方向用資料裡算好的方位角(由同路同向前後門架位置算，國3 東西向、彎道都準)；沒有才退回用北上/南下猜。
+  // 高架跟平面重疊(五楊、汐五高架在國1 正上方)：用路線在那裡的路名判斷走的是哪一層——
+  //   路名有「高架」只算高架門架(編號第 3 碼 H)，沒有就只算平面門架(F)；另外彼此 100 公尺內的門架只算最近的一個
   function countTollGantries(r) { const fr = tollGantryFracs(r); return fr ? fr.length : null; }
   function tollGantryFracs(r) {
     const G = etcGantries(), c = r && r.geometry && r.geometry.coordinates;
@@ -5596,7 +5600,23 @@ function _flipCell(cell, from, to) {
       const kx0 = 111320 * Math.cos(c[i][1] * Math.PI / 180);
       cum.push(cum[i - 1] + Math.hypot((c[i][0] - c[i - 1][0]) * kx0, (c[i][1] - c[i - 1][1]) * 110540));
     }
-    const total = cum[cum.length - 1] || 1, fracs = [];
+    const total = cum[cum.length - 1] || 1, hits = [];
+    // 路線每一步(step)在全長的哪一段，用來查門架所在位置的路名
+    const steps = (r.legs && r.legs[0] && r.legs[0].steps) || [], stepTot = steps.reduce((t, x) => t + (x.distance || 0), 0);
+    const stepNameAt = fr => {
+      if (!stepTot) return '';
+      let acc = 0;
+      for (const st of steps) { acc += st.distance || 0; if (acc / stepTot >= fr) return st.name || ''; }
+      return '';
+    };
+    // 門架是高架(H)還是平面(F)，跟路線在那裡走的那一層對不對得上(路名查不到就不判斷)
+    const layerOk = (id, fr) => {
+      const lay = id.charAt(2);
+      if (lay !== 'H' && lay !== 'F') return true;
+      const nm = stepNameAt(fr);
+      if (!/高速公路|高架|國道/.test(nm)) return true;   // 不是國道上的路名(例如剛下交流道)，不判斷
+      return /高架/.test(nm) ? lay === 'H' : lay === 'F';
+    };
     let n = -90, so = 90, e = -180, w = 180;
     c.forEach(p => { if (p[1] > n) n = p[1]; if (p[1] < so) so = p[1]; if (p[0] > e) e = p[0]; if (p[0] < w) w = p[0]; });
     G.forEach(g => {
@@ -5607,13 +5627,22 @@ function _flipCell(cell, from, to) {
         const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
         if (!L2) continue;
         const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2));
-        if (Math.hypot(ax + t * dx, ay + t * dy) > 25) continue;
+        const dist = Math.hypot(ax + t * dx, ay + t * dy);
+        if (dist > 25) continue;
         const brg = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
-        const diff = Math.abs(((brg - ETC_DIR_BEARING[g[2]]) % 360 + 540) % 360 - 180);
-        if (diff < 90) { fracs.push((cum[i] + t * (cum[i + 1] - cum[i])) / total); break; }
+        const want = g[4] >= 0 ? g[4] : ETC_DIR_BEARING[g[2]], lim = g[4] >= 0 ? 50 : 90;
+        const diff = Math.abs(((brg - want) % 360 + 540) % 360 - 180);
+        const fr = (cum[i] + t * (cum[i + 1] - cum[i])) / total;
+        if (diff < lim && layerOk(g[3], fr)) { hits.push({ frac: fr, d: dist, lon: g[0], lat: g[1] }); break; }
       }
     });
-    return fracs.sort((a, b) => a - b);
+    hits.sort((a, b) => a.d - b.d);   // 離路線近的先留
+    const kept = [];
+    hits.forEach(h => {
+      const kx = 111320 * Math.cos(h.lat * Math.PI / 180);
+      if (!kept.some(k => Math.hypot((k.lon - h.lon) * kx, (k.lat - h.lat) * 110540) < 100)) kept.push(h);
+    });
+    return kept.map(h => h.frac).sort((a, b) => a - b);
   }
   window._snmTollGantryFracs = tollGantryFracs;   // 導航卡片用
   function ecoIndex(c) {
