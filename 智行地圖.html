@@ -4389,9 +4389,14 @@ function _flipCell(cell, from, to) {
       // logo 可以是圖檔路徑,或直接是表情符號(例如廁所 🚾,之後有正式圖檔再換)
       if (logo === '圖片/toilet.svg') logo = '🚾'; // 最近目的地裡可能存著已移除的暫用 WC 圖
       const isImg = /[\/.]/.test(logo);
+      // 紅框裡面放跟地圖上一模一樣的圓角加框圖示：點過的店記下地圖圖示(window._snmLogoTile)；沒有就用 CSS 畫同樣的圓角＋細灰框
+      const tile = /^data:image/.test(logo) ? logo : (window._snmLogoTile && window._snmLogoTile[logo]);
+      const inner = tile
+        ? '<img src="' + tile + '" alt="" style="width:30px;height:30px;display:block">'
+        : '<div style="width:30px;height:30px;box-sizing:border-box;border-radius:7px;border:1px solid #d9d9d9;background:#fff url(\'' + logo + '\') center/cover no-repeat"></div>';
       el.style.cssText = 'display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45));';
       el.innerHTML = (isImg
-          ? '<div style="width:44px;height:44px;border-radius:50%;background:#fff url(\'' + logo + '\') center/72% no-repeat;border:3px solid #E53935;box-sizing:border-box"></div>'
+          ? '<div style="width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #E53935;box-sizing:border-box;display:flex;align-items:center;justify-content:center">' + inner + '</div>'
           : '<div style="width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #E53935;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1">' + logo + '</div>') +
         '<div style="width:0;height:0;margin-top:-2px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #E53935"></div>';
     } else {
@@ -9894,7 +9899,7 @@ setTimeout(() => {
       kw: /蝦皮|shopee|店到店|智取/i },
     { key: 'cityparking', data: 'cityParkingData', name: '城市車旅', logo: '圖片/cityparking.png', color: '#0d4c9c',
       kw: /城市車旅|city ?parking|停車場?/i },
-    { key: 'hospital', data: 'hospitalData', name: '醫院', logo: '圖片/hospital.png', color: '#e41e26',
+    { key: 'hospital', data: 'hospitalData', name: '醫院', logo: '圖片/hospital.png', color: '#e41e26', crop: [12, 12, 216, 216], // 原圖四周有白邊，裁掉才跟其他店一樣填滿到框
       kw: /醫院|hospital|急診|看病/i },
     { key: 'greattree', data: 'greatTreeData', name: '大樹藥局', logo: '圖片/greattree.png', color: '#21b14b', useAddr: true, // 官網資料有地址
       kw: /大樹|藥局|藥房|greattree/i },
@@ -10852,21 +10857,47 @@ setTimeout(() => {
   // ── 點有店家圖片的地點：卡片一打開，位置上就冒出跟規劃路線時一樣的紅框 logo 標記(落下＋回彈動畫)，關卡片時縮小淡出 ──
   // 只給店家圖檔(圖片/…、網址)；監視器、測速、紅綠燈等地圖上本來就有自己的圖示，不另外加
   var _pickPin = null, _pickHidden = null;
-  // 標記出現時，地圖上那間店原本的圖示先藏起來(只藏這一間：用同一層、同位置那個圖示的店名)，標記收掉再顯示回來
-  function hideBaseIcon(p) {
+  // 卡片用的名稱 → 地圖上實際的圖層；監視器、測速照相地圖上本來就有自己的立體圖示，不另外放標記
+  var PIN_LAYER_ALIAS = { 'signal-points': 'signal-single' }, PIN_SKIP = { 'cctv-point': 1, 'speed-point': 1 };
+  var _tileCache = {};
+  window._snmLogoTile = window._snmLogoTile || {};
+  // 地圖上離這個地點最近的那個圖示(同一層、6 公尺內)
+  function baseFeature(p, layer) {
     var m = window.map;
-    if (!m || !p.layer || !m.getLayer(p.layer)) return;
+    if (!m || !layer || !m.getLayer(layer) || p.lat == null) return null;
     var kx = 111320 * Math.cos(p.lat * Math.PI / 180), best = null, bd = 6;
-    m.queryRenderedFeatures({ layers: [p.layer] }).forEach(function (f) {
+    m.queryRenderedFeatures({ layers: [layer] }).forEach(function (f) {
       if (!f.geometry || f.geometry.type !== 'Point' || !f.properties || !f.properties.name) return;
       var c = f.geometry.coordinates, d = Math.hypot((c[0] - p.lng) * kx, (c[1] - p.lat) * 110540);
       if (d < bd) { bd = d; best = f; }
     });
+    return best;
+  }
+  // 這個圖示在地圖上用的是哪張圖(全聯依店名分大全聯/全聯福利中心)
+  function iconIdFor(layer, f) {
+    var v = window.map.getLayoutProperty(layer, 'icon-image');
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v) && v[0] === 'case' && Array.isArray(v[1]) && v[1][0] === 'in' && typeof v[1][1] === 'string')
+      return String((f.properties && f.properties.name) || '').indexOf(v[1][1]) >= 0 ? v[2] : v[3];
+    return null;
+  }
+  function tileUrl(id) {
+    if (!id) return null;
+    if (_tileCache[id]) return _tileCache[id];
+    var im = window.map.style && window.map.style.getImage && window.map.style.getImage(id);
+    if (!im || !im.data) return null;
+    var d = im.data, c = document.createElement('canvas'); c.width = d.width; c.height = d.height;
+    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d.data), d.width, d.height), 0, 0);
+    return (_tileCache[id] = c.toDataURL('image/png'));
+  }
+  // 標記出現時，地圖上那間店原本的圖示先藏起來(只藏這一間：用同一層、同位置那個圖示的店名)，標記收掉再顯示回來
+  function hideBaseIcon(p, layer, best) {
+    var m = window.map;
     if (!best) return;
-    var prevI = m.getPaintProperty(p.layer, 'icon-opacity'), prevT = m.getPaintProperty(p.layer, 'text-opacity');
+    var prevI = m.getPaintProperty(layer, 'icon-opacity'), prevT = m.getPaintProperty(layer, 'text-opacity');
     var hide = function (prev) { return ['case', ['==', ['get', 'name'], best.properties.name], 0, prev == null ? 1 : prev]; };
-    try { m.setPaintProperty(p.layer, 'icon-opacity', hide(prevI)); m.setPaintProperty(p.layer, 'text-opacity', hide(prevT)); } catch (_) { return; }
-    _pickHidden = { layer: p.layer, prevI: prevI, prevT: prevT };
+    try { m.setPaintProperty(layer, 'icon-opacity', hide(prevI)); m.setPaintProperty(layer, 'text-opacity', hide(prevT)); } catch (_) { return; }
+    _pickHidden = { layer: layer, prevI: prevI, prevT: prevT };
   }
   function restoreBaseIcon(h) {
     var m = window.map;
@@ -10884,15 +10915,19 @@ setTimeout(() => {
   function showPickPin(p) {
     hidePickPin();
     var logo = p && p.logo, plain = p && p.pin === 'plain';   // plain：長按地圖，用原本的紅色定位針(不包 logo)
-    if (!plain && (!logo || typeof logo !== 'string' || !/^(圖片\/|https?:)/.test(logo))) return;
-    if (p.lat == null || p.lng == null) return;
+    if (p.lat == null || p.lng == null || PIN_SKIP[p.layer]) return;
+    var layer = PIN_LAYER_ALIAS[p.layer] || p.layer, base = plain ? null : baseFeature(p, layer);
+    var tile = base ? tileUrl(iconIdFor(layer, base)) : null;   // 地圖上那個圖示(圓角加框)，標記裡放同一張
+    var imgLogo = typeof logo === 'string' && /^(圖片\/|https?:)/.test(logo);
+    if (!plain && !tile && !imgLogo) return;
+    if (tile && imgLogo) window._snmLogoTile[logo] = tile;   // 之後規劃路線的目的地標記也用同一張
     if (!window._snmMakeDestMarkerEl || !window.maplibregl || !window.map) return;
     var wrap = document.createElement('div');
     var inner = document.createElement('div'); inner.className = 'snmPickPin in';
-    inner.appendChild(window._snmMakeDestMarkerEl(plain ? '' : logo));
+    inner.appendChild(window._snmMakeDestMarkerEl(plain ? '' : (tile || logo)));
     wrap.appendChild(inner);
     _pickPin = new maplibregl.Marker({ element: wrap, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(window.map);
-    hideBaseIcon(p);
+    hideBaseIcon(p, layer, base);
   }
   window._snmOpenPlace = function (p) {
     if (window._snmAvoidPicking) return; // 正在地圖上點選要避開的道路
