@@ -5515,20 +5515,32 @@ function _flipCell(cell, from, to) {
     const m = Math.max(1, Math.round(sec / 60)), h = Math.floor(m / 60);
     return (h ? h + ' 小時 ' : '') + (m % 60) + ' 分鐘';
   }
-  // 估一條路線的耗油(只用來比較哪條比較省，不是真實油量)：
-  //   每段依平均車速算每公里耗油(太慢走走停停、太快風阻都比較耗，大約 50~60 km/h 最省)＋每次轉彎減速再加速＋塞車多花的時間怠速
+  // 估一條路線的耗油(公克，只用來比較哪條比較省，不是真實油量)：
+  //   1. 每段依「平均車速」查耗油：用 COPERT(歐洲官方車輛排放/耗油模型)汽油小客車的平均車速曲線，
+  //      平均車速低代表走走停停(停紅綠燈、起步)最耗油；70~90 km/h 最省；超過 110 才明顯變耗(風阻)。
+  //      所以國道定速行駛通常比繞市區省油，不會被誤判成比較耗
+  //   2. 每次轉彎減速再加速：約 12 公克
+  //   3. 塞車多花的時間(智行地圖即時路況)：走走停停約 0.4 公克/秒(約等於 10 km/h 爬行的耗油，比單純怠速耗)
+  const ECO_CURVE = [[10, 140], [20, 95], [30, 75], [40, 65], [50, 57], [60, 53], [70, 50], [80, 50], [90, 51], [100, 54], [110, 59], [120, 65], [130, 72]]; // [km/h, 公克/公里]
+  function ecoGramPerKm(v) {
+    if (v <= ECO_CURVE[0][0]) return ECO_CURVE[0][1];
+    for (let i = 1; i < ECO_CURVE.length; i++) {
+      const [v1, g1] = ECO_CURVE[i - 1], [v2, g2] = ECO_CURVE[i];
+      if (v <= v2) return g1 + (g2 - g1) * (v - v1) / (v2 - v1);
+    }
+    return ECO_CURVE[ECO_CURVE.length - 1][1];
+  }
   function ecoFuel(r, delaySec) {
     const steps = (r.legs && r.legs[0] && r.legs[0].steps) || [];
     let fuel = 0, turns = 0;
-    const perKm = v => (3 + 120 / Math.max(v, 5) + 0.00055 * v * v) / 100;   // 公升/公里(U 型曲線)
     steps.forEach(st => {
       const d = st.distance || 0, t = st.duration || 0;
-      if (d > 0) fuel += d / 1000 * perKm(t > 0 ? d / t * 3.6 : 40);
+      if (d > 0) fuel += d / 1000 * ecoGramPerKm(t > 0 ? d / t * 3.6 : 40);
       const m = st.maneuver || {};
       if (m.type && m.type !== 'depart' && m.type !== 'arrive' && m.modifier && m.modifier !== 'straight') turns++;
     });
-    if (!steps.length) fuel = r.distance / 1000 * perKm(r.duration > 0 ? r.distance / r.duration * 3.6 : 40);
-    return fuel + turns * 0.015 + (delaySec || 0) * 0.0002;
+    if (!steps.length) fuel = r.distance / 1000 * ecoGramPerKm(r.duration > 0 ? r.distance / r.duration * 3.6 : 40);
+    return fuel + turns * 12 + (delaySec || 0) * 0.4;
   }
   function ecoIndex(c) {
     if (!c || c.routes.length < 2 || !NAV_MODES[navMode].traffic) return -1;   // 開車、機車才算
