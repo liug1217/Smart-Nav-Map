@@ -2888,6 +2888,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._reloadCarsLayer === 'function') window._reloadCarsLayer();
     if (typeof window._reloadFwShields === 'function') window._reloadFwShields();
     if (typeof window._snmReloadAvoidLayer === 'function') window._snmReloadAvoidLayer();
+    if (typeof window._snmReloadCms3d === 'function') window._snmReloadCms3d();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -10879,6 +10880,8 @@ setTimeout(() => {
   }
   // 這個圖示在地圖上用的是哪張圖(全聯依店名分大全聯/全聯福利中心)
   function iconIdFor(layer, f) {
+    var ly = window.map.getLayer(layer);
+    if (!ly || ly.type !== 'symbol') return null;   // 圓點等圖層沒有圖示(例如電子看板點擊用的透明圓點)
     var v = window.map.getLayoutProperty(layer, 'icon-image');
     if (typeof v === 'string') return v;
     if (Array.isArray(v) && v[0] === 'case' && Array.isArray(v[1]) && v[1][0] === 'in' && typeof v[1][1] === 'string')
@@ -10897,7 +10900,7 @@ setTimeout(() => {
   // 標記出現時，地圖上那間店原本的圖示先藏起來(只藏這一間：用同一層、同位置那個圖示的店名)，標記收掉再顯示回來
   function hideBaseIcon(p, layer, best) {
     var m = window.map;
-    if (!best) return;
+    if (!best || !m.getLayer(layer) || m.getLayer(layer).type !== 'symbol') return;   // 只有圖示圖層才需要藏
     var prevI = m.getPaintProperty(layer, 'icon-opacity'), prevT = m.getPaintProperty(layer, 'text-opacity');
     var c = best.geometry.coordinates, dl = 1.5 / 110540, dg = 1.5 / (111320 * Math.cos(c[1] * Math.PI / 180));
     var box = { type: 'Polygon', coordinates: [[[c[0] - dg, c[1] - dl], [c[0] + dg, c[1] - dl], [c[0] + dg, c[1] + dl], [c[0] - dg, c[1] + dl], [c[0] - dg, c[1] - dl]]] };
@@ -12582,6 +12585,8 @@ setTimeout(() => {
 })();
 </script>
 
+<!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
+<script src="cms_3d.js?v=1"></script>
 </body>
 </html>
   
