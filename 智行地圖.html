@@ -5656,10 +5656,10 @@ function _flipCell(cell, from, to) {
   // 路線服務原生的「避開」選項(Valhalla costing_options)；沒有「山路」這種分類，最接近的是未鋪裝道路。
   // 國道、收費、渡輪在 Valhalla 只是「盡量不走」，沒別的路還是會走 → 算完用路線資料標的類別(cls)檢查，走到的路線丟掉
   const AVOID_OPTS = [
-    { k: 'highways', label: '國道(高速公路)', modes: ['car'], cls: 'motorway' },   // 機車本來就避開；只管國道，台61 這類快速道路不算
-    { k: 'tolls',    label: '收費路段',     modes: ['car'], cls: 'toll' },
-    { k: 'ferry',    label: '渡輪',         modes: ['car', 'scooter', 'bike', 'foot'], cls: 'ferry' },
-    { k: 'unpaved',  label: '未鋪裝道路(產業道路、山區小路常見)', modes: ['car', 'scooter', 'bike'] }
+    { k: 'highways', label: '避開高速公路', modes: ['car'], cls: 'motorway' },   // 機車本來就避開；只管國道，台61 這類快速道路不算
+    { k: 'tolls',    label: '避開收費路段',     modes: ['car'], cls: 'toll' },
+    { k: 'ferry',    label: '避開渡輪',         modes: ['car', 'scooter', 'bike', 'foot'], cls: 'ferry' },
+    { k: 'unpaved',  label: '避開泥土路', modes: ['car', 'scooter', 'bike'] }
   ];
   let _avoidOpts = {};
   try { _avoidOpts = JSON.parse(localStorage.getItem('snm_avoid_opts') || '{}') || {}; } catch (_) {}
@@ -5896,7 +5896,7 @@ function _flipCell(cell, from, to) {
     const box = document.getElementById('rpAvoid');
     if (!box || !routePanel.classList.contains('avoidOpen')) return;
     box.innerHTML = '';
-    const h0 = document.createElement('h4'); h0.textContent = '避開這類道路'; box.appendChild(h0);
+    
     const chips = document.createElement('div'); chips.className = 'rpAvChips';
     AVOID_OPTS.forEach(o => {
       if (o.modes.indexOf(navMode) < 0) return;
