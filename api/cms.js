@@ -3,14 +3,15 @@
 // 公路局伺服器沒有開放 CORS,瀏覽器不能直接抓,由這支後端代為抓取、合併位置後回傳。
 //
 // 資料來源(免金鑰):
-//   即時訊息 CMSLive.xml  每 60 秒更新
+//   即時訊息 CMSLive.xml  每 60 秒更新(照上游實際更新時間抓，見 lib/upstream.js)
 //   看板位置 CMS.xml      每天更新
 // 兩份用 CMSID 對起來,所有看板與訊息都原樣回傳,不做過濾。
 //
-// 回傳 { ok, data: { updateTime, count, items: [{ id, road, direction, mile, section,
+// 回傳 { ok, data: { updateTime, nextUpdateIn, count, items: [{ id, road, direction, mile, section,
 //        lon, lat, status, messageStatus, collectedAt, messages: [{ text, type, priority }] }] } }
 
 const { corsHeaders, handlePreflight, methodNotAllowed, ok, err } = require('../lib/response');
+const { feed } = require('../lib/upstream');
 
 const BASE = 'https://tisvcloud.freeway.gov.tw/history/motc20';
 const LIVE_URL = BASE + '/CMSLive.xml';
@@ -19,8 +20,8 @@ const STATIC_TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
 
 let staticCache = null; // { at, map: { CMSID -> 位置資料 } }
-const LIVE_TTL_MS = 30 * 1000;   // 即時訊息快取 30 秒：很多人同時看時，只向高公局抓一次
-let liveCache = null;           // { at, body }
+const liveFeed = feed(LIVE_URL, { periodMs: 60 * 1000, timeoutMs: FETCH_TIMEOUT_MS });
+let liveCache = null;           // { version, body }：上游沒更新就不重新解析
 
 function decodeXml(s) {
   return s
@@ -77,11 +78,12 @@ module.exports = async (req, res) => {
   if (handlePreflight(req, res)) return;
   if (req.method !== 'GET') return methodNotAllowed(res);
 
-  if (liveCache && Date.now() - liveCache.at < LIVE_TTL_MS) {
-    return ok(res, liveCache.body, { cache: 'public, s-maxage=15, stale-while-revalidate=30' });
-  }
   try {
-    const [liveXml, positions] = await Promise.all([fetchText(LIVE_URL), getStaticMap()]);
+    const [lf, positions] = await Promise.all([liveFeed.get(3000), getStaticMap()]);
+    if (liveCache && liveCache.version === lf.version) {
+      return ok(res, Object.assign({}, liveCache.body, { nextUpdateIn: liveFeed.nextUpdateIn }), { cache: 'no-cache' });
+    }
+    const liveXml = lf.body;
 
     const items = blocks(liveXml, 'CMSLive').map((b) => {
       const id = tag(b, 'CMSID');
@@ -106,11 +108,11 @@ module.exports = async (req, res) => {
     });
 
     const body = { updateTime: tag(liveXml, 'UpdateTime'), count: items.length, items };
-    liveCache = { at: Date.now(), body };
-    return ok(res, body, { cache: 'public, s-maxage=15, stale-while-revalidate=30' });
+    liveCache = { version: lf.version, body };
+    return ok(res, Object.assign({}, body, { nextUpdateIn: liveFeed.nextUpdateIn }), { cache: 'no-cache' });
   } catch (e) {
     console.error('[cms]', e.message);
-    if (liveCache) return ok(res, liveCache.body);   // 高公局暫時連不到：先給上一次的
+    if (liveCache) return ok(res, Object.assign({}, liveCache.body, { nextUpdateIn: liveFeed.nextUpdateIn }));   // 高公局暫時連不到：先給上一次的
     const cause = e.cause && (e.cause.code || e.cause.message);
     return err(res, 502, 'UPSTREAM_ERROR', '無法取得國道電子看板資料(' + e.message + (cause ? ' / ' + cause : '') + ')');
   }

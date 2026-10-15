@@ -7,11 +7,11 @@
 // 看板上多則訊息時跟實際看板一樣輪流顯示(每 5 秒)。點看板會打開卡片顯示完整訊息。
 (function () {
   'use strict';
-  var MIN_ZOOM = 15, MAX_SIGNS = 40, PAGE_MS = 5000, REFRESH_MS = 60 * 1000;   // 高公局看板訊息每分鐘更新，跟著每分鐘抓
+  var MIN_ZOOM = 15, MAX_SIGNS = 40, PAGE_MS = 5000, REFRESH_MS = 60 * 1000;   // 高公局看板訊息每分鐘更新；實際照後端說的下次更新時間(nextUpdateIn)來抓
   var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   var LAYER = 'snm-cms-3d', HIT_SRC = 'snm-cms-src', HIT_LAYER = 'cms-hit';
   var signs = [];            // [{ id, road, dir, mile, m, lon, lat, bearing, pages:[{text,type}] }]
-  var loadedAt = 0, loading = false, threeState = 'none';   // none / loading / ready / failed
+  var nextAt = 0, refreshTimer = null, loading = false, threeState = 'none';   // none / loading / ready / failed
   var visible = [];          // 目前畫出來的看板
   var models = {};           // id → { scene, board(mesh), page, pageAt, matrix }
   var renderer = null, camera = null;
@@ -23,10 +23,12 @@
   // ── 資料：抓看板、算每座看板面向哪裡 ──
   function loadSigns() {
     if (loading || document.hidden) return;
-    if (signs.length && Date.now() - loadedAt < 20000) return;   // 20 秒內剛抓過就不重抓(縮放、切回來時避免重複)；每分鐘計時器到點一定會重抓
+    if (signs.length && Date.now() < nextAt) return;   // 上游還沒更新，不用抓(縮放、切回來時也不會重複抓)
     loading = true;
+    var wait = 10000;   // 抓失敗：10 秒後再試
     fetch(apiBase() + '/cms').then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return;
+      wait = (j.data.nextUpdateIn || REFRESH_MS) + Math.random() * 1500;   // 上游一更新就來抓(加一點隨機，大家不要同一毫秒擠進來)
       var items = (j.data.items || []).filter(function (x) {
         return /^國道/.test(x.road || '') && /^[NSEW]$/.test(x.direction) && x.lon && x.lat && mileM(x.mile) != null;
       });
@@ -58,9 +60,16 @@
       // 已經吸附到車道的位置沿用，不用每分鐘重算
       var old = {}; signs.forEach(function (o) { if (o.snap) old[o.id] = o.snap; });
       list.forEach(function (n) { if (old[n.id]) n.snap = old[n.id]; });
-      signs = list; loadedAt = Date.now();
+      signs = list;
       updateHitSource(); refreshVisible();
-    }).catch(function () {}).then(function () { loading = false; });
+    }).catch(function () {}).then(function () {
+      loading = false; nextAt = Date.now() + wait;
+      clearTimeout(refreshTimer); refreshTimer = setTimeout(autoLoad, wait);
+    });
+  }
+  // 時間到自動更新：螢幕關著、地圖拉遠就先不抓(切回來 / 拉近時會補抓)
+  function autoLoad() {
+    if (!document.hidden && window.map && window.map.getZoom() >= MIN_ZOOM) loadSigns();
   }
   function cleanText(t) {
     return String(t || '').replace(/\(圖\)/g, '').replace(/\(至\)/g, '至').replace(/[\s　]+/g, ' ').trim();
@@ -339,8 +348,7 @@
     var go = function () { m.on('moveend', check); check(); };
     if (m.loaded()) go(); else m.once('load', go);
     pageTimer = setInterval(rotatePages, PAGE_MS);
-    setInterval(function () { if (!document.hidden && window.map && window.map.getZoom() >= MIN_ZOOM) loadSigns(); }, REFRESH_MS);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden && window.map && window.map.getZoom() >= MIN_ZOOM) loadSigns(); });
+    document.addEventListener('visibilitychange', autoLoad);
   }
   init();
 })();
