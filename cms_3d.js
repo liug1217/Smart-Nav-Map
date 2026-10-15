@@ -58,8 +58,8 @@
         }
       });
       // 已經吸附到車道的位置沿用，不用每分鐘重算
-      var old = {}; signs.forEach(function (o) { if (o.snap) old[o.id] = o.snap; });
-      list.forEach(function (n) { if (old[n.id]) n.snap = old[n.id]; });
+      var old = {}; signs.forEach(function (o) { old[o.id] = o; });
+      list.forEach(function (n) { var o = old[n.id]; if (o) { n.snap = o.snap; n.fit = o.fit; } });
       signs = list;
       updateHitSource(); refreshVisible();
     }).catch(function () {}).then(function () {
@@ -136,7 +136,8 @@
       m.quaternion.setFromUnitVectors(UP, d.normalize());
       g.add(m); return m;
     };
-    var SPAN = 11, H = 7, TH = 1.1, TZ = 0.42;   // 國道單向 3 線道＋路肩約 20 公尺，門架跨 22 公尺；桁架高 1.1、厚 0.84
+    // 門架寬度照那條路的實際路面寬度(3D 路面資料：車道數 × 3.75 + 路肩)，立柱在護欄外面；還沒有路面資料時先用 22 公尺
+    var SPAN = s.fit ? Math.max(7, s.fit.W / 2 + 0.9) : 11, H = 7, TH = 1.1, TZ = 0.42;   // 桁架高 1.1、厚 0.84
     [-SPAN, SPAN].forEach(function (px) {
       rod([px, 0, 0], [px, H + TH + 0.3, 0], 0.26);                                   // 圓柱立柱
       var base = new T.Mesh(new T.CylinderGeometry(0.5, 0.55, 0.25, 16), steel); base.position.set(px, 0.12, 0); g.add(base);   // 柱腳
@@ -200,9 +201,20 @@
       });
     }
   };
-  function signLon(s) { return s.snap ? s.snap.lon : s.lon; }
-  function signLat(s) { return s.snap ? s.snap.lat : s.lat; }
-  function signBearing(s) { return s.snap ? s.snap.bearing : s.bearing; }
+  // 位置優先用 3D 路面的中心線(fit)，其次底圖國道線(snap)，最後才是高公局座標
+  function signLon(s) { return s.fit ? s.fit.lon : s.snap ? s.snap.lon : s.lon; }
+  function signLat(s) { return s.fit ? s.fit.lat : s.snap ? s.snap.lat : s.lat; }
+  function signBearing(s) { return s.fit ? s.fit.bearing : s.snap ? s.snap.bearing : s.bearing; }
+  function fitSigns(list) {
+    if (!window._snmRoad3dFit) return false;
+    var changed = false;
+    list.forEach(function (s) {
+      if (s.fit) return;
+      var f = window._snmRoad3dFit(signLon(s), signLat(s), signBearing(s));
+      if (f) { s.fit = f; changed = true; }
+    });
+    return changed;
+  }
   // 地圖底圖的國道線(openmaptiles transportation 的 motorway)：找 60 公尺內、行車方向跟看板一致(差 50 度內)、最近的那條，把看板投影上去
   function snapSigns(list) {
     var m = window.map, need = list.filter(function (s) { return !s.snap && (s.snapTries || 0) < 4; });
@@ -251,13 +263,15 @@
     }).sort(function (a, b2) { return dist(a, { lon: c.lng, lat: c.lat }) - dist(b2, { lon: c.lng, lat: c.lat }); }).slice(0, MAX_SIGNS);
     var before = near.filter(function (s) { return !s.snap; }).length;
     snapSigns(near);
-    if (near.filter(function (s) { return !s.snap; }).length !== before) updateHitSource();   // 有看板吸附到車道了，點擊位置也跟著移
+    var fitted = fitSigns(near);
+    if (fitted || near.filter(function (s) { return !s.snap; }).length !== before) updateHitSource();   // 有看板吸附到車道了，點擊位置也跟著移
     near.forEach(function (s) {
       var md = models[s.id];
-      if (!md || md.key !== s.pages.map(function (p) { return p.text; }).join('|')) {   // 新看板或訊息換了才重建
+      var key = s.pages.map(function (p) { return p.text; }).join('|') + '#' + (s.fit ? s.fit.W : 0);
+      if (!md || md.key !== key) {   // 新看板、訊息換了、門架寬度變了才重建
         if (md) disposeModel(md);
         md = models[s.id] = buildModel(s);
-        md.key = s.pages.map(function (p) { return p.text; }).join('|');
+        md.key = key;
         md.sign = s;
       }
       md.group.rotation.y = -signBearing(s) * Math.PI / 180;   // 吸附到車道後方向可能變了
@@ -337,6 +351,9 @@
     ensureThree(function () { addLayer(); refreshVisible(); });
     if (threeState === 'ready') { addLayer(); refreshVisible(); }
   }
+  // 3D 路面資料載入後：門架改對準路面、寬度照路寬
+  var refitTimer = null;
+  window._snmOnRoad3dData = function () { clearTimeout(refitTimer); refitTimer = setTimeout(refreshVisible, 100); };
   // 換地圖樣式後圖層會被清掉，重加
   window._snmReloadCms3d = function () {
     renderer = null; models = {}; visible = [];
