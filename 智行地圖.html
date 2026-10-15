@@ -2509,16 +2509,18 @@ function _flipCell(cell, from, to) {
   // 每次都照固定順序整組重排(由下到上)：綠色道路 → 備選路線 → 導航路線 → 塞車線 → 路線箭頭 → 轉彎大箭頭。
   // 只搬「跑到建築上面的」會讓沒被搬的轉彎箭頭、備選路線被壓在導航路線/綠色道路底下
   (function () {
-    // 一般道路的綠線排在國道綠線下面：國道 3D 路面(road_3d.js)夾在中間，從國道底下穿過的路不會畫在國道路面上；
-    // 從國道上方跨過的陸橋另外一份(snm-road-3d-over-*)排在國道上面
-    const ORDER = [/^snm-roads-outline-(?!freeway$)/, /^snm-roads-line-(?!freeway$)/, /^snm-roads-outline-freeway$/, /^snm-roads-line-freeway$/,
-      /^snm-road-3d-over-casing$/, /^snm-road-3d-over-line$/, /^snm-roads-probe$/,
+    // 放大到國道 3D 路面出現時(window._snmRoad3dActive)：一般道路的綠線排在國道綠線下面，3D 路面(road_3d.js)夾在中間，
+    // 從國道底下穿過的路不會畫在國道路面上；從國道上方跨過的陸橋另外一份(snm-road-3d-over-*)排在國道上面。
+    // 平常照原本：外框全部在內線底下
+    const ROADS_NORMAL = [/^snm-roads-outline-/, /^snm-roads-line-/];
+    const ROADS_3D = [/^snm-roads-outline-(?!freeway$)/, /^snm-roads-line-(?!freeway$)/, /^snm-roads-outline-freeway$/, /^snm-roads-line-freeway$/];
+    const ORDER_TAIL = [/^snm-road-3d-over-casing$/, /^snm-road-3d-over-line$/, /^snm-roads-probe$/,
       /^routeOpt-other-casing$/, /^routeOpt-other$/, /^routeOpt-sel-casing$/, /^routeOpt-sel$/,
       /^navRoute-outline$/, /^navRoute-line$/,
       /^snm-traffic-casing$/, /^snm-traffic-lines$/, /^snm-traffic-points$/,
       /^navRoutePassed-outline$/, /^navRoutePassed-line$/,
       /^navRoute-arrows$/, /^navTurnArrow-casing$/, /^navTurnArrow-line$/, /^navTurnArrow-tail$/, /^navTurnArrow-head$/];
-    const rank = id => ORDER.findIndex(re => re.test(id));
+    const rank = id => (window._snmRoad3dActive ? ROADS_3D : ROADS_NORMAL).concat(ORDER_TAIL).findIndex(re => re.test(id));
     function sink() {
       const ls = (map.getStyle() || {}).layers || [];
       const bi = ls.findIndex(l => l.type === 'fill-extrusion' && l.id !== 'route');
@@ -12590,7 +12592,7 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="road_3d.js?v=3"></script>
+<script src="road_3d.js?v=4"></script>
 <script src="cms_3d.js?v=6"></script>
 </body>
 </html>

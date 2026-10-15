@@ -441,6 +441,14 @@
 
     // 路面
     strip(B.asphalt, -W / 2, right(W / 2), 0.03);
+    // 路的頭尾補圓形路面：匝道分岔、匯流、兩條路斜斜接在一起時，接縫不會凸出直角的階梯
+    [0, n - 1].forEach(function (k) {
+      var rad = (W + Math.min(0, shift[k])) / 2, c = [P[k][0], H[k] + 0.03, P[k][1]], seg = 16;
+      for (var j = 0; j < seg; j++) {
+        var a0 = j / seg * Math.PI * 2, a1 = (j + 1) / seg * Math.PI * 2;
+        B.asphalt.tri(c, [c[0] + Math.cos(a0) * rad, c[1], c[2] + Math.sin(a0) * rad], [c[0] + Math.cos(a1) * rad, c[1], c[2] + Math.sin(a1) * rad]);
+      }
+    });
     if (hb > 0) {   // 橋：路面兩側的橋面版側邊
       wall(B.concrete, -W / 2, -1, [[0, 0.03], [0, -0.5]]);
       wall(B.concrete, right(W / 2), 1, [[0, 0.03], [0, -0.5]]);
@@ -533,9 +541,12 @@
   function arrange() {
     var m = window.map;
     if (!m || !m.getLayer(LAYER) || !m.getLayer('snm-roads-line-main') || !m.getLayer('snm-roads-outline-freeway')) return;
+    // 主程式照 window._snmRoad3dActive 排路線圖層(放大到 3D 才把一般道路綠線排到國道下面)
+    var on = m.getZoom() >= MIN_ZOOM;
+    if (window._snmRoad3dActive !== on) { window._snmRoad3dActive = on; if (window.snmSinkRouteLayers) window.snmSinkRouteLayers(); }
     var order = (m.style && m.style._order) || [];
-    if (order.indexOf(LAYER) !== order.indexOf('snm-roads-outline-freeway') - 1) m.moveLayer(LAYER, 'snm-roads-outline-freeway');
-    {
+    if (on && order.indexOf(LAYER) !== order.indexOf('snm-roads-outline-freeway') - 1) m.moveLayer(LAYER, 'snm-roads-outline-freeway');
+    if (on) {
       if (!m.getLayer(OVER + '-casing')) {
         var cls = ['match', ['get', 'class'], ['primary', 'secondary', 'tertiary', 'minor', 'service'], true, false];
         var filter = ['all', cls, ['==', ['get', 'brunnel'], 'bridge']];
@@ -546,6 +557,11 @@
           layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': m.getPaintProperty('snm-roads-line-main', 'line-color') || '#16E098', 'line-width': 11, 'line-opacity': 0.95 } }, 'snm-roads-outline-freeway');
       }
     }
+    // 國道路況綠線在 3D 路面出現時變細(還是看得到路況，但不會蓋住整條路面的車道)
+    [['snm-roads-outline-freeway', 8], ['snm-roads-line-freeway', 5]].forEach(function (x) {
+      var id = x[0], cur = m.getPaintProperty(id, 'line-width');
+      if (typeof cur === 'number') m.setPaintProperty(id, 'line-width', ['step', ['zoom'], cur, MIN_ZOOM, x[1]]);
+    });
     // 陸橋那份跟著一般道路綠線的顯示 / 隱藏
     var vis = m.getLayoutProperty('snm-roads-line-main', 'visibility') || 'visible';
     [OVER + '-casing', OVER + '-line'].forEach(function (id) { if (m.getLayer(id) && m.getLayoutProperty(id, 'visibility') !== vis) m.setLayoutProperty(id, 'visibility', vis); });
