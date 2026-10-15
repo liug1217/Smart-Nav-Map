@@ -163,7 +163,7 @@
     var origin = maplibregl.MercatorCoordinate.fromLngLat([(box.w + box.e) / 2, (box.n + box.s) / 2], 0), sc = origin.meterInMercatorCoordinateUnits();
     var levels = {};
     var bucketsOf = function (lvl) {
-      return levels[lvl] = levels[lvl] || { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket() };
+      return levels[lvl] = levels[lvl] || { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket(), greenEdge: new Bucket(), green: new Bucket() };
     };
     var lines = {};   // 路 id → 這塊圖磚座標的線(建路、畫槽化線共用)
     var lineOf = function (w) { return lines[w.id] = lines[w.id] || prepLine(w, origin, sc); };
@@ -200,7 +200,15 @@
         sep[w.id][i === 0 ? 'start' : 'end'] = u;
       });
     });
-    t.ids.forEach(function (id) { var w = ways[id]; if (w) { var ln = lineOf(w); if (ln) buildWay(w, ln, bucketsOf(levelOf(w)), nearJunc, sep[w.id]); } });
+    // 道路交叉、重疊的地方：護欄、標線落在別條路的路面上就不畫(附近圖磚的路也算進來)
+    var e = t.ext || box, near = [];
+    Object.keys(ways).forEach(function (id) {
+      var w = ways[id];
+      if (t.ids.indexOf(id) < 0 && !w.coords.some(function (c) { return c[0] > e.w - 0.002 && c[0] < e.e + 0.002 && c[1] > e.s - 0.002 && c[1] < e.n + 0.002; })) return;
+      var ln = lineOf(w); if (ln) near.push({ w: w, ln: ln });
+    });
+    var cover = makeCover(near);
+    t.ids.forEach(function (id) { var w = ways[id]; if (w) { var ln = lineOf(w); if (ln) buildWay(w, ln, bucketsOf(levelOf(w)), nearJunc, sep[w.id], cover); } });
 
     var out = [];
     Object.keys(levels).map(Number).sort(function (a, b) { return a - b; }).forEach(function (lvl) {
@@ -212,6 +220,8 @@
         g.computeVertexNormals();
         var mesh = new T.Mesh(g, mats[k]);
         if (k === 'white' || k === 'yellow') mesh.renderOrder = 2;
+        if (k === 'greenEdge') mesh.renderOrder = 3;
+        if (k === 'green') mesh.renderOrder = 4;
         if (k === 'asphalt') (deck = deck || makeScene()).add(mesh); else (rest = rest || makeScene()).add(mesh);
       });
       if (deck || rest) out.push({ lvl: lvl, deck: deck, rest: rest });
@@ -359,7 +369,39 @@
     return sepU;
   }
 
-  function buildWay(w, ln, B, nearJunc, sep) {
+  // 路面覆蓋查詢：某一點是不是在「別條路」的路面上(用 25 公尺格子加速)
+  //   rail：護欄在同層或更高層的路面上 → 不畫(護欄不會橫過路面)
+  //   mark：標線在更高層的路面上，或同層的主線路面上(匝道讓主線) → 不畫
+  function makeCover(list) {
+    var CELL = 25, grid = {};
+    list.forEach(function (it) {
+      var ln = it.ln, half = section(it.w).W / 2, lv = levelOf(it.w);
+      for (var k = 0; k < ln.n - 1; k++) {
+        var a = ln.P[k], b = ln.P[k + 1];
+        var x0 = Math.floor((Math.min(a[0], b[0]) - half) / CELL), x1 = Math.floor((Math.max(a[0], b[0]) + half) / CELL);
+        var z0 = Math.floor((Math.min(a[1], b[1]) - half) / CELL), z1 = Math.floor((Math.max(a[1], b[1]) + half) / CELL);
+        for (var x = x0; x <= x1; x++) for (var z = z0; z <= z1; z++) (grid[x + ',' + z] = grid[x + ',' + z] || []).push({ w: it.w, a: a, b: b, half: half, lv: lv });
+      }
+    });
+    return function (p, w, kind) {
+      var list2 = grid[Math.floor(p[0] / CELL) + ',' + Math.floor(p[1] / CELL)];
+      if (!list2) return false;
+      var lvA = levelOf(w);
+      for (var i = 0; i < list2.length; i++) {
+        var g = list2[i];
+        if (g.w === w) continue;
+        if (kind === 'rail' ? g.lv < lvA : !(g.lv > lvA || (g.lv === lvA && (!g.w.link || w.link)))) continue;
+        var dx = g.b[0] - g.a[0], dz = g.b[1] - g.a[1], L2 = dx * dx + dz * dz;
+        if (!L2) continue;
+        var t = ((p[0] - g.a[0]) * dx + (p[1] - g.a[1]) * dz) / L2;
+        if (t < 0 || t > 1) continue;   // 超出那條路的頭尾不算(前後相接的路才不會互相吃掉)
+        if (Math.hypot(p[0] - g.a[0] - dx * t, p[1] - g.a[1] - dz * t) < g.half - (kind === 'rail' ? 0.5 : 0.3)) return true;
+      }
+      return false;
+    };
+  }
+  function buildWay(w, ln, B, nearJunc, sep, cover) {
+    var hidden = function (x, z, kind) { return cover ? cover([x, z], w, kind) : false; };
     var P = ln.P, S = ln.S, L = ln.L, n = ln.n, segR = ln.segR, R = ln.R, H = ln.H, hb = ln.hb;
     // 偏移 o 可以是數字，或 function(k)(右側跟著車道縮減漸變的那些線)
     var pt = function (k, o, y) { var v = typeof o === 'function' ? o(k) : o; return [P[k][0] + R[k][0] * v, H[k] + y, P[k][1] + R[k][1] * v]; };
@@ -382,7 +424,12 @@
     var sepS = sep ? sep.start : 0, sepE = sep ? sep.end : 0;
     var onMain = function (k) { return S[k + 1] <= sepS || S[k] >= L - sepE; };
     var strip = function (bk, o1, o2, y, skip) {
-      for (var k = 0; k < n - 1; k++) if (!skip || !skip(k)) bk.quad(pt(k, o1, y), pt(k, o2, y), pt(k + 1, o2, y), pt(k + 1, o1, y));
+      for (var k = 0; k < n - 1; k++) {
+        if (skip && skip(k)) continue;
+        var q = [pt(k, o1, y), pt(k, o2, y), pt(k + 1, o2, y), pt(k + 1, o1, y)];
+        if (bk !== B.asphalt && hidden((q[0][0] + q[2][0]) / 2, (q[0][2] + q[2][2]) / 2, 'mark')) continue;   // 標線落在別條路上
+        bk.quad(q[0], q[1], q[2], q[3]);
+      }
     };
     var dashed = function (bk, o, wd, y) {
       // 沿線走，每 10 公尺畫 4 公尺；縮減掉的車道那段不畫
@@ -399,6 +446,7 @@
           var x0 = P[k][0] + (P[k + 1][0] - P[k][0]) * t0, z0 = P[k][1] + (P[k + 1][1] - P[k][1]) * t0;
           var x1 = P[k][0] + (P[k + 1][0] - P[k][0]) * t1, z1 = P[k][1] + (P[k + 1][1] - P[k][1]) * t1;
           var h = wd / 2;
+          if (hidden((x0 + x1) / 2 + r[0] * o, (z0 + z1) / 2 + r[1] * o, 'mark')) continue;
           bk.quad([x0 + r[0] * (o - h), y0, z0 + r[1] * (o - h)], [x0 + r[0] * (o + h), y0, z0 + r[1] * (o + h)],
                   [x1 + r[0] * (o + h), y1, z1 + r[1] * (o + h)], [x1 + r[0] * (o - h), y1, z1 + r[1] * (o - h)]);
         }
@@ -409,6 +457,8 @@
       for (var k = 0; k < n - 1; k++) {
         if (skip && skip(k)) continue;
         var o0 = typeof o === 'function' ? o(k) : o, o1 = typeof o === 'function' ? o(k + 1) : o;
+        var m0 = pt(k, o0, 0), m1 = pt(k + 1, o1, 0);
+        if (hidden((m0[0] + m1[0]) / 2, (m0[2] + m1[2]) / 2, 'rail')) continue;   // 護欄落在別條路上(交叉、匯流處)
         for (var j = 0; j < profile.length - 1; j++) {
           var p0 = profile[j], p1 = profile[j + 1];
           bk.quad(pt(k, o0 + side * p0[0], p0[1]), pt(k, o0 + side * p1[0], p1[1]), pt(k + 1, o1 + side * p1[0], p1[1]), pt(k + 1, o1 + side * p0[0], p0[1]));
@@ -425,6 +475,7 @@
           var tt = (st - S[k]) / (S[k + 1] - S[k]), r = segR[k], f = [r[1], -r[0]];   // f：沿線方向(往前)
           var ov = (typeof o === 'function' ? o(k) * (1 - tt) + o(k + 1) * tt : o) + side * 0.12;
           var cx = P[k][0] + (P[k + 1][0] - P[k][0]) * tt + r[0] * ov, cz = P[k][1] + (P[k + 1][1] - P[k][1]) * tt + r[1] * ov;
+          if (hidden(cx, cz, 'rail')) continue;
           var y0 = H[k] + (H[k + 1] - H[k]) * tt, y1 = y0 + 0.78, hw = 0.07;
           var c = [[-hw, -hw], [hw, -hw], [hw, hw], [-hw, hw]].map(function (q) { return [cx + r[0] * q[0] + f[0] * q[1], cz + r[1] * q[0] + f[1] * q[1]]; });
           for (var e = 0; e < 4; e++) {
@@ -459,6 +510,10 @@
     var edge = function (o, side, skip) {   // 外側：橋上混凝土、平地鋼板
       if (hb > 0) wall(B.concrete, o, side, parapet, skip); else guardrail(o, side, skip);
     };
+    // 沒塞車的路況綠線畫在 3D 路面中間(跟著曲線、高架)，取代平面的國道綠線
+    var gc = w.oneway ? (a + b) / 2 : 0;
+    strip(B.greenEdge, gc - 0.95, gc + 0.95, my + 0.01, onMain);
+    strip(B.green, gc - 0.7, gc + 0.7, my + 0.02, onMain);
     if (w.oneway) {
       strip(B.yellow, a, a + 0.15, my, onMain);             // 內側路面邊線(黃實線)
       strip(B.white, right(b - 0.15), right(b), my, onMain);   // 外側路面邊線(白實線)
@@ -493,6 +548,8 @@
       steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: ds }),
       white: mark(0xF4F4F4),
       yellow: mark(0xF2BE1A),
+      greenEdge: mark(0x009B65),   // 路況綠線(同導航路線的顏色)：外框
+      green: mark(0x16E098),
     };
   }
 
@@ -508,6 +565,8 @@
     render: function (gl, matrix) {
       var m = window.map;
       if (!renderer || m.getZoom() < MIN_ZOOM) return;
+      var gv = m.getLayer('snm-roads-line-freeway') ? m.getLayoutProperty('snm-roads-line-freeway', 'visibility') !== 'none' : true;
+      if (mats && mats.green.visible !== gv) { mats.green.visible = gv; mats.greenEdge.visible = gv; }   // 路況綠線跟著主程式的開關
       var T = window.THREE, mapM = new T.Matrix4().fromArray(matrix), b = m.getBounds(), list = [], lvls = {};
       Object.keys(tiles).forEach(function (k) {
         var c = tiles[k].chunk;
@@ -557,8 +616,14 @@
           layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': m.getPaintProperty('snm-roads-line-main', 'line-color') || '#16E098', 'line-width': 11, 'line-opacity': 0.95 } }, 'snm-roads-outline-freeway');
       }
     }
-    // 國道路況綠線在 3D 路面出現時變細(還是看得到路況，但不會蓋住整條路面的車道)
-    [['snm-roads-outline-freeway', 8], ['snm-roads-line-freeway', 5]].forEach(function (x) {
+    // 底圖自己畫的國道、快速道路線(很寬的米黃色帶)：3D 路面出現時隱藏，不然會從兩個方向車道中間的空地露出來(隧道照舊)
+    (m.getStyle().layers || []).forEach(function (l) {
+      if (l.source !== 'openmaptiles' || l.type !== 'line' || !/^(road|bridge)_.*(motorway|trunk)/.test(l.id)) return;
+      if (m.getPaintProperty(l.id, 'line-opacity') !== undefined) return;   // 已經設過(或底圖本來有設)
+      m.setPaintProperty(l.id, 'line-opacity', ['step', ['zoom'], 1, MIN_ZOOM, ['case', ['match', ['get', 'class'], ['motorway', 'trunk'], true, false], 0, 1]]);
+    });
+    // 平面的國道路況綠線在 3D 路面出現時隱藏：改畫在 3D 路面上(跟著曲線、高架，不會亂穿過匝道)
+    [['snm-roads-outline-freeway', 0], ['snm-roads-line-freeway', 0]].forEach(function (x) {
       var id = x[0], cur = m.getPaintProperty(id, 'line-width');
       if (typeof cur === 'number') m.setPaintProperty(id, 'line-width', ['step', ['zoom'], cur, MIN_ZOOM, x[1]]);
     });
