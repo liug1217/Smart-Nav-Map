@@ -110,24 +110,42 @@
   // ── 3D 模型(公尺；+x 往右、+y 往上、看板正面朝 +z，之後轉到面向來車) ──
   function buildModel(s) {
     var T = window.THREE, g = new T.Group();
-    var steel = new T.MeshLambertMaterial({ color: 0xA7AEB5 }), dark = new T.MeshLambertMaterial({ color: 0x2A2D31 });
+    // 鍍鋅鋼：淺灰、帶一點金屬反光；看板箱體深灰
+    var steel = new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 70 });
+    var dark = new T.MeshPhongMaterial({ color: 0x24272B, specular: 0x333333, shininess: 30 });
     var box = function (w, h, d, mat, x, y, z) { var m = new T.Mesh(new T.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
-    var SPAN = 11, H = 7;   // 國道單向 3 線道＋路肩約 20 公尺，門架跨 22 公尺
+    var UP = new T.Vector3(0, 1, 0);
+    // 兩點之間的圓管
+    var rod = function (a, b, r, mat) {
+      var A = new T.Vector3(a[0], a[1], a[2]), B = new T.Vector3(b[0], b[1], b[2]), d = B.clone().sub(A), len = d.length();
+      var m = new T.Mesh(new T.CylinderGeometry(r, r, len, 12), mat || steel);
+      m.position.copy(A.clone().add(B).multiplyScalar(0.5));
+      m.quaternion.setFromUnitVectors(UP, d.normalize());
+      g.add(m); return m;
+    };
+    var SPAN = 11, H = 7, TH = 1.1, TZ = 0.42;   // 國道單向 3 線道＋路肩約 20 公尺，門架跨 22 公尺；桁架高 1.1、厚 0.84
     [-SPAN, SPAN].forEach(function (px) {
-      box(0.45, H + 1.2, 0.45, steel, px, (H + 1.2) / 2, 0);      // 立柱
-      box(0.9, 0.25, 0.9, steel, px, 0.12, 0);                     // 柱腳
+      rod([px, 0, 0], [px, H + TH + 0.3, 0], 0.26);                                   // 圓柱立柱
+      var base = new T.Mesh(new T.CylinderGeometry(0.5, 0.55, 0.25, 16), steel); base.position.set(px, 0.12, 0); g.add(base);   // 柱腳
+      var cap = new T.Mesh(new T.CylinderGeometry(0.3, 0.26, 0.12, 16), steel); cap.position.set(px, H + TH + 0.36, 0); g.add(cap); // 柱頂蓋
     });
-    // 桁架：上下弦桿＋前後兩片＋斜撐
-    [-0.35, 0.35].forEach(function (z) {
-      box(SPAN * 2 + 0.6, 0.14, 0.14, steel, 0, H, z);
-      box(SPAN * 2 + 0.6, 0.14, 0.14, steel, 0, H + 1.0, z);
-      for (var i = -SPAN; i < SPAN; i += 1.2) {
-        var d = new T.Mesh(new T.BoxGeometry(0.08, 1.4, 0.08), steel);
-        d.position.set(i + 0.6, H + 0.5, z); d.rotation.z = (Math.round((i + SPAN) / 1.2) % 2 ? 1 : -1) * 0.7; g.add(d);
+    // 桁架：前後兩片，每片上下弦桿＋豎桿＋斜撐(圓管)，前後之間再用橫桿連起來
+    var L = SPAN + 0.3, step = 1.1;
+    [-TZ, TZ].forEach(function (z) {
+      rod([-L, H, z], [L, H, z], 0.085);
+      rod([-L, H + TH, z], [L, H + TH, z], 0.085);
+      var k = 0;
+      for (var x = -SPAN; x < SPAN - 0.01; x += step, k++) {
+        rod([x, H, z], [x, H + TH, z], 0.04);                                                    // 豎桿
+        rod(k % 2 ? [x, H, z] : [x, H + TH, z], k % 2 ? [x + step, H + TH, z] : [x + step, H, z], 0.04); // 斜撐(左右交錯)
       }
+      rod([SPAN, H, z], [SPAN, H + TH, z], 0.04);
     });
+    for (var x2 = -SPAN; x2 <= SPAN + 0.01; x2 += step * 2) {
+      rod([x2, H, -TZ], [x2, H, TZ], 0.035); rod([x2, H + TH, -TZ], [x2, H + TH, TZ], 0.035);
+    }
     // LED 看板：黑色箱體＋正面發光面板(用 MeshBasic，不受光線影響，夜裡也看得清楚)
-    var BW = 8, BH = 2.3, BY = H + 1.0 + BH / 2 + 0.15;
+    var BW = 8, BH = 2.3, BY = H + TH + BH / 2 + 0.15;
     box(BW + 0.3, BH + 0.3, 0.6, dark, 0.8, BY, 0);
     var tex = new T.CanvasTexture(boardCanvas(s.pages[0])); tex.anisotropy = 4;
     var face = new T.Mesh(new T.PlaneGeometry(BW, BH), new T.MeshBasicMaterial({ map: tex }));
@@ -137,14 +155,15 @@
     // 左邊綠底里程牌
     var mt = new T.CanvasTexture(mileCanvas(s));
     var mile = new T.Mesh(new T.PlaneGeometry(2.4, 0.8), new T.MeshBasicMaterial({ map: mt }));
-    mile.position.set(-5.4, H + 0.5, 0.45); g.add(mile);
-    box(2.5, 0.9, 0.08, dark, -5.4, H + 0.5, 0.4);
-    g.rotation.y = -s.bearing * Math.PI / 180;   // 正面(+z)轉到面向來車
+    mile.position.set(-5.4, H + TH / 2, TZ + 0.12); g.add(mile);
+    box(2.5, 0.9, 0.08, dark, -5.4, H + TH / 2, TZ + 0.07);
+    g.rotation.y = -signBearing(s) * Math.PI / 180;   // 正面(+z)轉到面向來車
     var scene = new T.Scene();
-    scene.add(new T.AmbientLight(0xffffff, 0.75));
-    var sun = new T.DirectionalLight(0xffffff, 0.55); sun.position.set(0.4, 1, 0.6); scene.add(sun);
+    scene.add(new T.AmbientLight(0xffffff, 0.6));
+    var sun = new T.DirectionalLight(0xffffff, 0.7); sun.position.set(0.4, 1, 0.6); scene.add(sun);
+    var fill = new T.DirectionalLight(0xffffff, 0.25); fill.position.set(-0.6, 0.4, -0.5); scene.add(fill);   // 背光面也看得出圓管立體感
     scene.add(g);
-    return { scene: scene, face: face, tex: tex, page: 0 };
+    return { scene: scene, group: g, face: face, tex: tex, page: 0 };
   }
 
   // ── MapLibre 自訂圖層：每座看板一個模型，用地圖的投影矩陣畫 ──
@@ -168,8 +187,44 @@
       });
     }
   };
+  function signLon(s) { return s.snap ? s.snap.lon : s.lon; }
+  function signLat(s) { return s.snap ? s.snap.lat : s.lat; }
+  function signBearing(s) { return s.snap ? s.snap.bearing : s.bearing; }
+  // 地圖底圖的國道線(openmaptiles transportation 的 motorway)：找 60 公尺內、行車方向跟看板一致(差 50 度內)、最近的那條，把看板投影上去
+  function snapSigns(list) {
+    var m = window.map, need = list.filter(function (s) { return !s.snap && (s.snapTries || 0) < 4; });
+    if (!need.length || !m.getSource('openmaptiles')) return;
+    var feats;
+    try { feats = m.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation', filter: ['==', ['get', 'class'], 'motorway'] }); } catch (_) { return; }
+    var lines = [];
+    feats.forEach(function (f) {
+      var g = f.geometry, one = f.properties && f.properties.oneway;
+      (g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).forEach(function (c) { if (c.length > 1) lines.push({ c: c, oneway: one }); });
+    });
+    need.forEach(function (s) {
+      s.snapTries = (s.snapTries || 0) + 1;
+      var kx = 111320 * Math.cos(s.lat * Math.PI / 180), ky = 110540, best = null;
+      lines.forEach(function (ln) {
+        var c = ln.c;
+        for (var i = 0; i < c.length - 1; i++) {
+          var ax = (c[i][0] - s.lon) * kx, ay = (c[i][1] - s.lat) * ky, bx = (c[i + 1][0] - s.lon) * kx, by = (c[i + 1][1] - s.lat) * ky;
+          var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+          if (!L2) continue;
+          var t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)), d = Math.hypot(ax + t * dx, ay + t * dy);
+          if (d > 60 || (best && d >= best.d)) continue;
+          var b = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+          if (ln.oneway === -1) b = (b + 180) % 360;                       // 逆向畫的單行道
+          var diff = Math.abs(((b - s.bearing) % 360 + 540) % 360 - 180);
+          if (!ln.oneway && diff > 90) { b = (b + 180) % 360; diff = 180 - diff; }   // 雙向一條線：取跟看板同方向
+          if (diff > 50) continue;
+          best = { d: d, lon: c[i][0] + (c[i + 1][0] - c[i][0]) * t, lat: c[i][1] + (c[i + 1][1] - c[i][1]) * t, bearing: b };
+        }
+      });
+      if (best) s.snap = best;
+    });
+  }
   function modelMatrix(s) {
-    var T = window.THREE, mc = maplibregl.MercatorCoordinate.fromLngLat([s.lon, s.lat], 0), sc = mc.meterInMercatorCoordinateUnits();
+    var T = window.THREE, mc = maplibregl.MercatorCoordinate.fromLngLat([signLon(s), signLat(s)], 0), sc = mc.meterInMercatorCoordinateUnits();
     return new T.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new T.Vector3(sc, -sc, sc)).multiply(new T.Matrix4().makeRotationAxis(new T.Vector3(1, 0, 0), Math.PI / 2));
   }
 
@@ -181,6 +236,9 @@
     var near = signs.filter(function (s) {
       return s.lon > b.getWest() - padLon && s.lon < b.getEast() + padLon && s.lat > b.getSouth() - padLat && s.lat < b.getNorth() + padLat;
     }).sort(function (a, b2) { return dist(a, { lon: c.lng, lat: c.lat }) - dist(b2, { lon: c.lng, lat: c.lat }); }).slice(0, MAX_SIGNS);
+    var before = near.filter(function (s) { return !s.snap; }).length;
+    snapSigns(near);
+    if (near.filter(function (s) { return !s.snap; }).length !== before) updateHitSource();   // 有看板吸附到車道了，點擊位置也跟著移
     near.forEach(function (s) {
       var md = models[s.id];
       if (!md || md.key !== s.pages.map(function (p) { return p.text; }).join('|')) {   // 新看板或訊息換了才重建
@@ -189,6 +247,7 @@
         md.key = s.pages.map(function (p) { return p.text; }).join('|');
         md.sign = s;
       }
+      md.group.rotation.y = -signBearing(s) * Math.PI / 180;   // 吸附到車道後方向可能變了
       md.matrix = modelMatrix(s);
     });
     // 離開畫面很久的模型釋放掉(超過 120 座就清)
@@ -218,7 +277,7 @@
     var m = window.map;
     if (!m) return;
     var data = { type: 'FeatureCollection', features: signs.map(function (s) {
-      return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] }, properties: { id: s.id, name: s.road + ' ' + s.mile } };
+      return { type: 'Feature', geometry: { type: 'Point', coordinates: [signLon(s), signLat(s)] }, properties: { id: s.id, name: s.road + ' ' + s.mile } };
     }) };
     if (m.getSource(HIT_SRC)) { m.getSource(HIT_SRC).setData(data); return; }
     m.addSource(HIT_SRC, { type: 'geojson', data: data });
@@ -233,7 +292,7 @@
       if (!s || !window._snmOpenPlace) return;
       var md = models[s.id], logo = boardCanvas(s.pages[md ? md.page : 0]).toDataURL('image/png');
       window._snmOpenPlace({ layer: HIT_LAYER, name: s.road + ' ' + DIR_NAME[s.dir] + ' ' + (s.m / 1000).toFixed(1) + 'K 電子看板',
-        kind: '即時訊息' + (s.section ? ' · ' + s.section : ''), logo: logo, logoShape: 'bare', lat: s.lat, lng: s.lon,
+        kind: '即時訊息' + (s.section ? ' · ' + s.section : ''), logo: logo, logoShape: 'bare', lat: signLat(s), lng: signLon(s),
         info: s.pages.map(function (p) { return p.text; }), noReport: true });
     });
     m.on('mouseenter', HIT_LAYER, function () { m.getCanvas().style.cursor = 'pointer'; });
