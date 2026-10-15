@@ -199,6 +199,7 @@
         var u = gore(w, ll, i === 0, main, lm, bucketsOf(levelOf(main))) || 0;
         sep[w.id] = sep[w.id] || { start: 0, end: 0 };
         sep[w.id][i === 0 ? 'start' : 'end'] = u;
+        sep[w.id][i === 0 ? 'onMainStart' : 'onMainEnd'] = true;   // 這頭接在主線上
       });
     });
     // 道路交叉、重疊的地方：護欄、標線落在別條路的路面上就不畫(附近圖磚的路也算進來)
@@ -283,7 +284,7 @@
   // OSM 的南下、北上兩條線間距差很多，照畫的話分隔島一下很寬一下貼在一起。可以有寬有窄，但不能差太多：
   // 找出每段主線的對向車道(同一層、方向相反、55 公尺內)，兩邊路面內緣的距離超出 MEDIAN_MIN～MEDIAN_MAX 才往回拉(兩邊各移一半)，
   // 範圍內的照原本資料不動；移動量沿路慢慢變化(約 30 公尺)，35～55 公尺的慢慢放開(交流道附近上下行分很開的地方維持原樣)。
-  var MEDIAN_MIN = 0.7, MEDIAN_MAX = 4, oppGrid = null;
+  var MEDIAN_MIN = 1.0, MEDIAN_MAX = 3.0, oppGrid = null;
   function makeOppGrid(e, origin, sc) {
     var CELL = 60, grid = {};
     Object.keys(ways).forEach(function (id) {
@@ -309,8 +310,8 @@
   }
   function limitMedian(w, P) {
     if (!oppGrid || w.link || !w.oneway || P.length < 2) return P;
-    var n = P.length, half = section(w).W / 2, lv = levelOf(w), shift = new Array(n), any = false;
-    for (var i = 0; i < n; i++) {
+    var n = P.length, half = section(w).W / 2, lv = levelOf(w), shift = new Array(n), gaps = new Array(n), wgts = new Array(n), any = false, i;
+    for (i = 0; i < n; i++) {
       var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
       var dir = [dx / L, dz / L], rgt = [-dir[1], dir[0]], p = P[i], best = null, seen = [];
       var cx = Math.floor(p[0] / oppGrid.CELL), cz = Math.floor(p[1] / oppGrid.CELL);
@@ -328,15 +329,32 @@
           best = { dist: dist, half: g.half };
         });
       }
-      shift[i] = 0;
-      if (!best) continue;
-      var gap = best.dist - half - best.half, wgt = best.dist <= 35 ? 1 : (55 - best.dist) / 20;
-      var target = Math.max(MEDIAN_MIN, Math.min(MEDIAN_MAX, gap));
-      if (target !== gap) { shift[i] = (gap - target) / 2 * wgt; any = true; }   // 正 = 往左(往對向)移
+      gaps[i] = best ? best.dist - half - best.half : null;
+      wgts[i] = best ? (best.dist <= 35 ? 1 : (55 - best.dist) / 20) : 0;
+      if (best) any = true;
     }
     if (!any) return P;
-    // 移動量沿路平滑(前後各約 15 公尺)，寬窄變化是慢慢的
-    var sm = shift.map(function (_, i) { var s2 = 0, c = 0; for (var j = Math.max(0, i - 5); j <= Math.min(n - 1, i + 5); j++) { s2 += shift[j]; c++; } return s2 / c; });
+    var D = [0];
+    for (i = 1; i < n; i++) D[i] = D[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+    // 沿路距離 ±r 公尺的平均(只算有值的點)
+    var avg = function (arr, r, ok) {
+      var out = new Array(n), lo = 0, hi = -1, sum = 0, cnt = 0;
+      for (var k = 0; k < n; k++) {
+        while (hi + 1 < n && D[hi + 1] <= D[k] + r) { hi++; if (ok(hi)) { sum += arr[hi]; cnt++; } }
+        while (D[lo] < D[k] - r) { if (ok(lo)) { sum -= arr[lo]; cnt--; } lo++; }
+        out[k] = cnt ? sum / cnt : null;
+      }
+      return out;
+    };
+    // 分隔島寬度：沿路 ±60 公尺平均後限制在範圍內 → 目標寬度(慢慢變、不會差很多)
+    var smGap = avg(gaps, 60, function (k) { return gaps[k] !== null; });
+    for (i = 0; i < n; i++) {
+      if (gaps[i] === null || smGap[i] === null) { shift[i] = 0; continue; }
+      var target = Math.max(MEDIAN_MIN, Math.min(MEDIAN_MAX, smGap[i]));
+      shift[i] = (gaps[i] - target) / 2 * wgts[i];   // 正 = 往左(往對向)移；兩邊各移一半
+    }
+    // 移動量再沿路 ±30 公尺平滑：開始配對、結束配對的地方不會突然一扭
+    var sm = avg(shift, 30, function () { return true; });
     return P.map(function (p, i) {
       var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
       return [p[0] + (dz / L) * sm[i], p[1] - (dx / L) * sm[i]];   // 往左 = 右手方向的反方向
@@ -437,6 +455,14 @@
   // 路面覆蓋查詢：某一點是不是在「別條路」的路面上(用 25 公尺格子加速)
   //   rail：護欄在同層或更高層的路面上 → 不畫(護欄不會橫過路面)
   //   mark：標線在更高層的路面上，或同層的主線路面上(匝道讓主線) → 不畫
+  // 標線：A 落在 B 路面上時要不要讓 B(B 層比較高；同層時主線優先，同是主線或同是匝道就車道多的優先，再一樣就固定一條)
+  // 只讓一條，重疊的地方還是有一組標線，不會兩條都不畫變成一片空白
+  function marksYield(a, la, b, lb) {
+    if (lb !== la) return lb > la;
+    if (a.link !== b.link) return a.link;
+    if (a.lanes !== b.lanes) return b.lanes > a.lanes;
+    return b.id < a.id;
+  }
   function makeCover(list) {
     var CELL = 25, grid = {};
     list.forEach(function (it) {
@@ -455,7 +481,7 @@
       for (var i = 0; i < list2.length; i++) {
         var g = list2[i];
         if (g.w === w) continue;
-        if (kind === 'rail' ? g.lv < lvA : !(g.lv > lvA || (g.lv === lvA && (!g.w.link || w.link)))) continue;
+        if (kind === 'rail' ? g.lv < lvA : !marksYield(w, lvA, g.w, g.lv)) continue;
         var dx = g.b[0] - g.a[0], dz = g.b[1] - g.a[1], L2 = dx * dx + dz * dz;
         if (!L2) continue;
         var t = ((p[0] - g.a[0]) * dx + (p[1] - g.a[1]) * dz) / L2;
@@ -556,9 +582,13 @@
     var parapet = [[0, 0], [0.04, 0.95], [0.3, 0.95], [0.3, 0]];
 
     // 路面
-    strip(B.asphalt, -W / 2, right(W / 2), 0.03);
-    // 路的頭尾補圓形路面：匝道分岔、匯流、兩條路斜斜接在一起時，接縫不會凸出直角的階梯
+    strip(B.asphalt, -W / 2, right(W / 2), 0.03, onMain);   // 匝道還跟主線重疊的那段不畫(主線路面就是它)
+    // 路的頭尾補圓形路面：匝道分岔、兩條路斜斜接在一起時，接縫不會凸出直角的階梯。
+    // 直直接到下一段的頭尾不畫(接縫本來就密合，半圓會蓋到下一段的標線)；匝道接主線那頭也不畫
     [0, n - 1].forEach(function (k) {
+      var atStart = k === 0;
+      if (sep && (atStart ? sep.onMainStart : sep.onMainEnd)) return;
+      if (continuation(w, atStart)) return;
       var rad = (W + Math.min(0, shift[k])) / 2, c = [P[k][0], H[k] + 0.03, P[k][1]], seg = 16;
       for (var j = 0; j < seg; j++) {
         var a0 = j / seg * Math.PI * 2, a1 = (j + 1) / seg * Math.PI * 2;
@@ -566,8 +596,8 @@
       }
     });
     if (hb > 0) {   // 橋：路面兩側的橋面版側邊
-      wall(B.concrete, -W / 2, -1, [[0, 0.03], [0, -0.5]]);
-      wall(B.concrete, right(W / 2), 1, [[0, 0.03], [0, -0.5]]);
+      wall(B.concrete, -W / 2, -1, [[0, 0.03], [0, -0.5]], onMain);
+      wall(B.concrete, right(W / 2), 1, [[0, 0.03], [0, -0.5]], onMain);
     }
     var my = 0.06;   // 標線比路面高一點點，不會閃
     var skipEnds = function (k) { return S[k + 1] < 60 || S[k] > L - 60; };
