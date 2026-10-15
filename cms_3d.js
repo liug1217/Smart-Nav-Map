@@ -176,6 +176,7 @@
     scene.add(new T.AmbientLight(0xffffff, 0.6));
     var sun = new T.DirectionalLight(0xffffff, 0.7); sun.position.set(0.4, 1, 0.6); scene.add(sun);
     var fill = new T.DirectionalLight(0xffffff, 0.25); fill.position.set(-0.6, 0.4, -0.5); scene.add(fill);   // 背光面也看得出圓管立體感
+    g.traverse(function (o) { o.frustumCulled = false; });   // 不要讓 three.js 自己判斷在不在畫面裡(放大、傾斜時會誤判成看不到而消失)
     scene.add(g);
     return { scene: scene, group: g, face: face, tex: tex, page: 0 };
   }

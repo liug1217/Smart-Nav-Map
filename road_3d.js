@@ -211,6 +211,7 @@
       g.computeVertexNormals();
       var mesh = new T.Mesh(g, mats[k]);
       mesh.renderOrder = { white: 2, yellow: 2, greenEdge: 3, green: 4 }[k] || 0;
+      mesh.frustumCulled = false;   // 不要讓 three.js 自己判斷在不在畫面裡(疊在地圖上時放大、傾斜會誤判成看不到而消失)
       scene.add(mesh); any = true;
     });
     if (!any) return null;
