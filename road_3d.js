@@ -347,7 +347,8 @@
   }
   // 換地圖樣式後圖層會被清掉，重加
   window._snmReloadRoad3d = function () {
-    renderer = null; arranged = null;
+    if (window.map && !window.map.getLayer(LAYER)) renderer = null;   // 圖層真的被換樣式清掉了才重建
+    arranged = null;
     if (window.THREE && window.map && window.map.getZoom() >= MIN_ZOOM) addLayer();
   };
   // 某個位置、行車方向上的國道主線：回傳投影到中心線的位置、那段的方向、路面全寬(找不到回 null)；電子看板門架用
