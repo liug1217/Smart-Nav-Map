@@ -19,6 +19,8 @@ const STATIC_TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
 
 let staticCache = null; // { at, map: { CMSID -> 位置資料 } }
+const LIVE_TTL_MS = 30 * 1000;   // 即時訊息快取 30 秒：很多人同時看時，只向高公局抓一次
+let liveCache = null;           // { at, body }
 
 function decodeXml(s) {
   return s
@@ -75,6 +77,9 @@ module.exports = async (req, res) => {
   if (handlePreflight(req, res)) return;
   if (req.method !== 'GET') return methodNotAllowed(res);
 
+  if (liveCache && Date.now() - liveCache.at < LIVE_TTL_MS) {
+    return ok(res, liveCache.body, { cache: 'public, s-maxage=15, stale-while-revalidate=30' });
+  }
   try {
     const [liveXml, positions] = await Promise.all([fetchText(LIVE_URL), getStaticMap()]);
 
@@ -100,13 +105,12 @@ module.exports = async (req, res) => {
       };
     });
 
-    return ok(res, {
-      updateTime: tag(liveXml, 'UpdateTime'),
-      count: items.length,
-      items,
-    }, { cache: 'public, s-maxage=30, stale-while-revalidate=60' });
+    const body = { updateTime: tag(liveXml, 'UpdateTime'), count: items.length, items };
+    liveCache = { at: Date.now(), body };
+    return ok(res, body, { cache: 'public, s-maxage=15, stale-while-revalidate=30' });
   } catch (e) {
     console.error('[cms]', e.message);
+    if (liveCache) return ok(res, liveCache.body);   // 高公局暫時連不到：先給上一次的
     const cause = e.cause && (e.cause.code || e.cause.message);
     return err(res, 502, 'UPSTREAM_ERROR', '無法取得國道電子看板資料(' + e.message + (cause ? ' / ' + cause : '') + ')');
   }

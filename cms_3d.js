@@ -3,10 +3,11 @@
 // 造型：兩根立柱＋上下弦桿與斜撐的鋼桁架橫跨道路，桁架上是黑底 LED 看板(顯示即時訊息)、左邊綠底里程牌、看板上兩盞小燈。
 // 看板面向來車：方向用同一條國道、同方向、里程相鄰的看板位置算(南下/東向是里程增加的方向)。
 // 省資源：放大到 zoom 15 以上才載入 three.js 與畫模型；只畫畫面附近的看板(最多 40 座)；螢幕關掉不更新。
+// 即時更新：畫面上有看板時每 60 秒重抓，訊息變了的看板馬上換字；切回 App 時也馬上抓一次。
 // 看板上多則訊息時跟實際看板一樣輪流顯示(每 5 秒)。點看板會打開卡片顯示完整訊息。
 (function () {
   'use strict';
-  var MIN_ZOOM = 15, MAX_SIGNS = 40, PAGE_MS = 5000, REFRESH_MS = 5 * 60 * 1000;
+  var MIN_ZOOM = 15, MAX_SIGNS = 40, PAGE_MS = 5000, REFRESH_MS = 60 * 1000;   // 高公局看板訊息每分鐘更新，跟著每分鐘抓
   var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   var LAYER = 'snm-cms-3d', HIT_SRC = 'snm-cms-src', HIT_LAYER = 'cms-hit';
   var signs = [];            // [{ id, road, dir, mile, m, lon, lat, bearing, pages:[{text,type}] }]
@@ -22,7 +23,7 @@
   // ── 資料：抓看板、算每座看板面向哪裡 ──
   function loadSigns() {
     if (loading || document.hidden) return;
-    if (signs.length && Date.now() - loadedAt < REFRESH_MS) return;
+    if (signs.length && Date.now() - loadedAt < 20000) return;   // 20 秒內剛抓過就不重抓(縮放、切回來時避免重複)；每分鐘計時器到點一定會重抓
     loading = true;
     fetch(apiBase() + '/cms').then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return;
@@ -54,6 +55,9 @@
           break;
         }
       });
+      // 已經吸附到車道的位置沿用，不用每分鐘重算
+      var old = {}; signs.forEach(function (o) { if (o.snap) old[o.id] = o.snap; });
+      list.forEach(function (n) { if (old[n.id]) n.snap = old[n.id]; });
       signs = list; loadedAt = Date.now();
       updateHitSource(); refreshVisible();
     }).catch(function () {}).then(function () { loading = false; });
@@ -336,6 +340,7 @@
     if (m.loaded()) go(); else m.once('load', go);
     pageTimer = setInterval(rotatePages, PAGE_MS);
     setInterval(function () { if (!document.hidden && window.map && window.map.getZoom() >= MIN_ZOOM) loadSigns(); }, REFRESH_MS);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && window.map && window.map.getZoom() >= MIN_ZOOM) loadSigns(); });
   }
   init();
 })();
