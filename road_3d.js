@@ -166,6 +166,7 @@
       return levels[lvl] = levels[lvl] || { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket(), greenEdge: new Bucket(), green: new Bucket() };
     };
     var lines = {};   // 路 id → 這塊圖磚座標的線(建路、畫槽化線共用)
+    oppGrid = makeOppGrid(t.ext || box, origin, sc);   // 對向車道(限制分隔島寬度範圍用)
     var lineOf = function (w) { return lines[w.id] = lines[w.id] || prepLine(w, origin, sc); };
     // 匝道接點：主線外側護欄在這附近 120 公尺不畫；匝道兩端 60 公尺不畫
     var junc = [];
@@ -278,6 +279,69 @@
     }
     return out;
   }
+  // ── 中央分隔島寬度限制在一個範圍內 ──
+  // OSM 的南下、北上兩條線間距差很多，照畫的話分隔島一下很寬一下貼在一起。可以有寬有窄，但不能差太多：
+  // 找出每段主線的對向車道(同一層、方向相反、55 公尺內)，兩邊路面內緣的距離超出 MEDIAN_MIN～MEDIAN_MAX 才往回拉(兩邊各移一半)，
+  // 範圍內的照原本資料不動；移動量沿路慢慢變化(約 30 公尺)，35～55 公尺的慢慢放開(交流道附近上下行分很開的地方維持原樣)。
+  var MEDIAN_MIN = 0.7, MEDIAN_MAX = 4, oppGrid = null;
+  function makeOppGrid(e, origin, sc) {
+    var CELL = 60, grid = {};
+    Object.keys(ways).forEach(function (id) {
+      var w = ways[id];
+      if (w.link || !w.oneway) return;
+      if (!w.coords.some(function (c) { return c[0] > e.w - 0.003 && c[0] < e.e + 0.003 && c[1] > e.s - 0.003 && c[1] < e.n + 0.003; })) return;
+      var half = section(w).W / 2, lv = levelOf(w), prev = null;
+      w.coords.forEach(function (c) {
+        var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0), p = [(m.x - origin.x) / sc, (m.y - origin.y) / sc];
+        if (prev) {
+          var dx = p[0] - prev[0], dz = p[1] - prev[1], L = Math.hypot(dx, dz);
+          if (L > 0.1) {
+            var g = { w: w, a: prev, d: [dx / L, dz / L], L: L, half: half, lv: lv };
+            var x0 = Math.floor(Math.min(prev[0], p[0]) / CELL), x1 = Math.floor(Math.max(prev[0], p[0]) / CELL);
+            var z0 = Math.floor(Math.min(prev[1], p[1]) / CELL), z1 = Math.floor(Math.max(prev[1], p[1]) / CELL);
+            for (var x = x0; x <= x1; x++) for (var z = z0; z <= z1; z++) (grid[x + ',' + z] = grid[x + ',' + z] || []).push(g);
+          }
+        }
+        prev = p;
+      });
+    });
+    return { CELL: CELL, grid: grid };
+  }
+  function limitMedian(w, P) {
+    if (!oppGrid || w.link || !w.oneway || P.length < 2) return P;
+    var n = P.length, half = section(w).W / 2, lv = levelOf(w), shift = new Array(n), any = false;
+    for (var i = 0; i < n; i++) {
+      var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+      var dir = [dx / L, dz / L], rgt = [-dir[1], dir[0]], p = P[i], best = null, seen = [];
+      var cx = Math.floor(p[0] / oppGrid.CELL), cz = Math.floor(p[1] / oppGrid.CELL);
+      for (var x = cx - 1; x <= cx + 1; x++) for (var z = cz - 1; z <= cz + 1; z++) {
+        (oppGrid.grid[x + ',' + z] || []).forEach(function (g) {
+          if (g.w === w || g.lv !== lv || seen.indexOf(g) >= 0) return;
+          seen.push(g);
+          if (g.d[0] * dir[0] + g.d[1] * dir[1] > -0.85) return;   // 要方向相反
+          var t = (p[0] - g.a[0]) * g.d[0] + (p[1] - g.a[1]) * g.d[1];
+          if (t < 0 || t > g.L) return;
+          var lat = (g.a[0] + g.d[0] * t - p[0]) * rgt[0] + (g.a[1] + g.d[1] * t - p[1]) * rgt[1];
+          if (lat >= 0) return;   // 對向車道在左邊(靠右行駛)
+          var dist = -lat;
+          if (dist > 55 || (best && dist >= best.dist)) return;
+          best = { dist: dist, half: g.half };
+        });
+      }
+      shift[i] = 0;
+      if (!best) continue;
+      var gap = best.dist - half - best.half, wgt = best.dist <= 35 ? 1 : (55 - best.dist) / 20;
+      var target = Math.max(MEDIAN_MIN, Math.min(MEDIAN_MAX, gap));
+      if (target !== gap) { shift[i] = (gap - target) / 2 * wgt; any = true; }   // 正 = 往左(往對向)移
+    }
+    if (!any) return P;
+    // 移動量沿路平滑(前後各約 15 公尺)，寬窄變化是慢慢的
+    var sm = shift.map(function (_, i) { var s2 = 0, c = 0; for (var j = Math.max(0, i - 5); j <= Math.min(n - 1, i + 5); j++) { s2 += shift[j]; c++; } return s2 / c; });
+    return P.map(function (p, i) {
+      var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+      return [p[0] + (dz / L) * sm[i], p[1] - (dx / L) * sm[i]];   // 往左 = 右手方向的反方向
+    });
+  }
   function prepLine(w, origin, sc) {
     var loc = function (c) { var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0); return [(m.x - origin.x) / sc, (m.y - origin.y) / sc]; };
     var P = [], last = null;
@@ -288,6 +352,7 @@
     if (P.length < 2) return null;
     var cb = continuation(w, true), ca = continuation(w, false), before = cb && loc(cb), after = ca && loc(ca);
     P = smooth(P, before, after);
+    P = limitMedian(w, P);
     var n = P.length, S = [0], i;
     for (i = 1; i < n; i++) S[i] = S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
     var L = S[n - 1], segR = [];
