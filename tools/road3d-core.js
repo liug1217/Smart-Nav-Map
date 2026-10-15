@@ -245,7 +245,7 @@ function medians(chains) {
   }
   const shifts = new Map();
   for (const ch of mains) {
-    const v = ch.v, n = v.length, gaps = new Array(n).fill(null), wgts = new Array(n).fill(0);
+    const v = ch.v, n = v.length, gaps = new Array(n).fill(null), wgts = new Array(n).fill(0), pairs = new Array(n).fill(null);
     for (let i = 0; i < n; i++) {
       const p = v[i].P, dir = v[i].dir, rgt = rightOf(dir), k = v[i].k;
       const cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL);
@@ -261,12 +261,13 @@ function medians(chains) {
           if (lat >= 0) continue;   // 對向車道在左邊(靠右行駛)
           const dist = -lat;
           if (dist > 55 || (best && dist >= best.dist)) continue;
-          best = { dist, other: ov };
+          best = { dist, other: ov, och: g.ch };
         }
       }
       if (!best) continue;
       // 兩邊路面內緣的距離：自己的左緣到對方的左緣(對方方向相反，它的左緣也朝這邊)
       gaps[i] = best.dist + v[i].eL + best.other.eL;
+      pairs[i] = best.och;
       wgts[i] = best.dist <= 35 ? 1 : (55 - best.dist) / 20;
     }
     const smGap = windowAvg(v, gaps, 60, (k) => gaps[k] !== null);
@@ -275,7 +276,13 @@ function medians(chains) {
       const target = Math.max(MEDIAN_MIN, Math.min(MEDIAN_MAX, smGap[i]));
       return (gaps[i] - target) / 2 * wgts[i];   // 正 = 往左(往對向)移；兩邊各移一半
     });
-    shifts.set(ch, windowAvg(v, shift, 30, () => true));
+    const sm = windowAvg(v, shift, 30, () => true);
+    shifts.set(ch, sm);
+    // 移完之後的分隔島寬度(兩邊各移差不多一樣多)與對向是哪一條：中央護欄要畫一道還是兩道用
+    v.forEach((o, i) => {
+      if (gaps[i] !== null && wgts[i] >= 0.99) { o.medGap = gaps[i] - 2 * sm[i]; o.pairId = pairs[i].id; }
+      else { o.medGap = null; o.pairId = null; }
+    });
   }
   // 全部算完再移(算的時候都用原本的位置，兩邊才對稱)
   for (const [ch, sm] of shifts) {
@@ -385,7 +392,7 @@ function features(ch, covered) {
     }
     railRuns(ch, (i) => v[i].eR - 0.3, 1, covered, rails);
     if (isLink) railRuns(ch, (i) => v[i].eL + 0.3, -1, covered, rails);
-    else rails.push({ t: 'nj', off: (i) => v[i].eL - 0.1, side: 1, vis: visibleRuns(ch, (i) => v[i].eL + 0.23, 0.4, 'rail', covered) });   // 中央分隔護欄
+    else medianRails(ch, covered, rails);
   } else {
     const per = (i) => Math.max(1, Math.floor(v[i].lanes / 2)) * LANE;
     line('y', () => 0.12, 0.12, 0); line('y', () => -0.12, 0.12, 0);   // 中央雙黃線
@@ -403,6 +410,28 @@ function railRuns(ch, off, side, covered, out) {
   const onBridge = (i) => v[i].bridge;
   out.push({ t: 'wb', off, side, vis: clipRuns(vis, (i) => !onBridge(i), v) });
   out.push({ t: 'pp', off, side, vis: clipRuns(vis, (i) => onBridge(i), v) });
+}
+// 中央分隔：照分隔島寬度
+//   窄(< 1.6 公尺，只塞得下一道)：正中間一道紐澤西護欄＋綠色防眩板，只由 id 小的那條畫(兩個方向不會各畫一道)
+//   寬：兩邊各一道護欄(靠分隔島那側)，中間種灌木(id 小的那條畫)
+//   沒有對向(上下行分很開)：自己左邊一道護欄
+const NARROW = 1.6;
+function medianRails(ch, covered, rails) {
+  const v = ch.v;
+  const narrow = (i) => v[i].medGap !== null && v[i].medGap < NARROW;
+  const mine = (i) => v[i].pairId === null || ch.id < v[i].pairId;
+  const center = (i) => v[i].eL - (v[i].medGap !== null ? v[i].medGap / 2 : 0);
+  // 窄：正中間一道
+  const visC = visibleRuns(ch, center, 0.4, 'rail', covered);
+  const single = clipRuns(visC, (i) => narrow(i) && mine(i), v);
+  rails.push({ t: 'nj', off: (i) => center(i) - 0.33, side: 1, vis: single });
+  rails.push({ t: 'ag', off: center, side: 1, vis: single });   // 防眩板
+  // 寬或沒有對向：自己這邊一道(往分隔島那側長)
+  const visE = visibleRuns(ch, (i) => v[i].eL - 0.3, 0.4, 'rail', covered);
+  rails.push({ t: 'nj', off: (i) => v[i].eL, side: -1, vis: clipRuns(visE, (i) => !narrow(i), v) });
+  // 灌木：兩道護欄中間還有 0.3 公尺以上的空間才種
+  const hedgeOK = (i) => v[i].medGap !== null && v[i].medGap >= NARROW + 0.3 && mine(i);
+  rails.push({ t: 'hg', off: (i) => v[i].eL - 0.7, off2: (i) => v[i].eL - Math.max(1.0, (v[i].medGap || 0) - 0.7), side: -1, vis: clipRuns(visE, hedgeOK, v) });
 }
 function clipRuns(runs, ok, v) {
   const out = [];

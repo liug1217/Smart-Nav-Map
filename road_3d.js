@@ -4,7 +4,8 @@
 // (tools/build-road3d.js、tools/road3d-core.js)，這裡只把算好的資料畫出來：
 //   路面：車道 3.75 公尺、內側路肩 1、外側路肩 3(匝道 2)；橋面有側邊
 //   標線：車道線白虛線(線段 4 公尺、間距 6 公尺、線寬 10 公分)、外側白實線、內側黃實線；雙向道路中間雙黃線；匝道分岔處白色槽化線
-//   護欄：外側鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、中央紐澤西護欄、橋上混凝土護欄
+//   護欄：外側鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、橋上混凝土護欄
+//   中央分隔：窄的只放一道紐澤西護欄＋綠色防眩板；寬的兩邊各一道護欄、中間種灌木
 //   路況綠線(沒塞車)畫在路面中間，跟著主程式的綠色道路開關
 // 資料：road3d/13/x_y.json(zoom 13 圖磚，一塊約 4.9 公里)，只抓畫面附近那幾塊，同一塊只抓一次。
 // 上下層靠真的高度(橋每層 1.2 公尺)用深度判斷遮擋；圖層放在路況綠線、導航路線的下面，路況顏色、導航路線、車子照樣看得到。
@@ -86,7 +87,7 @@
         P: P, n: n, i0: p.pre, i1: n - 1 - p.post, S: undelta(p.s, 1).map(function (x) { return x / 100; }),
         eL: perV(p.e[0], n), a: perV(p.e[1], n), b: perV(p.e[2], n), eR: perV(p.e[3], n), link: !!p.lk, oneway: !!p.ow,
         L: p.L.map(function (l) { return { t: l.t, w: l.w / 100, d: l.d, o: perV(l.o, n), v: l.v.map(function (x) { return x / 100; }) }; }),
-        R: p.R.map(function (r) { return { t: r.t, sd: r.sd, o: perV(r.o, n), v: r.v.map(function (x) { return x / 100; }) }; }),
+        R: p.R.map(function (r) { return { t: r.t, sd: r.sd, o: perV(r.o, n), o2: r.o2 != null ? perV(r.o2, n) : null, v: r.v.map(function (x) { return x / 100; }) }; }),
       };
     });
     var corner = function (x, y) { return new maplibregl.MercatorCoordinate(mc.x + x * sc, mc.y + y * sc, 0).toLngLat(); };
@@ -155,11 +156,45 @@
         }
       });
     });
+    // 分隔島灌木：o 到 o2 之間，每 2 公尺一段，高度高高低低(看起來像一叢一叢)
+    var hedge = function (r) {
+      var bush = function (s) { return 0.95 + 0.18 * Math.sin(s * 1.7) + 0.1 * Math.sin(s * 4.3 + 1); };
+      spans(r.v, function (k, t0, t1, u0, u1) {
+        var len = S[k + 1] - S[k], m = Math.max(1, Math.ceil((u1 - u0) / 2));
+        for (var j = 0; j < m; j++) {
+          var a = t0 + (t1 - t0) * j / m, b = t0 + (t1 - t0) * (j + 1) / m, ha = bush(S[k] + a * len), hb = bush(S[k] + b * len);
+          B.hedge.quad(at(k, a, r.o, ha), at(k, a, r.o2, ha), at(k, b, r.o2, hb), at(k, b, r.o, hb));   // 頂
+          B.hedge.quad(at(k, a, r.o, 0), at(k, b, r.o, 0), at(k, b, r.o, hb), at(k, a, r.o, ha));       // 兩側
+          B.hedge.quad(at(k, a, r.o2, 0), at(k, b, r.o2, 0), at(k, b, r.o2, hb), at(k, a, r.o2, ha));
+        }
+      });
+    };
+    // 防眩板：紐澤西護欄上面一片一片綠色的，每 1 公尺一片(斜斜的擋對向車燈)
+    var glare = function (r) {
+      spans(r.v, function (k, t0, t1, u0, u1) {
+        var len = S[k + 1] - S[k], dx = P[k + 1][0] - P[k][0], dz = P[k + 1][1] - P[k][1], dl = Math.hypot(dx, dz) || 1;
+        var f = [dx / dl, dz / dl], g = [-dz / dl, dx / dl];
+        // 板子轉 60 度：寬 0.22、厚 0.03
+        var c60 = Math.cos(Math.PI / 3), s60 = Math.sin(Math.PI / 3);
+        var w = [f[0] * c60 + g[0] * s60, f[1] * c60 + g[1] * s60], th = [-w[1], w[0]];
+        for (var st = Math.ceil(u0); st < u1; st += 1) {
+          var c = at(k, (st - S[k]) / len, r.o, 0), y0 = c[1] + 0.85, y1 = c[1] + 1.5;
+          var cs = [[-0.11, -0.015], [0.11, -0.015], [0.11, 0.015], [-0.11, 0.015]].map(function (q) { return [c[0] + w[0] * q[0] + th[0] * q[1], c[2] + w[1] * q[0] + th[1] * q[1]]; });
+          for (var e = 0; e < 4; e++) {
+            var A = cs[e], C2 = cs[(e + 1) % 4];
+            B.glare.quad([A[0], y0, A[1]], [C2[0], y0, C2[1]], [C2[0], y1, C2[1]], [A[0], y1, A[1]]);
+          }
+          B.glare.quad([cs[0][0], y1, cs[0][1]], [cs[1][0], y1, cs[1][1]], [cs[2][0], y1, cs[2][1]], [cs[3][0], y1, cs[3][1]]);
+        }
+      });
+    };
     // 護欄：profile = [[往外偏移, 高度], ...] 沿線拉出來
     var WBEAM = [[0, 0.45], [0.06, 0.53], [0, 0.6], [0.06, 0.68], [0, 0.76]];
     var JERSEY = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
     var PARAPET = [[0, 0], [0.04, 0.95], [0.3, 0.95], [0.3, 0]];
     pc.R.forEach(function (r) {
+      if (r.t === 'hg') { hedge(r); return; }
+      if (r.t === 'ag') { glare(r); return; }
       var prof = r.t === 'nj' ? JERSEY : r.t === 'pp' ? PARAPET : WBEAM, bk = r.t === 'wb' ? B.steel : B.concrete;
       var offs = prof.map(function (q) { return shiftArr(r.o, r.sd * q[0]); });
       spans(r.v, function (k, t0, t1, u0, u1) {
@@ -185,7 +220,7 @@
 
   function buildChunk(d) {
     var T = window.THREE;
-    var B = { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket(), greenEdge: new Bucket(), green: new Bucket() };
+    var B = { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket(), greenEdge: new Bucket(), green: new Bucket(), hedge: new Bucket(), glare: new Bucket() };
     d.pieces.forEach(function (pc) { if (pc.i1 > pc.i0) buildPiece(pc, B); });
     // 路的頭尾補圓形路面(分岔、匯流處接縫平順)
     d.caps.forEach(function (c) {
@@ -232,6 +267,8 @@
       yellow: mark(0xF2BE1A),
       greenEdge: mark(0x009B65),   // 路況綠線(同導航路線的顏色)：外框
       green: mark(0x16E098),
+      hedge: new T.MeshLambertMaterial({ color: 0x6E9F2E, side: ds }),   // 分隔島灌木
+      glare: new T.MeshLambertMaterial({ color: 0x3F8A55, side: ds }),   // 防眩板
     };
   }
 

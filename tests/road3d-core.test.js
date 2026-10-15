@@ -115,3 +115,29 @@ test('makeCover：護欄落在同高度別條路面上不畫；高一層的路�
   const far = C.merc(120.999, 25.002);
   assert.strictEqual(covered(far, 0.4, ew, 'rail'), false);     // 路面外
 });
+
+test('中央分隔：窄的只畫一道護欄＋防眩板(兩個方向只有一條畫)；寬的兩邊各一道、中間種灌木', () => {
+  const build = (sepM) => {
+    const dLon = sepM / (111320 * Math.cos(25 * Math.PI / 180));
+    const ws = C.parseWays([
+      way(1, [1, 2], line(121, 25, 0.01, 2), {}),
+      way(2, [3, 4], line(121 - dLon, 25.01, -0.01, 2), {}),
+    ]);
+    const chains = C.buildChains(ws);
+    chains.forEach(C.prepChain); C.heights(chains); chains.forEach(C.sections); C.medians(chains);
+    const covered = C.makeCover(chains);
+    return chains.map((ch) => C.features(ch, covered).rails);
+  };
+  const len = (rails, t) => rails.filter((r) => r.t === t).reduce((a, r) => a + r.vis.reduce((b, v) => b + v[1] - v[0], 0), 0);
+  // 中心線相隔 15.25 公尺：路寬各 15.25 → 分隔島拉到 1 公尺(窄)
+  const narrow = build(15.25 + 1);
+  const ag = narrow.map((r) => len(r, 'ag'));
+  assert.ok(ag[0] > 500 !== ag[1] > 500, '防眩板只有一個方向畫 ' + ag);
+  assert.ok(Math.min(len(narrow[0], 'hg'), len(narrow[1], 'hg')) === 0 && Math.max(len(narrow[0], 'hg'), len(narrow[1], 'hg')) === 0, '窄的不種灌木');
+  // 中心線相隔 18.25 公尺 → 分隔島 3 公尺(寬)
+  const wide = build(15.25 + 3);
+  const hg = wide.map((r) => len(r, 'hg'));
+  assert.ok(hg[0] > 500 !== hg[1] > 500, '灌木只有一個方向畫 ' + hg);
+  assert.ok(wide.every((r) => len(r, 'nj') > 500), '寬的兩個方向各一道護欄');
+  assert.ok(wide.every((r) => len(r, 'ag') === 0), '寬的沒有防眩板');
+});

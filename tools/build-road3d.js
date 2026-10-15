@@ -84,7 +84,7 @@ for (const ch of chains) {
 //   s  [...]            每點沿路距離(差值)：虛線、看得到的區間都用這個
 //   e  [eL, a, b, eR]   路面左緣、最左車道外緣、最右車道外緣、路面右緣(每項是數字或每點的差值數列)
 //   L  標線 [{ t: 顏色, w: 寬, d: 虛線, o: 偏移, v: 看得到的區間 [s0, s1, s0, s1, ...] }]
-//   R  護欄 [{ t: wb 鋼板 / nj 紐澤西 / pp 橋上混凝土, sd: 往哪邊長, o, v }]
+//   R  護欄 [{ t: wb 鋼板 / nj 紐澤西 / pp 橋上混凝土 / ag 防眩板 / hg 分隔島灌木(o 到 o2 之間), sd: 往哪邊長, o, v }]
 function encodePiece(T, ch, keep, ja, jb) {
   const v = ch.v, lo = Math.max(0, ja - 1), hi = Math.min(keep.length - 1, jb + 1);
   const idx = []; for (let j = lo; j <= hi; j++) idx.push(keep[j]);
@@ -100,7 +100,13 @@ function encodePiece(T, ch, keep, ja, jb) {
   const offs = (fn) => perVertex(idx.map((i) => cm(fn(i))));
   const L = [], R = [];
   for (const l of ch.feat.lines) { const vis = clip(l.vis); if (vis.length) L.push({ t: l.t, w: cm(l.w), d: l.dash, o: offs(l.off), v: vis }); }
-  for (const r of ch.feat.rails) { const vis = clip(r.vis); if (vis.length) R.push({ t: r.t, sd: r.side, o: offs(r.off), v: vis }); }
+  for (const r of ch.feat.rails) {
+    const vis = clip(r.vis);
+    if (!vis.length) continue;
+    const item = { t: r.t, sd: r.side, o: offs(r.off), v: vis };
+    if (r.off2) item.o2 = offs(r.off2);   // 灌木：另一邊的邊緣
+    R.push(item);
+  }
   return {
     v: delta(xyz, 3), pre: lo < ja ? 1 : 0, post: hi > jb ? 1 : 0,
     s: delta(idx.map((i) => cm(v[i].S)), 1),
