@@ -252,6 +252,13 @@
     var c = nb[0].w.coords;
     return atStart ? c[c.length - 2] : c[1];
   }
+  function continuationWay(w, atStart) {
+    var i = atStart ? 0 : w.coords.length - 1;
+    var nb = (nodeIdx[nodeKey(w, i)] || []).filter(function (o) {
+      return o.w !== w && o.w.oneway === w.oneway && (atStart ? o.i === o.w.coords.length - 1 : o.i === 0) && o.w.coords.length > 1;
+    });
+    return nb.length === 1 ? nb[0].w : null;
+  }
   // 貝茲曲線平滑：OSM 道路是一段段直線，轉彎會一折一折的。用向心 Catmull-Rom 曲線(等同一串三次貝茲曲線)
   // 穿過每個原本的點(交流道接點位置不變)，每 3 公尺取一個點；向心參數不會在急彎繞圈、凸出去
   function smooth(P, before, after) {
@@ -308,32 +315,43 @@
     });
     return { CELL: CELL, grid: grid };
   }
-  function limitMedian(w, P) {
+  // 某一點(方向 dir)左邊的對向車道：回傳兩邊路面內緣的距離 gap 與權重(35 公尺內 1，到 55 公尺漸漸變 0)
+  function oppGap(p, dir, half, lv, self) {
+    var rgt = [-dir[1], dir[0]], best = null, seen = [];
+    var cx = Math.floor(p[0] / oppGrid.CELL), cz = Math.floor(p[1] / oppGrid.CELL);
+    for (var x = cx - 1; x <= cx + 1; x++) for (var z = cz - 1; z <= cz + 1; z++) {
+      (oppGrid.grid[x + ',' + z] || []).forEach(function (g) {
+        if (self.indexOf(g.w) >= 0 || g.lv !== lv || seen.indexOf(g) >= 0) return;
+        seen.push(g);
+        if (g.d[0] * dir[0] + g.d[1] * dir[1] > -0.85) return;   // 要方向相反
+        var t = (p[0] - g.a[0]) * g.d[0] + (p[1] - g.a[1]) * g.d[1];
+        if (t < 0 || t > g.L) return;
+        var lat = (g.a[0] + g.d[0] * t - p[0]) * rgt[0] + (g.a[1] + g.d[1] * t - p[1]) * rgt[1];
+        if (lat >= 0) return;   // 對向車道在左邊(靠右行駛)
+        var dist = -lat;
+        if (dist > 55 || (best && dist >= best.dist)) return;
+        best = { dist: dist, half: g.half };
+      });
+    }
+    return best ? { gap: best.dist - half - best.half, wgt: best.dist <= 35 ? 1 : (55 - best.dist) / 20 } : null;
+  }
+  // joints：頭 / 尾接到下一段時，接縫處的位置 p、方向 dir、用的半寬與層(兩段算出來的值完全一樣，接縫才不會裂開)
+  function limitMedian(w, P, joints) {
     if (!oppGrid || w.link || !w.oneway || P.length < 2) return P;
     var n = P.length, half = section(w).W / 2, lv = levelOf(w), shift = new Array(n), gaps = new Array(n), wgts = new Array(n), any = false, i;
     for (i = 0; i < n; i++) {
       var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
-      var dir = [dx / L, dz / L], rgt = [-dir[1], dir[0]], p = P[i], best = null, seen = [];
-      var cx = Math.floor(p[0] / oppGrid.CELL), cz = Math.floor(p[1] / oppGrid.CELL);
-      for (var x = cx - 1; x <= cx + 1; x++) for (var z = cz - 1; z <= cz + 1; z++) {
-        (oppGrid.grid[x + ',' + z] || []).forEach(function (g) {
-          if (g.w === w || g.lv !== lv || seen.indexOf(g) >= 0) return;
-          seen.push(g);
-          if (g.d[0] * dir[0] + g.d[1] * dir[1] > -0.85) return;   // 要方向相反
-          var t = (p[0] - g.a[0]) * g.d[0] + (p[1] - g.a[1]) * g.d[1];
-          if (t < 0 || t > g.L) return;
-          var lat = (g.a[0] + g.d[0] * t - p[0]) * rgt[0] + (g.a[1] + g.d[1] * t - p[1]) * rgt[1];
-          if (lat >= 0) return;   // 對向車道在左邊(靠右行駛)
-          var dist = -lat;
-          if (dist > 55 || (best && dist >= best.dist)) return;
-          best = { dist: dist, half: g.half };
-        });
-      }
-      gaps[i] = best ? best.dist - half - best.half : null;
-      wgts[i] = best ? (best.dist <= 35 ? 1 : (55 - best.dist) / 20) : 0;
-      if (best) any = true;
+      var r = oppGap(P[i], [dx / L, dz / L], half, lv, [w]);
+      gaps[i] = r ? r.gap : null; wgts[i] = r ? r.wgt : 0;
+      if (r) any = true;
     }
-    if (!any) return P;
+    // 接縫處的移動量：只用接縫那一點的原始資料算(前後兩段算出來一樣)
+    var J = [joints.start, joints.end].map(function (j) {
+      if (!j) return null;
+      var r = oppGap(j.p, j.dir, j.half, j.lv, j.self);
+      return r ? (r.gap - Math.max(MEDIAN_MIN, Math.min(MEDIAN_MAX, r.gap))) / 2 * r.wgt : 0;
+    });
+    if (!any && !J[0] && !J[1]) return P;
     var D = [0];
     for (i = 1; i < n; i++) D[i] = D[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
     // 沿路距離 ±r 公尺的平均(只算有值的點)
@@ -355,9 +373,24 @@
     }
     // 移動量再沿路 ±30 公尺平滑：開始配對、結束配對的地方不會突然一扭
     var sm = avg(shift, 30, function () { return true; });
+    // 接縫前後 60 公尺內慢慢對到接縫處的移動量
+    var Lw = D[n - 1];
+    for (i = 0; i < n; i++) {
+      if (J[0] !== null) sm[i] += (J[0] - sm[0]) * Math.max(0, 1 - D[i] / 60);
+      if (J[1] !== null) sm[i] += (J[1] - sm[n - 1]) * Math.max(0, 1 - (Lw - D[i]) / 60);
+    }
+    if (J[0] !== null) sm[0] = J[0];
+    if (J[1] !== null) sm[n - 1] = J[1];
     return P.map(function (p, i) {
-      var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
-      return [p[0] + (dz / L) * sm[i], p[1] - (dx / L) * sm[i]];   // 往左 = 右手方向的反方向
+      // 接縫那一點用接縫的方向移(兩段一樣)，其他點用自己的方向
+      var dir;
+      if (i === 0 && joints.start) dir = joints.start.dir;
+      else if (i === n - 1 && joints.end) dir = joints.end.dir;
+      else {
+        var a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+        dir = [dx / L, dz / L];
+      }
+      return [p[0] + dir[1] * sm[i], p[1] - dir[0] * sm[i]];   // 往左 = 右手方向的反方向
     });
   }
   function prepLine(w, origin, sc) {
@@ -370,15 +403,24 @@
     if (P.length < 2) return null;
     var cb = continuation(w, true), ca = continuation(w, false), before = cb && loc(cb), after = ca && loc(ca);
     P = smooth(P, before, after);
-    P = limitMedian(w, P);
+    // 接縫處的方向：用接縫前一點、後一點的原始座標算(前後兩段算出來完全一樣，路面接得密合)
+    var unit = function (a, b) { var dx = b[0] - a[0], dz = b[1] - a[1], d = Math.hypot(dx, dz) || 1; return [dx / d, dz / d]; };
+    var cw = w.coords, dirS = before ? unit(before, loc(cw[1])) : null, dirE = after ? unit(loc(cw[cw.length - 2]), after) : null;
+    var joint = function (atStart, dir) {
+      var o = continuationWay(w, atStart);
+      if (!o || !dir) return null;
+      return { p: loc(cw[atStart ? 0 : cw.length - 1]), dir: dir, half: Math.max(section(w).W, section(o).W) / 2, lv: Math.min(levelOf(w), levelOf(o)), self: [w, o] };
+    };
+    P = limitMedian(w, P, { start: joint(true, dirS), end: joint(false, dirE) });
     var n = P.length, S = [0], i;
     for (i = 1; i < n; i++) S[i] = S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
     var L = S[n - 1], segR = [];
     for (i = 0; i < n - 1; i++) { var dx = P[i + 1][0] - P[i][0], dz = P[i + 1][1] - P[i][1], d = Math.hypot(dx, dz) || 1; segR.push([-dz / d, dx / d]); }
     // 頭尾的斷面方向：有接續的路就跟那條路的方向平均(兩段路面接得密合，不會一邊開口一邊重疊)
-    var edgeR = function (from, to) { var dx = to[0] - from[0], dz = to[1] - from[1], d = Math.hypot(dx, dz) || 1; return [-dz / d, dx / d]; };
-    var r0 = before ? edgeR(before, P[0]) : null, rn = after ? edgeR(P[n - 1], after) : null;
+    var r0 = dirS ? [-dirS[1], dirS[0]] : null, rn = dirE ? [-dirE[1], dirE[0]] : null;
     var R = P.map(function (_, k) {
+      if (k === 0 && r0) return r0;
+      if (k === n - 1 && rn) return rn;
       var a = k === 0 && r0 ? r0 : segR[Math.max(0, k - 1)], b = k === n - 1 && rn ? rn : segR[Math.min(n - 2, k)], x = a[0] + b[0], z = a[1] + b[1], l = Math.hypot(x, z) || 1;
       x /= l; z /= l;
       var cos = x * b[0] + z * b[1], f = Math.min(2, 1 / Math.max(0.5, cos));
