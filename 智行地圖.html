@@ -2509,7 +2509,10 @@ function _flipCell(cell, from, to) {
   // 每次都照固定順序整組重排(由下到上)：綠色道路 → 備選路線 → 導航路線 → 塞車線 → 路線箭頭 → 轉彎大箭頭。
   // 只搬「跑到建築上面的」會讓沒被搬的轉彎箭頭、備選路線被壓在導航路線/綠色道路底下
   (function () {
-    const ORDER = [/^snm-roads-outline-/, /^snm-roads-line-/, /^snm-roads-probe$/,
+    // 一般道路的綠線排在國道綠線下面：國道 3D 路面(road_3d.js)夾在中間，從國道底下穿過的路不會畫在國道路面上；
+    // 從國道上方跨過的陸橋另外一份(snm-road-3d-over-*)排在國道上面
+    const ORDER = [/^snm-roads-outline-(?!freeway$)/, /^snm-roads-line-(?!freeway$)/, /^snm-roads-outline-freeway$/, /^snm-roads-line-freeway$/,
+      /^snm-road-3d-over-casing$/, /^snm-road-3d-over-line$/, /^snm-roads-probe$/,
       /^routeOpt-other-casing$/, /^routeOpt-other$/, /^routeOpt-sel-casing$/, /^routeOpt-sel$/,
       /^navRoute-outline$/, /^navRoute-line$/,
       /^snm-traffic-casing$/, /^snm-traffic-lines$/, /^snm-traffic-points$/,
@@ -12587,7 +12590,7 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="road_3d.js?v=2"></script>
+<script src="road_3d.js?v=3"></script>
 <script src="cms_3d.js?v=6"></script>
 </body>
 </html>

@@ -230,19 +230,63 @@
   }
 
   // 一條路換成圖磚公尺座標：P 點、S 累積距離、segR 每段右手方向、R 頂點斜接方向、H 高度
+  // 接在這條路頭 / 尾、順著開下去的那一條(只有一條時)：拿它相鄰的那個點，讓曲線、路面在接縫處方向連續
+  function continuation(w, atStart) {
+    var i = atStart ? 0 : w.coords.length - 1;
+    var nb = (nodeIdx[nodeKey(w, i)] || []).filter(function (o) {
+      return o.w !== w && o.w.oneway === w.oneway && (atStart ? o.i === o.w.coords.length - 1 : o.i === 0) && o.w.coords.length > 1;
+    });
+    if (nb.length !== 1) return null;
+    var c = nb[0].w.coords;
+    return atStart ? c[c.length - 2] : c[1];
+  }
+  // 貝茲曲線平滑：OSM 道路是一段段直線，轉彎會一折一折的。用向心 Catmull-Rom 曲線(等同一串三次貝茲曲線)
+  // 穿過每個原本的點(交流道接點位置不變)，每 3 公尺取一個點；向心參數不會在急彎繞圈、凸出去
+  function smooth(P, before, after) {
+    if (P.length < 2) return P;
+    var ext = [before || [2 * P[0][0] - P[1][0], 2 * P[0][1] - P[1][1]]].concat(P, [after || [2 * P[P.length - 1][0] - P[P.length - 2][0], 2 * P[P.length - 1][1] - P[P.length - 2][1]]]);
+    var out = [P[0]];
+    for (var i = 1; i < ext.length - 2; i++) {
+      var p0 = ext[i - 1], p1 = ext[i], p2 = ext[i + 1], p3 = ext[i + 2];
+      var d = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), m = Math.min(40, Math.ceil(d / 3));
+      if (m <= 1) { out.push(p2); continue; }
+      var t0 = 0, t1 = t0 + Math.pow(Math.max(1e-6, Math.hypot(p1[0] - p0[0], p1[1] - p0[1])), 0.5),
+          t2 = t1 + Math.pow(Math.max(1e-6, d), 0.5), t3 = t2 + Math.pow(Math.max(1e-6, Math.hypot(p3[0] - p2[0], p3[1] - p2[1])), 0.5);
+      for (var j = 1; j <= m; j++) {
+        if (j === m) { out.push(p2); break; }
+        var t = t1 + (t2 - t1) * j / m, q = [0, 0];
+        for (var c = 0; c < 2; c++) {
+          var A1 = (t1 - t) / (t1 - t0) * p0[c] + (t - t0) / (t1 - t0) * p1[c];
+          var A2 = (t2 - t) / (t2 - t1) * p1[c] + (t - t1) / (t2 - t1) * p2[c];
+          var A3 = (t3 - t) / (t3 - t2) * p2[c] + (t - t2) / (t3 - t2) * p3[c];
+          var B1 = (t2 - t) / (t2 - t0) * A1 + (t - t0) / (t2 - t0) * A2;
+          var B2 = (t3 - t) / (t3 - t1) * A2 + (t - t1) / (t3 - t1) * A3;
+          q[c] = (t2 - t) / (t2 - t1) * B1 + (t - t1) / (t2 - t1) * B2;
+        }
+        out.push(q);
+      }
+    }
+    return out;
+  }
   function prepLine(w, origin, sc) {
+    var loc = function (c) { var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0); return [(m.x - origin.x) / sc, (m.y - origin.y) / sc]; };
     var P = [], last = null;
     w.coords.forEach(function (c) {
-      var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0), p = [(m.x - origin.x) / sc, (m.y - origin.y) / sc];
+      var p = loc(c);
       if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.3) { P.push(p); last = p; }
     });
     if (P.length < 2) return null;
+    var cb = continuation(w, true), ca = continuation(w, false), before = cb && loc(cb), after = ca && loc(ca);
+    P = smooth(P, before, after);
     var n = P.length, S = [0], i;
     for (i = 1; i < n; i++) S[i] = S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
     var L = S[n - 1], segR = [];
-    for (i = 0; i < n - 1; i++) { var dx = P[i + 1][0] - P[i][0], dz = P[i + 1][1] - P[i][1], d = Math.hypot(dx, dz); segR.push([-dz / d, dx / d]); }
+    for (i = 0; i < n - 1; i++) { var dx = P[i + 1][0] - P[i][0], dz = P[i + 1][1] - P[i][1], d = Math.hypot(dx, dz) || 1; segR.push([-dz / d, dx / d]); }
+    // 頭尾的斷面方向：有接續的路就跟那條路的方向平均(兩段路面接得密合，不會一邊開口一邊重疊)
+    var edgeR = function (from, to) { var dx = to[0] - from[0], dz = to[1] - from[1], d = Math.hypot(dx, dz) || 1; return [-dz / d, dx / d]; };
+    var r0 = before ? edgeR(before, P[0]) : null, rn = after ? edgeR(P[n - 1], after) : null;
     var R = P.map(function (_, k) {
-      var a = segR[Math.max(0, k - 1)], b = segR[Math.min(n - 2, k)], x = a[0] + b[0], z = a[1] + b[1], l = Math.hypot(x, z) || 1;
+      var a = k === 0 && r0 ? r0 : segR[Math.max(0, k - 1)], b = k === n - 1 && rn ? rn : segR[Math.min(n - 2, k)], x = a[0] + b[0], z = a[1] + b[1], l = Math.hypot(x, z) || 1;
       x /= l; z /= l;
       var cos = x * b[0] + z * b[1], f = Math.min(2, 1 / Math.max(0.5, cos));
       return [x * f, z * f];
@@ -481,6 +525,31 @@
     if (!m || !window.THREE || m.getLayer(LAYER)) return;
     if (!mats) makeMats();
     m.addLayer(customLayer, beforeId(m));
+    arrange();
+  }
+  // 圖層順序(主程式的路線圖層排序也照這個)：一般道路綠線 → 3D 路面 → 國道綠線 → 陸橋綠線
+  // 從國道底下穿過的一般道路不會畫在國道路面上；本身是橋的一般道路(從國道上方跨過的陸橋)另外畫一份在上面
+  var OVER = 'snm-road-3d-over', arranged = null;
+  function arrange() {
+    var m = window.map;
+    if (!m || !m.getLayer(LAYER) || !m.getLayer('snm-roads-line-main') || !m.getLayer('snm-roads-outline-freeway')) return;
+    var order = (m.style && m.style._order) || [];
+    if (order.indexOf(LAYER) !== order.indexOf('snm-roads-outline-freeway') - 1) m.moveLayer(LAYER, 'snm-roads-outline-freeway');
+    {
+      if (!m.getLayer(OVER + '-casing')) {
+        var cls = ['match', ['get', 'class'], ['primary', 'secondary', 'tertiary', 'minor', 'service'], true, false];
+        var filter = ['all', cls, ['==', ['get', 'brunnel'], 'bridge']];
+        var src = m.getLayer('snm-roads-line-main');
+        m.addLayer({ id: OVER + '-casing', type: 'line', source: src.source, 'source-layer': src.sourceLayer, minzoom: MIN_ZOOM, filter: filter,
+          layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': m.getPaintProperty('snm-roads-outline-main', 'line-color') || '#009B65', 'line-width': 15, 'line-opacity': 0.9 } }, 'snm-roads-outline-freeway');
+        m.addLayer({ id: OVER + '-line', type: 'line', source: src.source, 'source-layer': src.sourceLayer, minzoom: MIN_ZOOM, filter: filter,
+          layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': m.getPaintProperty('snm-roads-line-main', 'line-color') || '#16E098', 'line-width': 11, 'line-opacity': 0.95 } }, 'snm-roads-outline-freeway');
+      }
+    }
+    // 陸橋那份跟著一般道路綠線的顯示 / 隱藏
+    var vis = m.getLayoutProperty('snm-roads-line-main', 'visibility') || 'visible';
+    [OVER + '-casing', OVER + '-line'].forEach(function (id) { if (m.getLayer(id) && m.getLayoutProperty(id, 'visibility') !== vis) m.setLayoutProperty(id, 'visibility', vis); });
+    arranged = true;
   }
   function ensureThree(cb) {
     if (window.THREE) { threeState = 'ready'; cb(); return; }
@@ -493,9 +562,10 @@
   }
   function check() {
     var m = window.map;
-    if (!m || m.getZoom() < MIN_ZOOM) return;
+    if (!m) return;
+    if (m.getZoom() < MIN_ZOOM) { if (arranged) arrange(); return; }
     ensureThree(function () {
-      addLayer();
+      addLayer(); arrange();
       var now = Date.now();
       visibleTiles().forEach(function (k) {
         var t = tiles[k];
@@ -518,7 +588,7 @@
   }
   // 換地圖樣式後圖層會被清掉，重加
   window._snmReloadRoad3d = function () {
-    renderer = null;
+    renderer = null; arranged = null;
     if (window.THREE && window.map && window.map.getZoom() >= MIN_ZOOM) addLayer();
   };
   // 某個位置、行車方向上的國道主線：回傳投影到中心線的位置、那段的方向、路面全寬(找不到回 null)
@@ -547,6 +617,7 @@
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
+    m.on('styledata', function () { if (arranged) arrange(); });   // 主程式重排路線圖層後，3D 路面放回一般道路與國道綠線中間
     var go = function () { m.on('moveend', function () { clearTimeout(timer); timer = setTimeout(check, 250); }); check(); };
     if (m.loaded()) go(); else m.once('load', go);
   }
