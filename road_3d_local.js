@@ -6,6 +6,7 @@
 //   標線：省道、縣道中央雙黃線＋車道線＋路邊白線；市區道路中央黃虛線＋路邊白線；巷弄沒有標線；單行道沒有黃線
 //   路口：交叉的地方標線讓給等級高的路(同等級兩邊都讓，路口中間沒有標線，跟真的一樣)
 //   橋：抬高 1.2 公尺(每層)，兩頭慢慢降回地面，兩側混凝土護欄；隧道不畫
+//       跨過國道的橋：查國道 3D 路面高度(window._snmRoad3dHeightAt)，至少高 5.3 公尺(淨空 4.5)，不會穿過國道
 // 省資源：放大到 zoom 17 以上才畫、只畫畫面中心附近 700 公尺；中心移動超過 250 公尺或換了地圖圖磚才重建。
 // 圖層放在所有路況綠線下面(路況顏色照樣看得到)，國道 3D 路面再蓋在上面。
 (function () {
@@ -117,6 +118,19 @@
       // 橋：中間滿高度，兩頭 min(60 公尺, 長度 1/3) 內降回地面(跟前後的路接得上)
       var hb = r.bridge ? LAYER_H * r.layer : 0, ramp = Math.min(60, r.L / 3);
       r.Z = S.map(function (s) { return hb * Math.min(1, Math.min(s, r.L - s) / (ramp || 1)); });
+      // 跨過國道的橋：查國道 3D 路面的高度(road_3d.js)，至少比國道高 5.3 公尺(淨空 4.5＋橋面 0.8)，往兩頭用 4% 坡度接回
+      if (r.bridge && window._snmRoad3dHeightAt) {
+        var need = r.P.map(function (q) {
+          var ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * sc, origin.y + q[1] * sc, 0).toLngLat();
+          var h = window._snmRoad3dHeightAt(ll.lng, ll.lat, null, null);
+          return h ? h.z + 5.3 : 0;
+        });
+        if (need.some(function (x) { return x > 0; })) {
+          for (var k = 1; k < n; k++) need[k] = Math.max(need[k], need[k - 1] - 0.04 * (S[k] - S[k - 1]));
+          for (k = n - 2; k >= 0; k--) need[k] = Math.max(need[k], need[k + 1] - 0.04 * (S[k + 1] - S[k]));
+          r.Z = r.Z.map(function (z, k2) { return Math.max(z, need[k2]); });
+        }
+      }
       out.push(r);
     });
     return out;

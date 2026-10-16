@@ -1,0 +1,9 @@
+{
+  "name": "smart-nav-map-tools",
+  "private": true,
+  "description": "智行地圖的資料產生工具(只在電腦上跑，手機不會載入這些套件)",
+  "dependencies": {
+    "earcut": "2.2.4",
+    "polygon-clipping": "0.15.7"
+  }
+}

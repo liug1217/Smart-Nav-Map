@@ -2714,6 +2714,8 @@ function _flipCell(cell, from, to) {
     if (window._snmRoutePassedClear) window._snmRoutePassedClear(); // 已行駛的灰色也清掉
     window.plannedRouteCoordinates = [];
     window._navRouteGeometry = null;
+    window._navRouteNodes = null;
+    window.dispatchEvent(new Event('snm-route-changed'));
     plannedRouteCoordinates = [];
     updateWalkLink(0, 0, null); // 清掉道路外的虛線
     window._navTurnView = false; window._navTurnHoldUntil = 0;
@@ -5510,7 +5512,8 @@ function _flipCell(cell, from, to) {
     // 有設避開道路：OSRM 不能排除指定路段，改用 Valhalla 的 exclude_polygons 真正排除，算完再逐條檢查(見下方避開道路)
     if (_avoids.length || avoidOptsOn(mode).length) return fetchRoutesAvoiding(mode, origin, destLat, destLon, alternatives);
     const ll = origin.lon + ',' + origin.lat + ';' + destLon + ',' + destLat;
-    const q = '?overview=full&geometries=geojson&steps=true' + (alternatives ? '&alternatives=3' : '');
+    // annotations=nodes：經過的 OSM 節點 id，3D 道路(road_3d.js)用它把導航路線畫在對的那一層(高架、平面並排時用位置分不出來)
+    const q = '?overview=full&geometries=geojson&steps=true&annotations=nodes' + (alternatives ? '&alternatives=3' : '');
     let url;
     if (mode === 'scooter') {
       const body = { locations: [{ lat: origin.lat, lon: origin.lon }, { lat: destLat, lon: destLon }],
@@ -6313,6 +6316,10 @@ function _flipCell(cell, from, to) {
       plannedRouteCoordinates = route.geometry.coordinates;
       window.plannedRouteCoordinates = plannedRouteCoordinates;
       window._navRouteGeometry = route.geometry; // 供樣式切換後重建圖層用
+      // 經過的 OSM 節點(OSRM 才有；機車路線用 Valhalla 沒有，3D 道路改用位置＋方向對)
+      window._navRouteNodes = (route.legs || []).reduce(function (a, l) { return l.annotation && l.annotation.nodes ? a.concat(l.annotation.nodes) : a; }, []);
+      if (!window._navRouteNodes.length) window._navRouteNodes = null;
+      window.dispatchEvent(new Event('snm-route-changed'));
 
       if (window._snmRoutePassedClear) window._snmRoutePassedClear(); // 新路線(含重新規劃)：已行駛從頭算
       if (window.navRouteSource) {
@@ -7404,6 +7411,7 @@ map.on('load', function() {
       Math.abs(_lerpAngle(_lastBearing, _dispBearing, 1) - _lastBearing) > 0.01;
     if (poseChanged) {
       _lastLng = _dispLng; _lastLat = _dispLat; _lastBearing = _dispBearing;
+      window._snmCarPose = { lng: _dispLng, lat: _dispLat, bearing: _dispBearing };   // 3D 道路：高架上把車子抬到橋面高度
       if (typeof window._updateCarMarkerRaw === 'function') {
         window._updateCarMarkerRaw(_dispLng, _dispLat, _dispBearing);
       }
@@ -12594,9 +12602,9 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="road_3d.js?v=12"></script>
-<script src="road_3d_local.js?v=2"></script>
-<script src="cms_3d.js?v=7"></script>
+<script src="road_3d.js?v=14"></script>
+<script src="road_3d_local.js?v=3"></script>
+<script src="cms_3d.js?v=8"></script>
 </body>
 </html>
   
