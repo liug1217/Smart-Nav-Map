@@ -4,6 +4,7 @@
 //   - 標線：車道線白色虛線(劃 4 公尺、空 6 公尺)、外側路面邊線白色實線、內側路面邊線黃色實線；雙向道路中間雙黃線
 //   - 護欄：外側鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、中央分隔混凝土護欄(紐澤西護欄)、橋上兩側混凝土護欄
 //   - 匝道進出口(分流、匯流)那段不畫外側護欄，車道才接得起來
+//   - 轉角都改成貝茲曲線(彎道圓順)，匝道接點不動
 // 資料：OpenStreetMap 的車道數 lanes、單行道、橋梁，事先切成 zoom 13 圖磚的小檔案(road3d/，用 tools/build-road3d.js 產生)，
 //       只抓畫面附近那幾塊、同一塊只抓一次。沒標車道數的用一般值：國道 3、快速道路 2、匝道 1。
 //       檔案抓不到(離線)時改用底圖的道路線。
@@ -192,11 +193,29 @@
 
   function buildWay(w, origin, sc, B, nearJunc) {
     // 經緯度 → 這塊圖磚的公尺座標(x 東、z 南)
-    var P = [], last = null;
-    w.coords.forEach(function (c) {
+    var P0 = [], shared = [], last = null;
+    w.coords.forEach(function (c, ci) {
       var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0), p = [(m.x - origin.x) / sc, (m.y - origin.y) / sc];
-      if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.3) { P.push(p); last = p; }
+      if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.3) { P0.push(p); shared.push((nodeIdx[nodeKey(w, ci)] || []).length > 1); last = p; }
     });
+    if (P0.length < 2) return;
+    // 貝茲曲線：每個轉角改成二次貝茲曲線(兩邊各取一段，不超過那段的一半、最多 40 公尺，控制點 = 原本的轉角)，
+    // 彎道變圓順、還是貼著原本的線走；跟別條路共用的點(匝道接點)不動，路才接得起來
+    var P = [P0[0]], add = function (p) { var q = P[P.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.05) P.push(p); };   // 相鄰兩個轉角的曲線剛好接在一起時不要重複點
+    for (var c0 = 1; c0 < P0.length - 1; c0++) {
+      var pa = P0[c0 - 1], pb = P0[c0], pc = P0[c0 + 1];
+      var la = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), lc = Math.hypot(pc[0] - pb[0], pc[1] - pb[1]);
+      var cosT = ((pb[0] - pa[0]) * (pc[0] - pb[0]) + (pb[1] - pa[1]) * (pc[1] - pb[1])) / (la * lc || 1);
+      var deg = Math.acos(Math.max(-1, Math.min(1, cosT))) * 180 / Math.PI;
+      if (shared[c0] || deg < 1) { add(pb); continue; }
+      var dd = Math.min(40, la / 2, lc / 2), q0 = [pb[0] + (pa[0] - pb[0]) * dd / la, pb[1] + (pa[1] - pb[1]) * dd / la], q2 = [pb[0] + (pc[0] - pb[0]) * dd / lc, pb[1] + (pc[1] - pb[1]) * dd / lc];
+      var steps = Math.max(2, Math.ceil(deg / 3));
+      for (var j0 = 0; j0 <= steps; j0++) {
+        var tb = j0 / steps, u0 = (1 - tb) * (1 - tb), u1 = 2 * (1 - tb) * tb, u2 = tb * tb;
+        add([u0 * q0[0] + u1 * pb[0] + u2 * q2[0], u0 * q0[1] + u1 * pb[1] + u2 * q2[1]]);
+      }
+    }
+    add(P0[P0.length - 1]);
     if (P.length < 2) return;
     var n = P.length, S = [0];
     for (var i = 1; i < n; i++) S[i] = S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
