@@ -278,7 +278,8 @@
     };
     // 鋼板護欄：W 型鋼板(兩道折線)＋立柱
     var guardrail = function (o, side, skip) {
-      wall(B.steel, o, side, [[0, 0.45], [0.06, 0.53], [0, 0.6], [0.06, 0.68], [0, 0.76]], skip);
+      // W 型鋼板：兩道凸起朝向車道(偏移 0)，上下緣和中間往立柱那邊彎(偏移 0.06)
+      wall(B.steel, o, side, [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]], skip);
       var period = 4;
       for (var k = 0; k < n - 1; k++) {
         if (skip && skip(k)) continue;
