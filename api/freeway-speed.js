@@ -3,22 +3,21 @@
 // 高公局伺服器沒有開放 CORS，瀏覽器不能直接抓，由這支後端代為抓取、合併路段資料後回傳。
 //
 // 資料來源(免金鑰)：
-//   即時車速 LiveTraffic.xml  每分鐘更新(照上游實際更新時間抓，跟地圖國道路況共用一份，見 lib/upstream.js)
+//   即時車速 LiveTraffic.xml  每分鐘更新(這裡快取 60 秒，多人同時看也只抓一次)
 //   路段資料 Section.xml      每天更新
 //
-// 回傳 { ok, data: { updateTime, nextUpdateIn, items: [{ road, dir, s, e, from, to, speed, level, limit }] } }
+// 回傳 { ok, data: { updateTime, items: [{ road, dir, s, e, from, to, speed, level, limit }] } }
 //   s/e 起訖里程(公尺)、speed 車速(km/h，-1 = 沒資料)、level 壅塞等級(1 順暢 ~ 5 壅塞)
 
 const { corsHeaders, handlePreflight, methodNotAllowed, ok, err } = require('../lib/response');
-const { feed } = require('../lib/upstream');
 
 const BASE = 'https://tisvcloud.freeway.gov.tw/history/motc20';
 const STATIC_TTL_MS = 6 * 60 * 60 * 1000;
+const LIVE_TTL_MS = 60 * 1000;
 const FETCH_TIMEOUT_MS = 10000;
 
 let sectionCache = null; // { at, map: { SectionID -> 路段 } }
-const liveFeed = feed(BASE + '/LiveTraffic.xml', { periodMs: 60 * 1000 });
-let liveCache = null;    // { version, data }：上游沒更新就不重新解析
+let liveCache = null;    // { at, data }
 
 function tag(block, name) {
   const m = block.match(new RegExp('<' + name + '>([\\s\\S]*?)</' + name + '>'));
@@ -58,9 +57,9 @@ async function getSections() {
 }
 
 async function getLive() {
-  const [lf, sections] = await Promise.all([liveFeed.get(3000), getSections()]);
-  if (liveCache && liveCache.version === lf.version) return liveCache.data;
-  const xml = lf.body;
+  const now = Date.now();
+  if (liveCache && now - liveCache.at < LIVE_TTL_MS) return liveCache.data;
+  const [xml, sections] = await Promise.all([fetchText(BASE + '/LiveTraffic.xml'), getSections()]);
   const items = [];
   for (const b of blocks(xml, 'LiveTraffic')) {
     const sec = sections[tag(b, 'SectionID')];
@@ -69,7 +68,7 @@ async function getLive() {
     items.push(Object.assign({}, sec, { speed: Number.isFinite(speed) ? speed : -1, level: +tag(b, 'CongestionLevel') || 0 }));
   }
   const data = { updateTime: tag(xml, 'UpdateTime'), items };
-  liveCache = { version: lf.version, data };
+  liveCache = { at: now, data };
   return data;
 }
 
@@ -78,10 +77,10 @@ module.exports = async (req, res) => {
   if (handlePreflight(req, res)) return;
   if (req.method !== 'GET') return methodNotAllowed(res);
   try {
-    return ok(res, Object.assign({ nextUpdateIn: liveFeed.nextUpdateIn }, await getLive()), { cache: 'no-cache' });
+    return ok(res, await getLive(), { cache: 'public, s-maxage=30, stale-while-revalidate=60' });
   } catch (e) {
     console.error('[freeway-speed]', e.message);
-    if (liveCache) return ok(res, Object.assign({ nextUpdateIn: liveFeed.nextUpdateIn }, liveCache.data)); // 上游暫時連不到就先給上一次的
+    if (liveCache) return ok(res, liveCache.data); // 上游暫時連不到就先給上一次的
     return err(res, 502, 'UPSTREAM_ERROR', '無法取得國道路段車速(' + e.message + ')');
   }
 };

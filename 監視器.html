@@ -225,15 +225,9 @@
 
   // ── 電子看板(CMS)訊息：每支監視器顯示「開到這裡之前」最近的一面看板在講什麼 ──
   let cmsList = [];
-  // 照後端說的「上游下次更新」時間(nextUpdateIn)排下一次抓取；螢幕關著或不需要時，每 5 秒看一下要不要補抓
-  function schedule(fn, ms, need) {
-    setTimeout(function run() { if (document.hidden || (need && !need())) setTimeout(run, 5000); else fn(); }, ms);
-  }
   function loadCms() {
-    var wait = 10000;
     fetch(API + '/cms').then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return;
-      wait = (j.data.nextUpdateIn || 60000) + Math.random() * 1500;
       cmsList = (j.data.items || []).filter(function (x) { return x.messages && x.messages.length; }).map(function (x) {
         const mm = String(x.mile || '').match(/(\d+)K\+(\d+)/);
         return { road: x.road, dir: x.direction, m: mm ? (+mm[1]) * 1000 + (+mm[2]) : null,
@@ -244,7 +238,7 @@
       // 只把看板訊息補進已經在畫面上的卡片，不重畫清單(已經抓好的縮圖不用重抓)
       document.querySelectorAll('.card').forEach(function (k) { setCmsEl(k.querySelector('.info'), byId[k.dataset.id]); });
       if (vCam) showCam(vCam);
-    }).catch(function () {}).then(function () { schedule(loadCms, wait); });
+    }).catch(function () {});
   }
   // 同一條路、同方向、在監視器「前面」10 公里內最近的看板
   let cmsIdx = {};
@@ -453,10 +447,8 @@
     ln.firstChild.textContent = has ? x.speed : '—';
   }
   function loadSpeed() {
-    var wait = 10000;
     fetch(API + '/freeway-speed').then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.ok) return;
-      wait = (j.data.nextUpdateIn || 60000) + Math.random() * 1500;
       const first = !speedList.length;
       const ALIAS = { '臺76線': '快速公路76號' };
       speedList = (j.data.items || []).map(function (t) { if (ALIAS[t.road]) t.road = ALIAS[t.road]; return t; });
@@ -464,7 +456,7 @@
       speedList.forEach(function (t) { (speedIdx[t.road + '|' + t.dir] = speedIdx[t.road + '|' + t.dir] || []).push(t); });
       if (st.tab !== 'fw') return;
       if (first) renderDiagram(true); else document.querySelectorAll('.lane').forEach(paintLane); // 之後只換車道顏色，縮圖不重抓
-    }).catch(function () {}).then(function () { schedule(loadSpeed, wait, function () { return st.tab === 'fw'; }); });
+    }).catch(function () {});
   }
   // 交流道：優先用路段車速資料的起訖(最準)，沒有就從監視器的路段名稱推
   function nodesOf(road, fdir) {
@@ -692,6 +684,8 @@
     if (DATA.updated) $('upd').textContent = '國道 ' + DATA.fw.length + ' 支、省道 ' + DATA.thb.length + ' 支 · 資料 ' + DATA.updated;
     renderControls(); render(); if (focus) setTimeout(function () { openViewer(focus); }, 300);
     loadCms(); loadSpeed();
+    setInterval(function () { if (!document.hidden && st.tab === 'fw') loadSpeed(); }, 60 * 1000); // 車速每分鐘更新
+    setInterval(function () { if (!document.hidden) loadCms(); }, 5 * 60 * 1000); // 看板訊息 5 分鐘更新一次
   })();
 })();
 </script>
