@@ -2499,6 +2499,7 @@ function _flipCell(cell, from, to) {
     center: [121.394, 24.951],
     zoom: 16,
     pitch: 60,
+    maxPitch: 85,   // 可以往下拉到幾乎平視，看得到地平線上的天空(sky.js)
     bearing: -20,
     antialias: false,
     preserveDrawingBuffer: true
@@ -12587,6 +12588,8 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
+<!-- 🌤 天空(照太陽高度角換顏色) -->
+<script src="sky.js?v=1"></script>
 <script src="road_3d.js?v=19"></script>
 <script src="cms_3d.js?v=9"></script>
 </body>
