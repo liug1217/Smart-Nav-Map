@@ -1,2 +1,5 @@
 .env
 .vercel
+
+# 電腦端資料產生工具的套件
+tools/node_modules/
