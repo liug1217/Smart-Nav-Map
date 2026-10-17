@@ -237,9 +237,7 @@
     });
   }
   function modelMatrix(s) {
-    // 門架立在 3D 路面上(高架上的看板跟著抬高；road_3d.js 查路面高度)
-    var a = window._snmRoad3dAt ? window._snmRoad3dAt(signLon(s), signLat(s), 30) : null;
-    var T = window.THREE, mc = maplibregl.MercatorCoordinate.fromLngLat([signLon(s), signLat(s)], a ? a.h : 0), sc = mc.meterInMercatorCoordinateUnits();
+    var T = window.THREE, mc = maplibregl.MercatorCoordinate.fromLngLat([signLon(s), signLat(s)], 0), sc = mc.meterInMercatorCoordinateUnits();
     return new T.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new T.Vector3(sc, -sc, sc)).multiply(new T.Matrix4().makeRotationAxis(new T.Vector3(1, 0, 0), Math.PI / 2));
   }
 
@@ -347,13 +345,10 @@
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
-    var lastMove = 0;
-    var go = function () { m.on('moveend', check); m.on('move', function () { var now = Date.now(); if (now - lastMove > 1500) { lastMove = now; check(); } }); check(); };   // 導航時鏡頭一直在動：移動中也更新
+    var go = function () { m.on('moveend', check); check(); };
     if (m.loaded()) go(); else m.once('load', go);
     pageTimer = setInterval(rotatePages, PAGE_MS);
     document.addEventListener('visibilitychange', autoLoad);
-    var refit = null;
-    window.addEventListener('snm-road3d-data', function () { clearTimeout(refit); refit = setTimeout(refreshVisible, 200); });   // 3D 路面載入後：門架改立在路面高度
   }
   init();
 })();

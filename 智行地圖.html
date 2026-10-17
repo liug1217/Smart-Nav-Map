@@ -2499,7 +2499,6 @@ function _flipCell(cell, from, to) {
     center: [121.394, 24.951],
     zoom: 16,
     pitch: 60,
-    maxPitch: 85,   // 可以往下拉到幾乎平視，看得到地平線上的天空(sky.js)
     bearing: -20,
     antialias: false,
     preserveDrawingBuffer: true
@@ -2889,10 +2888,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._reloadCarsLayer === 'function') window._reloadCarsLayer();
     if (typeof window._reloadFwShields === 'function') window._reloadFwShields();
     if (typeof window._snmReloadAvoidLayer === 'function') window._snmReloadAvoidLayer();
-    if (typeof window._snmReloadRoad3d === 'function') window._snmReloadRoad3d();
     if (typeof window._snmReloadCms3d === 'function') window._snmReloadCms3d();
-    if (typeof window._snmReloadCams3d === 'function') window._snmReloadCams3d();
-    if (typeof window._snmReloadRoad3dCity === 'function') window._snmReloadRoad3dCity();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -4633,11 +4629,10 @@ function _flipCell(cell, from, to) {
   // 非同步的路線規劃(含偏航重新規劃)回來時若場次已變,代表使用者已退出/換了導航,結果直接丟棄,
   // 避免「按退出後,晚回來的重新規劃又把導航模式打開」。
   let _navSession = 0;
-  // 🎥 導航鏡頭:平常 3D(zoom 19、傾斜 65°);接近轉彎 150m 內拉遠成平面(zoom 18、傾斜 0°),轉完 4 秒後回 3D
+  // 🎥 導航鏡頭:平常 3D(zoom 17、傾斜 60°);接近轉彎 150m 內拉遠成平面(zoom 16、傾斜 0°),轉完 4 秒後回 3D
   const NAV_TURN_VIEW_M = 150;
   const NAV_TURN_HOLD_MS = 4000;
-  // 3D 道路之後鏡頭拉近：平常 zoom 19、傾斜 65°(看得清楚車道、標線)；接近轉彎拉遠到 18、平面
-  window.NAV_CAM = { normal: { zoom: 19, pitch: 65 }, turn: { zoom: 18, pitch: 0 } };
+  window.NAV_CAM = { normal: { zoom: 17, pitch: 60 }, turn: { zoom: 16, pitch: 0 } };
   // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
   // 回傳陣列由遠到近，最多 3 個值
   const rect8 = document.getElementById('rect8');
@@ -7217,7 +7212,7 @@ map.on('load', function() {
       source: 'user-pos',
       layout: {
         'icon-image': 'car-icon',
-        'icon-size': 1,   // 鏡頭拉近看 3D 道路時車子維持原本大小(不縮小)
+        'icon-size': 1,
         // 車頭朝向「地圖上的實際行進方向」:鏡頭跟隨時地圖跟著轉,車子照樣朝上;
         // 用手轉動地圖時,車子跟著道路一起轉,不會自己原地打轉
         'icon-rotate': ['get', 'heading'],
@@ -12591,17 +12586,7 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<!-- 🌤 天空(照太陽高度角換顏色) -->
-<script src="sky.js?v=1"></script>
-<script src="road_3d_shape.js?v=3"></script>
-<script src="road_3d.js?v=30"></script>
-<!-- 🏙 一般道路 3D 路面 -->
-<script src="road_3d_city.js?v=4"></script>
-<!-- 📹 監視器、測速照相 3D 模型(放大到 zoom 16 才畫) -->
-<script src="cams_3d.js?v=3"></script>
-<script src="cms_3d.js?v=11"></script>
-<!-- 🚗 示範導航(網址加 ?demo=1 才會跑) -->
-<script src="demo_drive.js?v=2"></script>
+<script src="cms_3d.js?v=9"></script>
 </body>
 </html>
   
