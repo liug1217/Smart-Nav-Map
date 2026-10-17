@@ -238,6 +238,92 @@ function separate(ways) {
   unifyNodes(ways);
   return { pushed, maxPush, followed };
 }
+// 匝道跟同一層的路(同向或對向)平行疊在一起(OSM 畫得比實際路寬還近)：匝道往外推開，中間留 0.8 公尺
+//   對方是主線：主線不動、匝道推足；對方也是匝道：各推一半
+//   跟別條路共用的節點不動，離它越遠才推越多(每公尺最多 0.1 公尺)，接點附近的重疊交給交流道的槽化區
+function separateLinks(ways) {
+  const GAP = 0.8, RANGE = 30, CELL = 60, SLOPE = 0.1, MAXP = 10;
+  const grid = new Map(), useCnt = new Map();
+  // 匝道每 20 公尺補一個點(OSM 直線段很長，只推頭尾的點中間會推不夠)
+  for (const w of ways) {
+    if (!w.link) continue;
+    const ll = [w.ll[0]], nd = [w.nodes[0]];
+    for (let i = 1; i < w.ll.length; i++) {
+      const a = w.ll[i - 1], b = w.ll[i], m = Math.floor(dist(a, b) / 20);
+      for (let j = 1; j <= m; j++) { const f = j / (m + 1); ll.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); nd.push(null); }
+      ll.push(b); nd.push(w.nodes[i]);
+    }
+    w.ll = ll; w.nodes = nd;
+  }
+  for (const w of ways) {
+    w._f = fOf(w.ll[0][1]); w._P = w.ll.map(chk);
+    w.nodes.forEach((id) => { if (id != null) useCnt.set(id, (useCnt.get(id) || 0) + 1); });
+    for (let i = 0; i < w._P.length - 1; i++) {
+      const a = w._P[i], b = w._P[i + 1];
+      for (let x = Math.floor(Math.min(a[0], b[0]) / CELL); x <= Math.floor(Math.max(a[0], b[0]) / CELL); x++)
+        for (let y = Math.floor(Math.min(a[1], b[1]) / CELL); y <= Math.floor(Math.max(a[1], b[1]) / CELL); y++) {
+          const k = x * 100003 + y; if (!grid.has(k)) grid.set(k, []); grid.get(k).push([w, i]);
+        }
+    }
+  }
+  const W = (w) => SH.widthOf({ oneway: w.oneway, link: w.link, lanes: lanesOf(w) });
+  let pushed = 0, maxPush = 0;
+  const moves = [];
+  for (const w of ways) {
+    if (!w.link) continue;
+    const P = w._P, n = P.length, Wa = W(w), need = new Array(n).fill(0);
+    // 這一點(方向 t)要往右推多少(負 = 往左)
+    const needAt = (p, t) => {
+      const r = rightN(t[0], t[1]);
+      let best = null;
+      for (let x = Math.floor((p[0] - RANGE * w._f) / CELL); x <= Math.floor((p[0] + RANGE * w._f) / CELL); x++)
+        for (let y = Math.floor((p[1] - RANGE * w._f) / CELL); y <= Math.floor((p[1] + RANGE * w._f) / CELL); y++)
+          for (const [o, j] of grid.get(x * 100003 + y) || []) {
+            if (o === w || Math.abs(SH.baseH(o) - SH.baseH(w)) > 0.6) continue;
+            const A = o._P[j], B = o._P[j + 1], dx = B[0] - A[0], dy = B[1] - A[1], L2 = dx * dx + dy * dy;
+            if (!L2) continue;
+            if (Math.abs((dx * t[0] + dy * t[1]) / Math.sqrt(L2)) < 0.85) continue;   // 要平行(交叉的不算)
+            const f = ((p[0] - A[0]) * dx + (p[1] - A[1]) * dy) / L2;
+            if (f < 0 || f > 1) continue;
+            const q = [A[0] + dx * f, A[1] + dy * f], lat = ((q[0] - p[0]) * r[0] + (q[1] - p[1]) * r[1]) / w._f;   // 對方在右邊為正
+            const ov = Wa / 2 + W(o) / 2 + GAP - Math.abs(lat);
+            if (ov <= 0) continue;
+            const v = -Math.sign(lat || 1) * ov * (o.link ? 0.5 : 1);
+            if (!best || Math.abs(v) > Math.abs(best)) best = v;
+          }
+      return best || 0;
+    };
+    for (let i = 0; i < n - 1; i++) {
+      const A = P[i], B = P[i + 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]) / w._f, t = [(B[0] - A[0]) / (len * w._f || 1), (B[1] - A[1]) / (len * w._f || 1)];
+      const m = Math.max(1, Math.ceil(len / 10));
+      for (let j = 0; j <= m; j++) {
+        const v = needAt([A[0] + (B[0] - A[0]) * j / m, A[1] + (B[1] - A[1]) * j / m], t);
+        if (Math.abs(v) > Math.abs(need[i])) need[i] = v;
+        if (Math.abs(v) > Math.abs(need[i + 1])) need[i + 1] = v;
+      }
+    }
+    if (!need.some((v) => Math.abs(v) > 0.05)) continue;
+    const S = [0]; for (let i = 1; i < n; i++) S.push(S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]) / w._f);
+    // 前後 30 公尺取(絕對值)最大，再前後 60 公尺平均
+    const mx = need.map((_, i) => { let v = 0; for (let j = 0; j < n; j++) if (Math.abs(S[j] - S[i]) <= 30 && Math.abs(need[j]) > Math.abs(v)) v = need[j]; return v; });
+    const sm = mx.map((_, i) => { let a = 0, c = 0; for (let j = 0; j < n; j++) { const d = Math.abs(S[j] - S[i]); if (d <= 60) { const wt = 1 - d / 60; a += mx[j] * wt; c += wt; } } return a / c; });
+    // 共用節點(和頭尾)不動，離它越遠才推越多
+    const fixedS = []; for (let i = 0; i < n; i++) if (i === 0 || i === n - 1 || (w.nodes[i] != null && useCnt.get(w.nodes[i]) > 1)) fixedS.push(S[i]);
+    const out = sm.map((v, i) => { let d = Infinity; for (const fs of fixedS) d = Math.min(d, Math.abs(S[i] - fs)); const cap = Math.min(MAXP, d * SLOPE); return Math.max(-cap, Math.min(cap, v)); });
+    if (!out.some((v) => Math.abs(v) > 0.05)) continue;
+    moves.push([w, out]); pushed++; maxPush = Math.max(maxPush, ...out.map(Math.abs));
+  }
+  for (const [w, sm] of moves) {
+    const P = w._P, n = P.length;
+    w.ll = w.ll.map((c, i) => {
+      if (Math.abs(sm[i]) < 0.005) return c;
+      const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, r = rightN((b[0] - a[0]) / l, (b[1] - a[1]) / l);
+      const m = merc(c[0], c[1]), k = kAt(c[1]);
+      return unmerc(m[0] + r[0] * sm[i] / k, m[1] + r[1] * sm[i] / k);
+    });
+  }
+  return { pushed, maxPush };
+}
 // 同一個 OSM 節點在每條路上的座標一定要一模一樣(差 1e-6 度手機就認不出是同一點，高度會接不起來)：
 // 以「主線、路中間經過那條」的位置為準，全部統一
 function unifyNodes(ways) {
@@ -447,7 +533,176 @@ function clearance(ways, nodeIdx) {
   return { crossings: cross.length, bumped, left };
 }
 
-// ── 4. 護欄落在別條路上 ──
+// ── 4. 交流道(第 2 階段)：分流、匯流、匝道分岔 ──
+//   每個好幾條路接在一起的點：找「直直穿過去」的路(路在這點中間經過，或前一段的尾接下一段的頭、轉彎最小)，
+//   其他在這裡開始 / 結束的路就是「分出去 / 併進來」的支線。分流看下游、匯流看上游的那條當「本線」。
+//   沿著支線離開接點每 2 公尺量一次：支線內側路面邊緣跟本線外側路面邊緣的空隙 gap
+//     gap < 0(還疊在本線上)：支線那段不畫，改成本線往那一側加寬(減速 / 加速車道)，本線那側的白線改虛線
+//     0 ≤ gap < 1.5 公尺：槽化區(鋪路面＋白色斜紋＋邊線)
+//     gap ≥ 1.5 公尺(槽化區尖端之後)：支線是獨立的路
+//   本線那一側的護欄從接點到尖端都打開；支線靠本線那側的護欄到尖端之後才開始
+//   400 公尺內都沒分開的(兩條路並排很久)：不特別處理(照一般重疊規則：護欄落在別條路上不畫)
+const NOSE = 1.5;
+const chkInv = (p) => unmerc(O[0] + p[0] / KC, O[1] + p[1] / KC);
+function junctions(ways, nodeIdx) {
+  for (const w of ways) if (w.ok) { const n = w.P.length; w.auxL = new Array(n).fill(0); w.auxR = new Array(n).fill(0); w.skip = []; w.gores = []; w.hideX = []; }
+  // 這條路第 i 點(原始點)在曲線上的索引
+  const pIdx = (w, i) => (w.rawToP && w.rawToP.has(i) ? w.rawToP.get(i) : (i === 0 ? 0 : w.P.length - 1));
+  const dirAt = (w, k, out) => {   // 曲線第 k 點往前(out)或往後的方向(共同座標，單位向量)
+    const a = out ? w.Pc[k] : w.Pc[Math.max(0, k - 1)], b = out ? w.Pc[Math.min(w.Pc.length - 1, k + 1)] : w.Pc[k];
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l];
+  };
+  // p 投影到 w(共同座標)：{ s(公尺), lat(公尺，右正), k, t }
+  const project = (w, p, hint) => {
+    let best = null;
+    const lo = hint == null ? 0 : Math.max(0, hint - 60), hi = hint == null ? w.Pc.length - 1 : Math.min(w.Pc.length - 1, hint + 60);
+    for (let k = lo; k < hi; k++) {
+      const A = w.Pc[k], B = w.Pc[k + 1], dx = B[0] - A[0], dy = B[1] - A[1], L2 = dx * dx + dy * dy;
+      if (!L2) continue;
+      const t = Math.max(0, Math.min(1, ((p[0] - A[0]) * dx + (p[1] - A[1]) * dy) / L2));
+      const qx = A[0] + dx * t, qy = A[1] + dy * t, d = Math.hypot(p[0] - qx, p[1] - qy);
+      if (!best || d < best.d) best = { d, k, t, lat: ((p[0] - qx) * w.seg[k][0] + (p[1] - qy) * w.seg[k][1]) / w.fc, s: w.S[k] + (w.S[k + 1] - w.S[k]) * t };
+    }
+    return best;
+  };
+  const li = (arr, k, t) => arr[k] + (arr[Math.min(arr.length - 1, k + 1)] - arr[k]) * t;
+  const lip = (P, k, t) => { const a = P[k], b = P[Math.min(P.length - 1, k + 1)]; return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; };
+  let count = 0, skipped = 0;
+  for (const list of nodeIdx.values()) {
+    if (list.length < 2) continue;
+    const ents = list.filter((o) => o.w.ok && o.w.oneway);
+    if (ents.length < 2) continue;
+    // 直直穿過去的路
+    let through = null;
+    const turn = (u, v) => Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1])));
+    for (const o of ents) {
+      const k = pIdx(o.w, o.i), last = o.w.P.length - 1;
+      if (k > 0 && k < last) { const tv = turn(dirAt(o.w, k, false), dirAt(o.w, k, true)); if (!through || tv < through.turn) through = { turn: tv, up: { w: o.w, k }, down: { w: o.w, k } }; }
+    }
+    for (const a of ents) for (const b of ents) {
+      if (a.w === b.w) continue;
+      const ka = pIdx(a.w, a.i), kb = pIdx(b.w, b.i);
+      if (ka !== a.w.P.length - 1 || kb !== 0) continue;
+      const tv = turn(dirAt(a.w, ka, false), dirAt(b.w, kb, true));
+      if (!through || tv < through.turn) through = { turn: tv, up: { w: a.w, k: ka }, down: { w: b.w, k: kb } };
+    }
+    if (!through || through.turn > Math.PI / 3) continue;
+    for (const o of ents) {
+      const A = o.w, kA = pIdx(A, o.i), last = A.P.length - 1;
+      if (A === through.up.w || A === through.down.w) continue;
+      if (kA !== 0 && kA !== last) continue;
+      const diverge = kA === 0, base = diverge ? through.down : through.up;
+      // 本線往下游(分流)或上游(匯流)一路接下去，最多 600 公尺(OSM 的本線常在交流道附近切成好幾段)
+      const chain = [{ w: base.w, hint: base.k }];
+      for (let tot = 0; chain.length < 12;) {
+        const cw = chain[chain.length - 1].w, cl = cw.P.length - 1;
+        tot += cw.S[cl]; if (tot > 600) break;
+        const endKey = key(cw.ll[diverge ? cw.ll.length - 1 : 0]), dEnd = dirAt(cw, diverge ? cl : 0, !diverge);
+        let nx = null, bt = Math.PI / 6;
+        for (const o of nodeIdx.get(endKey) || []) {
+          if (o.w === cw || !o.w.ok || !o.w.oneway || o.w === A || chain.some((c) => c.w === o.w)) continue;
+          const ok0 = diverge ? o.i === 0 : o.i === o.w.ll.length - 1;
+          if (!ok0) continue;
+          const ko = diverge ? 0 : o.w.P.length - 1, tv = turn(dEnd, dirAt(o.w, ko, diverge));
+          if (tv < bt) { bt = tv; nx = o.w; }
+        }
+        if (!nx) break;
+        chain.push({ w: nx, hint: diverge ? 0 : nx.P.length - 1 });
+      }
+      // 每段本線上的位置 s → 離接點的距離 d(往支線那個方向為正；接點另一邊為負)
+      {
+        let endD = 0;
+        chain.forEach((c, ci) => {
+          const L = c.w.S[c.w.P.length - 1];
+          if (ci === 0) { const s0 = c.w.S[base.k]; c.d = diverge ? (x) => x - s0 : (x) => s0 - x; endD = diverge ? L - s0 : s0; }
+          else { const o = endD; c.d = diverge ? (x) => o + x : (x) => o + (L - x); endD += L; }
+        });
+      }
+      const projChain = (p) => {
+        let best = null;
+        for (const c of chain) { const pr = project(c.w, p, c.hint); if (pr && (!best || pr.d < best.d)) { best = pr; best.c = c; } }
+        if (best) best.c.hint = best.k;
+        return best;
+      };
+      const lastW = chain[chain.length - 1].w;
+      // 支線也一路接下去(OSM 的匝道也常切成好幾小段)，最多 500 公尺
+      const aCh = [A];
+      for (let tot = A.S[last]; tot < 500 && aCh.length < 12;) {
+        const cw = aCh[aCh.length - 1], cl = cw.P.length - 1;
+        const dEnd = dirAt(cw, diverge ? cl : 0, !diverge);
+        let nx = null, bt = Math.PI / 6;
+        for (const o of nodeIdx.get(key(cw.ll[diverge ? cw.ll.length - 1 : 0])) || []) {
+          if (o.w === cw || !o.w.ok || !o.w.oneway || aCh.includes(o.w) || chain.some((c) => c.w === o.w)) continue;
+          if (diverge ? o.i !== 0 : o.i !== o.w.ll.length - 1) continue;
+          const tv = turn(dEnd, dirAt(o.w, diverge ? 0 : o.w.P.length - 1, diverge));
+          if (tv < bt) { bt = tv; nx = o.w; }
+        }
+        if (!nx) break;
+        aCh.push(nx); tot += nx.S[nx.P.length - 1];
+      }
+      // 沿支線離開接點取樣(分流往前、匯流往後)
+      const samples = [];
+      { let off = 0; for (const aw of aCh) { const L = aw.S[aw.P.length - 1]; for (let u = off ? 0 : 0; u <= L && off + u <= 500; u += 2) samples.push([aw, off + u, diverge ? u : L - u]); off += L; if (off > 500) break; } }
+      let side = 0, sep = null, nose = null;
+      const rec = [];
+      for (const [Aw, u, sA] of samples) {
+        let k = 0; while (k < Aw.S.length - 2 && Aw.S[k + 1] < sA) k++;
+        const t = (sA - Aw.S[k]) / ((Aw.S[k + 1] - Aw.S[k]) || 1);
+        const p = lip(Aw.Pc, k, t);
+        const pr = projChain(p);
+        if (!pr) break;
+        const B = pr.c.w;
+        if (B === lastW && (diverge ? (pr.k >= B.Pc.length - 2 && pr.t === 1) : (pr.k === 0 && pr.t === 0))) break;   // 超出本線
+        const hA = li(Aw.Wv, k, t) / 2, hB = li(B.Wv, pr.k, pr.t) / 2;
+        // 在哪一側：第一次真的分開(路面不再重疊)時在哪邊就是哪邊(接點曲線剛開始可能往反方向偏一點)
+        if (!side && Math.abs(pr.lat) - hA - hB >= 0) side = pr.lat > 0 ? 1 : -1;
+        const gap = (side || 1) * pr.lat - hA - hB;
+        rec.push({ u, sA, k, t, p, pr, B, Aw, hA, hB, gap });
+        if (sep == null && side && gap >= 0) sep = rec.length - 1;
+        if (sep != null && gap >= NOSE) { nose = rec.length - 1; break; }
+      }
+      if (!side || sep == null || nose == null) { skipped++; continue; }
+      count++;
+      // 支線還疊在本線上的那段不畫；本線往那側加寬(每段本線各自算)
+      const rangeOn = (aw, q0, q1) => { const ss = rec.slice(q0, q1 + 1).filter((r) => r.Aw === aw).map((r) => r.sA); return ss.length ? [Math.min(...ss), Math.max(...ss)] : null; };
+      for (const aw of aCh) { const r = rangeOn(aw, 0, sep); if (r) aw.skip.push([r[0] - (r[0] < 1 ? 1 : 0), r[1] + (r[1] > aw.S[aw.P.length - 1] - 1 ? 1 : 0)]); }
+      // 本線往那側加寬：要蓋住還疊在上面的支線(need)，前後每 15 公尺收 1 公尺慢慢變回原寬(減速 / 加速車道的漸變段)
+      const need = [];
+      for (let q = 0; q <= sep; q++) need.push([rec[q].pr.c.d(rec[q].pr.s), Math.max(0, side * rec[q].pr.lat + rec[q].hA - rec[q].hB)]);
+      const TAPER = 1 / 15, envelope = (d) => { let v = 0; for (const [dq, vq] of need) v = Math.max(v, vq - TAPER * Math.abs(d - dq)); return v; };
+      const vMax = Math.max(0, ...need.map((x) => x[1])), dLo = Math.min(...need.map((x) => x[0])) - vMax / TAPER, dHi = Math.max(...need.map((x) => x[0]));   // 分開之後不加寬(那裡是匝道自己的路面和槽化區)
+      const segs = chain.map((c) => ({ w: c.w, d: c.d }));
+      const back = diverge ? through.up : through.down;
+      if (back.w !== base.w) { const bw = back.w, L = bw.S[bw.P.length - 1]; segs.push({ w: bw, d: diverge ? (x) => x - L : (x) => -x }); }
+      for (const sg of segs) {
+        const aux = side > 0 ? sg.w.auxR : sg.w.auxL;
+        for (let k = 0; k < sg.w.P.length; k++) { const d = sg.d(sg.w.S[k]); if (d < dLo || d > dHi) continue; const v = envelope(d); if (v > aux[k]) aux[k] = v; }
+      }
+      for (const c of chain) {
+        const B = c.w;
+        // 護欄：本線那側從接點到尖端打開
+        const ss = rec.slice(0, nose + 1).filter((r) => r.B === B).map((r) => r.pr.s);
+        if (ss.length) B.hideX.push([side, Math.min(...ss) - 10, Math.max(...ss) + 10]);
+      }
+      // 槽化區：本線(沒加寬的)路面邊緣 → 支線內側路面邊緣
+      const gl = [], gr = [], gz = [];
+      for (let q = sep; q <= nose; q++) {
+        const r = rec[q], B = r.B, kb = r.pr.k, nB = B.seg[kb], kA = r.k, Aw = r.Aw, nA = Aw.seg[kA];
+        const qb = lip(B.Pc, kb, r.pr.t);
+        gl.push(chkInv([qb[0] + nB[0] * side * r.hB * B.fc, qb[1] + nB[1] * side * r.hB * B.fc]));
+        gr.push(chkInv([r.p[0] - nA[0] * side * r.hA * Aw.fc, r.p[1] - nA[1] * side * r.hA * Aw.fc]));
+        gz.push((li(B.H, kb, r.pr.t) + li(Aw.H, kA, r.t)) / 2);
+      }
+      const GA = rec[sep].Aw;
+      if (diverge) GA.gores.push({ l: gl, r: gr, z: gz }); else GA.gores.push({ l: gl.reverse(), r: gr.reverse(), z: gz.reverse() });
+      // 支線靠本線那側到尖端之後才開始
+      for (const aw of aCh) { const r = rangeOn(aw, 0, nose); if (r) aw.hideX.push([-side, diverge ? r[0] : r[0] - 5, diverge ? r[1] + 5 : r[1]]); }
+    }
+  }
+  return { count, skipped };
+}
+
+// ── 5. 護欄落在別條路上 ──
 function railHides(ways) {
   const CELL = 50, grid = new Map();
   for (const w of ways) if (w.ok) for (let i = 0; i < w.Pc.length - 1; i++) {
@@ -467,9 +722,12 @@ function railHides(ways) {
       if (t < 0 || t > 1) continue;
       const lat = ((p[0] - A[0]) * w.seg[i][0] + (p[1] - A[1]) * w.seg[i][1]) / w.fc;   // 右正(公尺)
       const hw = (w.Wv[i] + (w.Wv[i + 1] - w.Wv[i]) * t) / 2, hh = w.H[i] + (w.H[i + 1] - w.H[i]) * t;
-      if (lat > -hw + 0.2 && lat < hw - 0.2 && Math.abs(hh - h) < 0.6) return true;
+      const aL = w.auxL ? w.auxL[i] + (w.auxL[i + 1] - w.auxL[i]) * t : 0, aR = w.auxR ? w.auxR[i] + (w.auxR[i + 1] - w.auxR[i]) * t : 0;
+      const sw = w.S[i] + (w.S[i + 1] - w.S[i]) * t;
+      if (w.skip && w.skip.some((r) => sw >= r[0] && sw <= r[1])) continue;   // 支線還疊在本線上、沒畫的那段
+      if (lat > -hw - aL + 0.2 && lat < hw + aR - 0.2 && Math.abs(hh - h) < 0.6) return w;
     }
-    return false;
+    return null;
   };
   let hiddenM = 0;
   for (const w of ways) {
@@ -481,15 +739,22 @@ function railHides(ways) {
         const len = w.S[k + 1] - w.S[k], m = Math.max(1, Math.ceil(len / 2));
         for (let j = 0; j < m; j++) {
           const t = (j + 0.5) / m, s0 = w.S[k] + len * j / m, s1 = w.S[k] + len * (j + 1) / m;
-          const o = rl.off(k) + (rl.off(k + 1) - rl.off(k)) * t + (rl.side === 0 ? 0.33 : 0), r = w.seg[k];   // 中央護欄看中心(底寬 0.66)
+          // 護欄位置跟著加寬的減速 / 加速車道往外移；中央護欄看中心(底寬 0.66)
+          const ax = rl.side > 0 ? (w.auxR ? w.auxR[k] + (w.auxR[k + 1] - w.auxR[k]) * t : 0) : -(w.auxL ? w.auxL[k] + (w.auxL[k + 1] - w.auxL[k]) * t : 0);
+          const o = rl.off(k) + (rl.off(k + 1) - rl.off(k)) * t + ax + (rl.side === 0 ? 0.33 : 0), r = w.seg[k];
           const p = [w.Pc[k][0] + (w.Pc[k + 1][0] - w.Pc[k][0]) * t + r[0] * o * w.fc, w.Pc[k][1] + (w.Pc[k + 1][1] - w.Pc[k][1]) * t + r[1] * o * w.fc];
           const h = w.H[k] + (w.H[k + 1] - w.H[k]) * t;
-          if (onDeck(p, h, w)) { if (cur && Math.abs(cur[1] - s0) < 1e-6) cur[1] = s1; else { cur = [s0, s1]; out.push([rl.side, cur]); } hiddenM += s1 - s0; }
+          const on = onDeck(p, h, w);
+          const sm = (s0 + s1) / 2, planned = (w.skip || []).some((r) => sm >= r[0] && sm <= r[1]) || (w.hideX || []).some((x) => (x[0] === -1 && !w.link && w.oneway ? 0 : x[0]) === rl.side && sm >= x[1] && sm <= x[2]);
+          if (on) { if (cur && Math.abs(cur[1] - s0) < 1e-6) cur[1] = s1; else { cur = [s0, s1]; out.push([rl.side, cur]); } if (!planned) hiddenM += s1 - s0; }
           else cur = null;
         }
       }
     }
     // 存成「占整條的比例 × 1e6」(手機每條路的比例尺跟電腦差一點點，用比例就一模一樣)
+    // 交流道：本線那側、支線靠本線那側在槽化區前不畫(junctions 算好的)
+    // 主線左邊是中央護欄(邊 0)
+    (w.hideX || []).forEach((x) => out.push([x[0] === -1 && !w.link && w.oneway ? 0 : x[0], [Math.max(0, x[1]), Math.min(L, x[2])]]));
     w.hide = out.map(([side, r]) => [side, Math.round(r[0] / L * 1e6), Math.round(r[1] / L * 1e6)]);
   }
   return { hiddenKm: hiddenM / 1000 };
@@ -504,12 +769,14 @@ function run(ways, opts) {
   for (const w of ways) w._ll0 = w.ll.map((c) => c.slice());
   for (const w of ways) w._orig = w.ll;
   const sep = separate(ways);
+  const sepL = separateLinks(ways);
   for (const w of ways) w.ll = w.ll.map((c) => [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6]);
   snapEnds(ways);   // 跟手機拿到的座標一樣(1e-6 度)
   const nodeIdx = geometry(ways);
   const clr = clearance(ways, nodeIdx);
+  const junc = junctions(ways, nodeIdx);
   const hide = railHides(ways);
-  return { lanes, jitter, round, sep, clr, hide };
+  return { lanes, jitter, round, sep, sepL, clr, junc, hide };
 }
 
 module.exports = { CLEAR, lanesOf, unmerc, run, roundNodes, inferLanes, separate, geometry, clearance, railHides };

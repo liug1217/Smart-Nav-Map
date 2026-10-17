@@ -17,7 +17,7 @@
   //   - 曲線一定通過每個原始點(包括交流道接點)，切線連續，整條路沒有任何折角
   //   - 向心版不會在點距不均勻時繞圈、打結或衝過頭(一般的 Catmull-Rom / 二次貝茲在 OSM 這種點距忽大忽小的資料會)
   //   - ghostA / ghostB：接續的前一條路倒數第二點 / 下一條路第二點，接縫兩邊的切線一樣，跨路段也是平順的
-  //   - 取點：照轉彎量決定(每轉 1.5 度一點，最密每 1 公尺一點)，直線不多取點
+  //   - 取點：照轉彎量決定(每轉 1.5 度一點，最密每 1 公尺一點)；直線也至少每 8 公尺一點(交流道加寬、路寬漸變要有點才放得上去)
   function curve(P0, shared, ghostA, ghostB) {
     var n = P0.length;
     if (n < 2) return P0.slice();
@@ -36,7 +36,7 @@
       // 這段總共轉多少：用控制多邊形(p1 → b1 → b2 → p2)兩個轉角加起來(曲線轉的一定不超過它；S 形的也算得到)
       var ang = function (a0, a1, a2) { var u = [a1[0] - a0[0], a1[1] - a0[1]], v = [a2[0] - a1[0], a2[1] - a1[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]); return lu && lv ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI : 0; };
       var turn = ang(p1, b1, b2) + ang(b1, b2, p2);
-      var len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), m = Math.min(Math.max(1, Math.ceil(len / 1)), Math.max(1, Math.ceil(turn / 1.5)));
+      var len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), m = Math.min(Math.max(1, Math.ceil(len / 1)), Math.max(Math.ceil(len / 8), Math.ceil(turn / 1.5), 1));
       for (var j = 1; j <= m; j++) {
         var t = j / m, u = 1 - t;
         if (j === m) { add(p2); break; }

@@ -1,5 +1,5 @@
-// ===== 🛣 國道、快速道路 3D 路面(第 1 階段：主線) =====
-// 放大到 zoom 16 以上，把國道、快速道路的主線畫成立體道路(匝道是第 2 階段)。
+// ===== 🛣 國道、快速道路 3D 路面(第 2 階段：主線＋匝道、交流道) =====
+// 放大到 zoom 16 以上，把國道、快速道路的主線、匝道畫成立體道路。
 // 資料(road3d/，tools/build-road3d.js 產生)在電腦上已經全部算好：貝茲曲線的曲線點、每點路寬、高度、接縫方向、哪段護欄不畫，
 // 這裡只照著畫：
 //   - 路面：深灰色柏油；車道 3.75 公尺、內側路肩 1、外側路肩 3 公尺(電腦算好的路寬)
@@ -7,7 +7,10 @@
 //   - 中央分隔：紐澤西水泥護欄＋綠色防眩板(主線往左多鋪 0.4 公尺，跟對向之間的空隙鋪滿)
 //   - 外側：平地鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、橋上紐澤西水泥護欄；會落在別條路上的那段不畫
 //   - 橋：第 1 階段只微抬(每層 1.2 公尺)，兩側有橋面版側邊
-//   - 路燈：道路兩側外面每 50 公尺一支(有 3D 主線的地方由這裡立，lamps_3d.js 就不畫，不會對不上)
+//   - 匝道：內側路肩 1、外側 2 公尺，左右兩側都有護欄(沒有中央分隔)
+//   - 交流道：匝道還疊在本線上的那段不畫，本線往那側加寬成減速 / 加速車道(原本的邊線位置改畫虛線)；
+//     分開後到尖端之間是槽化區(柏油＋白色斜線＋白邊線)；本線那側、匝道靠本線那側的護欄到尖端之後才有
+//   - 路燈：道路兩側外面每 50 公尺一支(有 3D 道路的地方由這裡立，lamps_3d.js 就不畫，不會對不上)
 // 圖層放在路況綠線、導航路線的下面：路況顏色、導航路線、車子照樣畫在路面上看得到。
 (function () {
   'use strict';
@@ -41,8 +44,8 @@
     var f = r[1], d = r[4], e = r[5] || {}, x = d[0], y = d[1], coords = [[x / 1e6, y / 1e6]];
     for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; coords.push([x / 1e6, y / 1e6]); }
     var n = coords.length, dd = e.d || [0, 0, 0, 0];
-    return { id: r[0], cls: f & 2 ? 'trunk' : 'motorway', oneway: !!(f & 4), bridge: !!(f & 8), lanes: r[2], coords: coords,
-      W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [],
+    return { id: r[0], link: !!(f & 1), cls: f & 2 ? 'trunk' : 'motorway', oneway: !!(f & 4), bridge: !!(f & 8), lanes: r[2], coords: coords,
+      W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [], aL: perPoint(e.aL, n, 0), aR: perPoint(e.aR, n, 0), skip: e.x || [], gores: e.g || [],
       dirB: dd[0] || dd[1] ? [dd[0] / 1e4, dd[1] / 1e4] : null, dirA: dd[2] || dd[3] ? [dd[2] / 1e4, dd[3] / 1e4] : null };
   }
   function loadIndex(cb) {
@@ -72,7 +75,8 @@
           }).catch(function () { t.state = 'failed'; t.retryAt = Date.now() + 60000; t.ids = []; }).then(function () {
             busy--;
             if (t.chunk) disposeChunk(t.chunk);
-            t.chunk = threeState === 'ready' && t.ids.length ? buildChunk(t) : null;
+            t.chunk = null;
+            if (threeState === 'ready' && t.ids.length) requestBuild(t);
             if (window.map) window.map.triggerRepaint();
             pump();
           });
@@ -88,23 +92,50 @@
   var JERSEY = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
   var WBEAM = [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]];   // 兩道凸起朝向車道
 
-  function buildChunk(t) {
+  // 分批建：一塊圖磚可能有一百多條路、上萬個點，一次建完畫面會卡住一秒多；
+  //   改成每格畫面最多花 6 毫秒建幾條路，整塊建完才顯示
+  var buildQ = [], building = null, BUDGET = 6;
+  function requestBuild(t) {
+    if (t.chunk || t.building) return;
+    t.building = true; buildQ.push(t);
+    if (!building) nextBuild();
+  }
+  function nextBuild() {
+    var t = buildQ.shift();
+    if (!t) { building = null; return; }
+    var ext = t.ext, origin = maplibregl.MercatorCoordinate.fromLngLat([(ext.w + ext.e) / 2, (ext.n + ext.s) / 2], 0);
+    building = { t: t, i: 0, origin: origin, sc: origin.meterInMercatorCoordinateUnits(),
+      B: { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), glare: new Bucket(), lamp: new Bucket(), white: new Bucket(), yellow: new Bucket() } };
+    requestAnimationFrame(buildSlice);
+  }
+  function buildSlice() {
+    var b = building, t = b.t, t0 = performance.now();
+    while (b.i < t.ids.length && performance.now() - t0 < BUDGET) { var w = ways[t.ids[b.i++]]; if (w) buildWay(w, b.origin, b.sc, b.B); }
+    if (b.i < t.ids.length) { requestAnimationFrame(buildSlice); return; }
+    // 路都建完了：每格畫面做一種材質的模型(大的一塊要幾十毫秒)
+    if (!b.keys) { b.keys = Object.keys(b.B).filter(function (k) { return b.B[k].p.length; }); b.meshes = []; }
+    var k = b.keys.shift();
+    if (k) { b.meshes.push(makeMesh(k, b.B[k])); b.B[k] = null; requestAnimationFrame(buildSlice); return; }
+    t.building = false;
+    if (t.chunk) disposeChunk(t.chunk);
+    t.chunk = finishChunk(t, b.origin, b.sc, b.meshes);
+    if (window.map) window.map.triggerRepaint();
+    nextBuild();
+  }
+  function makeMesh(k, bucket) {
+    var T = window.THREE, g = new T.BufferGeometry();
+    g.setAttribute('position', new T.Float32BufferAttribute(bucket.p, 3));
+    if (k !== 'white' && k !== 'yellow' && k !== 'lamp') g.computeVertexNormals();   // 標線、燈面不受光照，不用法向量
+    var mesh = new T.Mesh(g, mats[k]);
+    if (k === 'white' || k === 'yellow') mesh.renderOrder = 2;
+    mesh.frustumCulled = false;   // 疊在地圖上時 three.js 自己判斷會誤判成看不到
+    return mesh;
+  }
+  function finishChunk(t, origin, sc, meshes) {
     var T = window.THREE, ext = t.ext;
-    var origin = maplibregl.MercatorCoordinate.fromLngLat([(ext.w + ext.e) / 2, (ext.n + ext.s) / 2], 0), sc = origin.meterInMercatorCoordinateUnits();
-    var B = { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), glare: new Bucket(), lamp: new Bucket(), white: new Bucket(), yellow: new Bucket() };
-    t.ids.forEach(function (id) { var w = ways[id]; if (w) buildWay(w, origin, sc, B); });
-    var group = new T.Group(), any = false;
-    Object.keys(B).forEach(function (k) {
-      if (!B[k].p.length) return;
-      var g = new T.BufferGeometry();
-      g.setAttribute('position', new T.Float32BufferAttribute(B[k].p, 3));
-      g.computeVertexNormals();
-      var mesh = new T.Mesh(g, mats[k]);
-      if (k === 'white' || k === 'yellow') mesh.renderOrder = 2;
-      mesh.frustumCulled = false;   // 疊在地圖上時 three.js 自己判斷會誤判成看不到
-      group.add(mesh); any = true;
-    });
-    if (!any) return null;
+    if (!meshes.length) return null;
+    var group = new T.Group();
+    meshes.forEach(function (m) { group.add(m); });
     var scene = new T.Scene();
     scene.add(new T.AmbientLight(0xffffff, 0.62));
     var sun = new T.DirectionalLight(0xffffff, 0.6); sun.position.set(0.4, 1, 0.6); scene.add(sun);
@@ -125,6 +156,11 @@
     var S = fr.S, segR = fr.seg, R = fr.R, L = S[n - 1], H = w.H, W = w.W;
     var hidden = { '1': [], '-1': [], '0': [] };
     for (i = 0; i + 2 < w.hide.length; i += 3) hidden[w.hide[i]].push([w.hide[i + 1] / 1e6 * L, w.hide[i + 2] / 1e6 * L]);
+    // 匝道還疊在本線上的那段：路面、標線、護欄、路燈都不畫
+    var skip = [];
+    for (i = 0; i + 1 < w.skip.length; i += 2) skip.push([w.skip[i] / 1e6 * L, w.skip[i + 1] / 1e6 * L]);
+    skip.forEach(function (r) { hidden['1'].push(r); hidden['-1'].push(r); hidden['0'].push(r); });
+    var inSkip = function (s) { return skip.some(function (r) { return s >= r[0] && s <= r[1]; }); };
     var ov = function (o, k) { return typeof o === 'number' ? o : o[k]; };
     var plus = function (o, d) { return typeof o === 'number' ? o + d : o.map(function (v) { return v + d; }); };
     var pt = function (k, o, y) { var v = ov(o, k); return [P[k][0] + R[k][0] * v, H[k] + y, P[k][1] + R[k][1] * v]; };
@@ -134,9 +170,9 @@
       var v = ov(o, k) + (ov(o, k + 1) - ov(o, k)) * t, r = segR[k];
       return [P[k][0] + (P[k + 1][0] - P[k][0]) * t + r[0] * v, H[k] + (H[k + 1] - H[k]) * t + y, P[k][1] + (P[k + 1][1] - P[k][1]) * t + r[1] * v];
     };
-    var visible = function (k, side) {   // 第 k 段去掉不畫的部分，剩下的 [t0, t1]
+    var visible = function (k, side) {   // 第 k 段去掉不畫的部分，剩下的 [t0, t1](side 沒給 = 只去掉匝道不畫的那段)
       var s0 = S[k], s1 = S[k + 1], len = s1 - s0, out = [[s0, s1]];
-      hidden[side].forEach(function (h) {
+      (side == null ? skip : hidden[side]).forEach(function (h) {
         var nx = [];
         out.forEach(function (r) { if (h[1] <= r[0] || h[0] >= r[1]) nx.push(r); else { if (h[0] > r[0]) nx.push([r[0], h[0]]); if (h[1] < r[1]) nx.push([h[1], r[1]]); } });
         out = nx;
@@ -145,10 +181,16 @@
     };
     var isHidden = function (side, s) { return hidden[side].some(function (h) { return s >= h[0] && s <= h[1]; }); };
     // 橫斷面：a / b = 最左 / 最右車道外緣
-    var inner = w.oneway ? 1.0 : 1.5, outer = w.oneway ? 3.0 : 1.5;
-    var half = W.map(function (v) { return v / 2; }), nhalf = W.map(function (v) { return -v / 2; });
+    //   匝道外側路肩 2 公尺；交流道往右 / 左加寬(aR / aL，減速、加速車道)：路面邊緣、護欄、邊線跟著往外
+    var inner = w.oneway ? 1.0 : 1.5, outer = w.oneway ? (w.link ? 2.0 : 3.0) : 1.5, aR = w.aR, aL = w.aL;
+    var half = W.map(function (v, k) { return v / 2 + aR[k]; }), nhalf = W.map(function (v, k) { return -v / 2 - aL[k]; });
     var a = W.map(function (v) { return -v / 2 + inner; }), b = W.map(function (v) { return v / 2 - outer; });
-    var strip = function (bk, o1, o2, y) { for (var k = 0; k < n - 1; k++) bk.quad(pt(k, o1, y), pt(k, o2, y), pt(k + 1, o2, y), pt(k + 1, o1, y)); };
+    var strip = function (bk, o1, o2, y) {
+      for (var k = 0; k < n - 1; k++) {
+        if (!skip.length) { bk.quad(pt(k, o1, y), pt(k, o2, y), pt(k + 1, o2, y), pt(k + 1, o1, y)); continue; }
+        visible(k, null).forEach(function (r) { bk.quad(at(k, r[0], o1, y), at(k, r[0], o2, y), at(k, r[1], o2, y), at(k, r[1], o1, y)); });
+      }
+    };
     var dashed = function (bk, o, wd, y, ok) {   // 每 10 公尺畫 4 公尺
       var period = DASH + GAP;
       for (var k = 0; k < n - 1; k++) {
@@ -156,7 +198,7 @@
         var s0 = S[k], s1 = S[k + 1];
         for (var st = Math.floor(s0 / period) * period; st < s1; st += period) {
           var u0 = Math.max(st, s0), u1 = Math.min(st + DASH, s1);
-          if (u1 - u0 < 0.2) continue;
+          if (u1 - u0 < 0.2 || inSkip((u0 + u1) / 2)) continue;
           var t0 = Math.max(1e-9, (u0 - s0) / (s1 - s0)), t1 = Math.min(1 - 1e-9, (u1 - s0) / (s1 - s0)), h = wd / 2;
           bk.quad(at(k, t0, plus(o, -h), y), at(k, t0, plus(o, h), y), at(k, t1, plus(o, h), y), at(k, t1, plus(o, -h), y));
         }
@@ -192,8 +234,8 @@
       });
     };
     var onBridge = w.bridge;
-    // 路面(主線往左多鋪 0.4 公尺：跟對向之間的空隙鋪滿)
-    var deckL = w.oneway ? plus(nhalf, -MEDIAN_FILL) : nhalf;
+    // 路面(主線往左多鋪 0.4 公尺：跟對向之間的空隙鋪滿；匝道沒有中央分隔，不多鋪)
+    var deckL = w.oneway && !w.link ? plus(nhalf, -MEDIAN_FILL) : nhalf;
     strip(B.asphalt, deckL, half, 0.03);
     if (onBridge) {   // 橋：路面兩側的橋面版側邊
       wall(B.concrete, deckL, -1, [[0, 0.03], [0, -0.5]]);
@@ -204,12 +246,19 @@
       if (onBridge) wall(B.concrete, plus(o, -0.36 * side), side, JERSEY, hs); else guardrail(o, side, hs);
     };
     if (w.oneway) {
-      strip(B.yellow, a, plus(a, 0.15), my);   // 內側黃實線
-      strip(B.white, plus(b, -0.15), b, my);   // 外側白實線
+      // 內側黃實線、外側白實線：有加寬(減速 / 加速車道)的地方跟著往外移，原本的位置改畫虛線(加寬超過 1 公尺的地方)
+      var aLin = a.map(function (v, k) { return v - aL[k]; }), bOut = b.map(function (v, k) { return v + aR[k]; });
+      strip(B.yellow, aLin, plus(aLin, 0.15), my);
+      strip(B.white, plus(bOut, -0.15), bOut, my);
+      if (aR.some(function (v) { return v > 1; })) dashed(B.white, plus(b, -0.1), 0.2, my, function (k) { return aR[k] > 1 && aR[k + 1] > 1; });
+      if (aL.some(function (v) { return v > 1; })) dashed(B.white, plus(a, 0.1), 0.2, my, function (k) { return aL[k] > 1 && aL[k + 1] > 1; });
       for (var k2 = 1; k2 < w.lanes; k2++) (function (kk) {   // 車道線：車道數漸變時，窄掉的那條不畫
         dashed(B.white, plus(a, kk * LANE), 0.15, my, function (k) { return a[k] + kk * LANE < b[k] - 1 && a[k + 1] + kk * LANE < b[k + 1] - 1; });
       })(k2);
       edge(plus(half, -0.3), 1, '1');
+    }
+    if (w.oneway && w.link) edge(plus(nhalf, 0.3), -1, '-1');   // 匝道：左邊也是護欄(沒有中央分隔)
+    if (w.oneway && !w.link) {
       // 中央分隔：紐澤西水泥護欄＋綠色防眩板(每 1 公尺一片、斜 60 度、0.85～1.5 公尺高)
       var med = plus(nhalf, -0.1);
       wall(B.concrete, med, 1, JERSEY, '0');
@@ -220,6 +269,7 @@
         for (var e = 0; e < 4; e++) { var A = cs[e], C = cs[(e + 1) % 4]; B.glare.quad([A[0], y0, A[1]], [C[0], y0, C[1]], [C[0], y1, C[1]], [A[0], y1, A[1]]); }
       });
     }
+    gore(w, origin, sc, B);
     if (!w.oneway) {
       var per = Math.max(1, Math.floor(w.lanes / 2)), hl = per * LANE;
       strip(B.yellow, 0.06, 0.18, my); strip(B.yellow, -0.18, -0.06, my);   // 中央雙黃線
@@ -238,6 +288,34 @@
         var e = side > 0 ? half[kl] + (half[kl + 1] - half[kl]) * tl : nhalf[kl] + (nhalf[kl + 1] - nhalf[kl]) * tl;
         var r = segR[kl], f = [r[1], -r[0]], base = at(kl, tl, onBridge ? e - side * 0.33 : e + side * 0.6, onBridge ? 0.85 : 0);
         lamp(B, base, [-r[0] * side, -r[1] * side], f);   // 燈臂伸向車道
+      }
+    });
+  }
+
+  // ── 槽化區：本線路面邊緣(l)到匝道路面邊緣(r)之間鋪柏油、畫白邊線和斜線(每 6 公尺一條) ──
+  function gore(w, origin, sc, B) {
+    w.gores.forEach(function (g) {
+      var dec = function (d) {
+        var x = d[0], y = d[1], o = [[x, y]];
+        for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; o.push([x, y]); }
+        return o.map(function (c) { var m = maplibregl.MercatorCoordinate.fromLngLat([c[0] / 1e6, c[1] / 1e6], 0); return [(m.x - origin.x) / sc, (m.y - origin.y) / sc]; });
+      };
+      var l = dec(g.l), r = dec(g.r), n = Math.min(l.length, r.length);
+      if (n < 2) return;
+      var p3 = function (p, i, dy) { return [p[0], (g.z[i] || 0) / 100 + dy, p[1]]; };
+      var toward = function (p, q, d) { var dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz); if (L < 1e-6) return p; var f = Math.min(d, L / 2) / L; return [p[0] + dx * f, p[1] + dz * f]; };
+      for (var i = 0; i < n - 1; i++) {
+        B.asphalt.quad(p3(l[i], i, 0.035), p3(r[i], i, 0.035), p3(r[i + 1], i + 1, 0.035), p3(l[i + 1], i + 1, 0.035));
+        // 兩側白邊線(往槽化區裡面 0.15 公尺)
+        B.white.quad(p3(l[i], i, 0.065), p3(toward(l[i], r[i], 0.15), i, 0.065), p3(toward(l[i + 1], r[i + 1], 0.15), i + 1, 0.065), p3(l[i + 1], i + 1, 0.065));
+        B.white.quad(p3(r[i], i, 0.065), p3(toward(r[i], l[i], 0.15), i, 0.065), p3(toward(r[i + 1], l[i + 1], 0.15), i + 1, 0.065), p3(r[i + 1], i + 1, 0.065));
+      }
+      // 斜線：本線那邊斜到匝道那邊往前 4 公尺，寬 0.3 公尺；太窄的地方不畫
+      for (var j = 1; j + 2 < n; j += 3) {
+        if (Math.hypot(r[j][0] - l[j][0], r[j][1] - l[j][1]) < 0.6) continue;
+        var t = [l[j + 1][0] - l[j][0], l[j + 1][1] - l[j][1]], tl = Math.hypot(t[0], t[1]) || 1; t = [t[0] / tl * 0.3, t[1] / tl * 0.3];
+        var A0 = l[j], A1 = r[j + 2];
+        B.white.quad(p3(A0, j, 0.065), p3([A0[0] + t[0], A0[1] + t[1]], j, 0.065), p3([A1[0] + t[0], A1[1] + t[1]], j + 2, 0.065), p3(A1, j + 2, 0.065));
       }
     });
   }
@@ -337,7 +415,7 @@
       Object.keys(tiles).forEach(function (k) {
         var t = tiles[k], e = t.ext;
         if (t.chunk || !t.ids.length || !e || e.e < b.getWest() || e.w > b.getEast() || e.n < b.getSouth() || e.s > b.getNorth()) return;
-        t.chunk = buildChunk(t); t.usedAt = now;
+        requestBuild(t); t.usedAt = now;
       });
       // 太多塊就丟掉最久沒看的模型(資料留著，回來再建)
       var built = Object.keys(tiles).filter(function (k) { return tiles[k].chunk; }).sort(function (x, y) { return tiles[x].usedAt - tiles[y].usedAt; });

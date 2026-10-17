@@ -24,7 +24,7 @@
     feats.forEach(function (f) {
       var p = f.properties || {}, g = f.geometry;
       if (p.brunnel === 'tunnel') return;
-      if (p.ramp !== 1 && window._snmRoad3dState) return;   // 有 3D 主線(road_3d.js)：主線的路燈由 3D 道路立在路面外緣，這裡只畫匝道的
+      if (window._snmRoad3dState) return;   // 有 3D 道路(road_3d.js，主線＋匝道)：路燈由 3D 道路立在路面外緣，這裡不畫
       var oneway = p.oneway === 1 || p.oneway === -1 || p.class === 'motorway', off = offsetOf(p);
       (g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).forEach(function (cs) {
         if (p.oneway === -1) cs = cs.slice().reverse();

@@ -1,8 +1,9 @@
-// 產生 3D 道路資料(road3d/)。第 1 階段：只做國道、快速道路的「主線」(匝道是第 2 階段)
+// 產生 3D 道路資料(road3d/)。第 2 階段：國道、快速道路的主線＋匝道、交流道(分流、匯流、槽化區)
 // 電腦把全部都算好，手機(road_3d.js)只照著畫：
-//   1. 讀 OpenStreetMap 的國道、快速道路(含匝道，只用來推車道數)；車道數沒標的用接點車道數守恆推
-//   2. 只留主線；同一個點每條路的座標統一、很近的頭尾接起來；接點、接縫先改成曲線
-//   3. 對向車道疊在一起：兩個方向各往外推一半，中間留 0.8 公尺放中央護欄
+//   1. 讀 OpenStreetMap 的國道、快速道路(主線＋匝道)；車道數沒標的用接點車道數守恆推
+//   2. 同一個點每條路的座標統一、很近的頭尾接起來；接點、接縫先改成曲線
+//   3. 對向車道疊在一起：兩個方向各往外推一半，中間留 0.8 公尺放中央護欄；匝道跟別條路平行疊在一起也推開
+//   3b. 交流道：匝道還疊在本線上的那段不畫、本線加寬(減速 / 加速車道，有漸變段)、分開後到尖端是槽化區
 //   4. 曲線：向心 Catmull-Rom 樣條換成三次貝茲曲線(road_3d_shape.js)，通過每個原始點、沒有折角、跨路段也平順
 //   5. 每點的路寬(車道數不同時漸變)、高度(第 1 階段橋只微抬 1.2 公尺)、會落在別條路上的護欄段落
 //   6. 全台體檢(折角、頭尾沒接上、路面疊在一起、邊線折回)，寫進 road3d/report.json
@@ -15,10 +16,12 @@
 //   road3d/index.json      有資料的圖磚清單 ["x_y", ...]
 //   road3d/report.json     體檢報告
 //   road3d/13/x_y.json     { v: 4, w: [[id, flags, 車道數, layer, [曲線點：經度, 緯度 × 1e6，第一點之後存差值], 細節], ...] }
-//     flags：2 快速道路(否則國道)、4 單行道、8 橋梁
+//     flags：1 匝道、2 快速道路(否則國道)、4 單行道、8 橋梁
 //     細節：w 每點路寬(公分；一個數字 = 整條一樣，陣列 = 差值)、z 每點高度(公分，同上，沒有 = 平地)、
 //           d [前一條在接縫的方向 x, y, 下一條的方向 x, y](× 1e4，東、北；沒有接續的路是 0)、
-//           h [邊, 起, 迄, ...] 這幾段護欄不畫(邊 1 右、0 中央；起迄 = 占整條的比例 × 1e6)
+//           h [邊, 起, 迄, ...] 這幾段護欄不畫(邊 1 右、-1 左、0 中央；起迄 = 占整條的比例 × 1e6)、
+//           aL / aR 每點往左 / 右加寬(減速、加速車道，公分)、x [起, 迄, ...] 這幾段不畫(匝道還疊在本線上)、
+//           g [{ l: 本線邊緣的點, r: 匝道邊緣的點, z: 高度 }] 槽化區
 
 'use strict';
 
@@ -55,16 +58,16 @@ for (const e of elements) {
   all.push({ id: e.id, link, cls, oneway, bridge, layer, lanes, ll, nodes });
 }
 const inferred = FIX.inferLanes(all);
-const mains = all.filter((w) => !w.link);
-lap(`讀道路：${all.length} 段(主線 ${mains.length} 段)，推出車道數 ${inferred} 段`);
+const mains = all;   // 第 2 階段：主線＋匝道都做
+lap(`讀道路：${all.length} 段(主線 ${all.filter((w) => !w.link).length}、匝道 ${all.filter((w) => w.link).length})，推出車道數 ${inferred} 段`);
 
 // ── 2～5. 修正、曲線、路寬、高度、護欄 ──
 const rep = FIX.run(mains, { lanesDone: true });
-lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里`);
+lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(沒分開的 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里`);
 
 // ── 6. 體檢 ──
 const ang = (a, b, c) => { const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]); return lu && lv ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI : 0; };
-const report = { generated: new Date().toISOString(), stage: 1, ways: mains.length, kinks: { '6-10': 0, '10-20': 0, '>20': 0 }, kinkExamples: [], folds: 0, gaps: 0, overlapKm: 0 };
+const report = { generated: new Date().toISOString(), stage: 2, ways: mains.length, kinks: { '6-10': 0, '10-20': 0, '>20': 0 }, kinkExamples: [], folds: 0, gaps: 0, overlapKm: 0 };
 const ll6 = (w, i) => { const p = w.P[i], m = [w.m0[0] + p[0] / w.k, w.m0[1] + p[1] / w.k]; return FIX.unmerc(m[0], m[1]).map((v) => +v.toFixed(5)); };
 for (const w of mains) {
   if (!w.ok) continue;
@@ -117,7 +120,12 @@ for (const w of mains) {
   const z = cmArr(w.H); if (z !== 0) ext.z = z;
   if (w.dirB || w.dirA) ext.d = [w.dirB ? Math.round(w.dirB[0] * 1e4) : 0, w.dirB ? Math.round(w.dirB[1] * 1e4) : 0, w.dirA ? Math.round(w.dirA[0] * 1e4) : 0, w.dirA ? Math.round(w.dirA[1] * 1e4) : 0];
   if (w.hide && w.hide.length) ext.h = [].concat(...w.hide);
-  const flags = (w.cls === 'trunk' ? 2 : 0) | (w.oneway ? 4 : 0) | (w.bridge ? 8 : 0);
+  const L = w.S[w.S.length - 1];
+  if (w.auxL && w.auxL.some((v) => v > 0.01)) ext.aL = cmArr(w.auxL);   // 減速 / 加速車道往左加寬(公尺 → 公分)
+  if (w.auxR && w.auxR.some((v) => v > 0.01)) ext.aR = cmArr(w.auxR);   // 往右加寬
+  if (w.skip && w.skip.length) ext.x = [].concat(...w.skip.map((r) => [Math.round(Math.max(0, r[0]) / L * 1e6), Math.round(Math.min(L, r[1]) / L * 1e6)]));   // 這幾段不畫(還疊在本線上)
+  if (w.gores && w.gores.length) ext.g = w.gores.map((g) => { const f = (pts) => { const o = [Math.round(pts[0][0] * 1e6), Math.round(pts[0][1] * 1e6)]; for (let i = 1; i < pts.length; i++) o.push(Math.round(pts[i][0] * 1e6) - Math.round(pts[i - 1][0] * 1e6), Math.round(pts[i][1] * 1e6) - Math.round(pts[i - 1][1] * 1e6)); return o; }; return { l: f(g.l), r: f(g.r), z: g.z.map((v) => Math.round(v * 100)) }; });   // 槽化區
+  const flags = (w.link ? 1 : 0) | (w.cls === 'trunk' ? 2 : 0) | (w.oneway ? 4 : 0) | (w.bridge ? 8 : 0);
   const rec = [w.id, flags, FIX.lanesOf(w), w.layer, flat, ext];
   const keys = new Set();
   for (let i = 0; i < pts.length; i++) keys.add(lon2x(pts[i][0] / 1e6) + '_' + lat2y(pts[i][1] / 1e6));
