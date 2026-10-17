@@ -19,7 +19,8 @@
 // 放大到看得到 3D 時，國道的綠線、塞車顏色、導航路線改畫在 3D 路面上(高架上也對得上)，車子抬到橋面高度。
 (function () {
   'use strict';
-  var MIN_ZOOM = 16, TILE_Z = 13, MAX_CHUNKS = 16, LANE = 3.75, DASH = 4, GAP = 6, MEDIAN_FILL = 0.4;
+  // 縮放：zoom 14 以上就畫 3D 路面(縮小也不會不見)；16 以上才把綠線、導航路線畫到橋面上、車子抬高(16 以下綠線照樣畫在地面那層，3D 路面在它下面)
+  var MIN_ZOOM = 16, DRAW_ZOOM = 14, DETAIL_ZOOM = 15.5, TILE_Z = 13, MAX_CHUNKS = 24, LANE = 3.75, DASH = 4, GAP = 6, MEDIAN_FILL = 0.4;
   var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   var LAYER = 'snm-road-3d', DATA_DIR = 'road3d/';
   var index = null, indexState = 'none', ways = {}, tiles = {}, queue = [], busy = 0;
@@ -31,7 +32,7 @@
   function visibleTiles() {
     var m = window.map, b = m.getBounds(), out = [];
     var x0 = lon2x(b.getWest()), x1 = lon2x(b.getEast()), y0 = lat2y(b.getNorth()), y1 = lat2y(b.getSouth());
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 9) return out;   // 太傾斜、看太遠：不抓
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) return out;   // 太傾斜、看太遠：不抓
     for (var x = x0; x <= x1; x++) for (var y = y0; y <= y1; y++) out.push(x + '_' + y);
     return out;
   }
@@ -147,6 +148,7 @@
     var mesh = new T.Mesh(g, mats[k]);
     if (k === 'white' || k === 'yellow') mesh.renderOrder = 2;
     mesh.frustumCulled = false;   // 疊在地圖上時 three.js 自己判斷會誤判成看不到
+    mesh.userData.detail = k === 'glare' || k === 'lamp';   // 防眩板、路燈燈面：遠看看不出來，縮小時不畫(省效能)
     return mesh;
   }
   function finishChunk(t, origin, sc, meshes) {
@@ -468,12 +470,14 @@
         B.white.quad(p3(l[i], i, 0.065), p3(toward(l[i], r[i], 0.15), i, 0.065), p3(toward(l[i + 1], r[i + 1], 0.15), i + 1, 0.065), p3(l[i + 1], i + 1, 0.065));
         B.white.quad(p3(r[i], i, 0.065), p3(toward(r[i], l[i], 0.15), i, 0.065), p3(toward(r[i + 1], l[i + 1], 0.15), i + 1, 0.065), p3(r[i + 1], i + 1, 0.065));
       }
-      // 斜線：本線那邊斜到匝道那邊往前 4 公尺，寬 0.3 公尺；太窄的地方不畫
-      for (var j = 1; j + 2 < n; j += 3) {
-        if (Math.hypot(r[j][0] - l[j][0], r[j][1] - l[j][1]) < 0.6) continue;
-        var t = [l[j + 1][0] - l[j][0], l[j + 1][1] - l[j][1]], tl = Math.hypot(t[0], t[1]) || 1; t = [t[0] / tl * 0.3, t[1] / tl * 0.3];
-        var A0 = l[j], A1 = r[j + 2];
-        B.white.quad(p3(A0, j, 0.065), p3([A0[0] + t[0], A0[1] + t[1]], j, 0.065), p3([A1[0] + t[0], A1[1] + t[1]], j + 2, 0.065), p3(A1, j + 2, 0.065));
+      // 斜線(照標線規則：寬 20 公分、斜 45 度)：從本線那邊斜到匝道那邊，往前的距離 = 那裡的寬度；每 4 公尺一條，太窄的地方不畫
+      for (var j = 1; j + 1 < n; j += 2) {
+        var gw = Math.hypot(r[j][0] - l[j][0], r[j][1] - l[j][1]);
+        if (gw < 0.6) continue;
+        var j2 = Math.min(n - 1, j + Math.max(1, Math.round(gw / 2)));   // 點每 2 公尺一個
+        var t = [l[j + 1][0] - l[j][0], l[j + 1][1] - l[j][1]], tl = Math.hypot(t[0], t[1]) || 1; t = [t[0] / tl * 0.2, t[1] / tl * 0.2];
+        var A0 = l[j], A1 = r[j2];
+        B.white.quad(p3(A0, j, 0.065), p3([A0[0] + t[0], A0[1] + t[1]], j, 0.065), p3([A1[0] + t[0], A1[1] + t[1]], j2, 0.065), p3(A1, j2, 0.065));
       }
     });
   }
@@ -941,11 +945,12 @@
       var m = window.map;
       lastMatrix = matrix;
       if (!liftTimer) liftTimer = setTimeout(function () { liftTimer = null; liftCar(); }, 100);   // 車子抬到橋面(不在畫面更新中改圖層)
-      if (!renderer || m.getZoom() < MIN_ZOOM) return;
-      var T = window.THREE, mapM = new T.Matrix4().fromArray(matrix), b = m.getBounds();
+      if (!renderer || m.getZoom() < DRAW_ZOOM) return;
+      var T = window.THREE, mapM = new T.Matrix4().fromArray(matrix), b = m.getBounds(), detail = m.getZoom() >= DETAIL_ZOOM;
       Object.keys(tiles).forEach(function (k) {
         var c = tiles[k].chunk;
         if (!c || c.box.e < b.getWest() || c.box.w > b.getEast() || c.box.n < b.getSouth() || c.box.s > b.getNorth()) return;
+        if (c.detail !== detail) { c.detail = detail; c.scene.traverse(function (o) { if (o.userData && o.userData.detail) o.visible = detail; }); }
         camera.projectionMatrix = mapM.clone().multiply(c.matrix);
         renderer.resetState();
         renderer.render(c.scene, camera);
@@ -954,11 +959,19 @@
   };
   // 放在平面道路線、導航路線、塞車線的上面(高架底下經過的路被橋面蓋住)、路線箭頭、3D 建築的下面
   //   (主程式會把路線類圖層整組重排到 3D 建築下面，排完 3D 道路會被擠到它們底下：init 裡圖層一變動就放回來)
+  //   zoom 16 以下：放在綠色道路線下面(綠線照樣畫在 3D 路面上)
   function beforeId(m) {
+    if (m.getZoom() < MIN_ZOOM) { var gl = ((m.getStyle() || {}).layers || []).find(function (l) { return /^snm-roads-/.test(l.id); }); if (gl) return gl.id; }
     if (m.getLayer('navRoute-arrows')) return 'navRoute-arrows';
     var ls = (m.getStyle() || {}).layers || [], bl = ls.find(function (l) { return l.type === 'fill-extrusion' && l.id !== 'route'; });
     if (bl) return bl.id;
     return m.getLayer('user-pulse') ? 'user-pulse' : undefined;
+  }
+  // 放到該在的位置；一般道路 3D(snm-road-3d-city)永遠在國道 3D 下面
+  function place(m) {
+    if (!m.getLayer(LAYER)) return;
+    var bi = beforeId(m);
+    try { if (bi) m.moveLayer(LAYER, bi); if (m.getLayer('snm-road-3d-city') && m.getZoom() < MIN_ZOOM) m.moveLayer('snm-road-3d-city', LAYER); } catch (e) {}
   }
   function ensureThree(cb) {
     if (window.THREE) { threeState = 'ready'; cb(); return; }
@@ -974,8 +987,11 @@
     var m = window.map;
     if (!m) return;
     var nowActive = m.getZoom() >= MIN_ZOOM;
-    if (nowActive !== wasActive) { wasActive = nowActive; ovSoon(); }   // 放大 / 縮小跨過 3D：地面的線換回完整的 / 只留沒對到路面的
-    if (!nowActive || !window.RoadShape) return;
+    if (nowActive !== wasActive) {   // 放大 / 縮小跨過 16：地面的線換回完整的 / 只留沒對到路面的；3D 圖層換到綠線上面 / 下面
+      wasActive = nowActive; ovSoon();
+      place(m);
+    }
+    if (m.getZoom() < DRAW_ZOOM || !window.RoadShape) return;
     ensureThree(function () {
       if (!mats) makeMats();
       if (!m.getLayer(LAYER)) { m.addLayer(customLayer, beforeId(m)); }
@@ -1005,7 +1021,7 @@
     renderer = null; carShift = [0, 0];
     setTimeout(ovSoon, 300);   // 換樣式後圖層、資料來源都是新的：重新接手
     var m = window.map;
-    if (window.THREE && m && m.getZoom() >= MIN_ZOOM && mats && !m.getLayer(LAYER)) { m.addLayer(customLayer, beforeId(m)); }
+    if (window.THREE && m && m.getZoom() >= DRAW_ZOOM && mats && !m.getLayer(LAYER)) { m.addLayer(customLayer, beforeId(m)); }
   };
   window._snmRoad3dState = function () { return { tiles: tiles, ways: ways, threeState: threeState, ovGreen: ovGreen, ovItems: ovItems, carShift: carShift }; };   // 除錯用
   function init() {
@@ -1023,8 +1039,9 @@
     m.on('styledata', function () {
       if (placing || !m.getLayer(LAYER)) return;
       var o = m.style && m.style._order, b = beforeId(m);
-      if (!o || !b || o.indexOf(LAYER) === o.indexOf(b) - 1) return;
-      placing = true; try { m.moveLayer(LAYER, b); } catch (e) {} placing = false;
+      var c = o && o.indexOf('snm-road-3d-city'), okCity = !(c >= 0 && m.getZoom() < MIN_ZOOM) || c === o.indexOf(LAYER) - 1;
+      if (!o || !b || (o.indexOf(LAYER) === o.indexOf(b) - 1 && okCity)) return;
+      placing = true; place(m); placing = false;
     });
     if (m.loaded()) go(); else m.once('load', go);
   }

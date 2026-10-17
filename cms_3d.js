@@ -7,7 +7,7 @@
 // 看板上多則訊息時跟實際看板一樣輪流顯示(每 5 秒)。點看板會打開卡片顯示完整訊息。
 (function () {
   'use strict';
-  var MIN_ZOOM = 15, MAX_SIGNS = 40, PAGE_MS = 5000, REFRESH_MS = 60 * 1000;   // 高公局看板訊息每分鐘更新；實際照後端說的下次更新時間(nextUpdateIn)來抓
+  var MIN_ZOOM = 14, MAX_SIGNS = 40, PAGE_MS = 5000, REFRESH_MS = 60 * 1000;   // 高公局看板訊息每分鐘更新；實際照後端說的下次更新時間(nextUpdateIn)來抓
   var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   var LAYER = 'snm-cms-3d', HIT_SRC = 'snm-cms-src', HIT_LAYER = 'cms-hit';
   var signs = [];            // [{ id, road, dir, mile, m, lon, lat, bearing, pages:[{text,type}] }]
@@ -109,6 +109,23 @@
     for (var gy = 0; gy < H; gy += 4) x.fillRect(0, gy, W, 1);
     return c;
   }
+  // 閃光燈面：黑底上一顆顆 LED 排成圓形(跟看板一樣的點陣)；亮 = 偏黃的綠色發光、暗 = 每顆變暗但看得出點陣
+  var lampTex = {};
+  function lampTexture(on) {
+    var key = on ? 'on' : 'off';
+    if (lampTex[key]) return lampTex[key];
+    var S = 96, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    var x = cv.getContext('2d'), col = on ? '#C4F23A' : '#2E3A14';
+    x.fillStyle = '#0B0B0D'; x.fillRect(0, 0, S, S);
+    if (on) { x.shadowColor = '#C4F23A'; x.shadowBlur = 6; }
+    x.fillStyle = col;
+    for (var gy = 6; gy < S; gy += 8) for (var gx = 6; gx < S; gx += 8) {
+      if (Math.hypot(gx - S / 2, gy - S / 2) > S / 2 - 6) continue;   // 排成圓形
+      x.beginPath(); x.arc(gx, gy, 2.6, 0, Math.PI * 2); x.fill();
+    }
+    lampTex[key] = new window.THREE.CanvasTexture(cv);
+    return lampTex[key];
+  }
   function mileCanvas(s) {
     var c = document.createElement('canvas'); c.width = 192; c.height = 64;
     var x = c.getContext('2d');
@@ -174,10 +191,9 @@
     [-BW / 2 + 1.2, BW / 2 - 1.2].forEach(function (lx) {
       var ly = BY + BH / 2 + 0.45;
       box(0.5, 0.45, 0.4, dark, BX + lx, ly, 0.05);
-      var core = new T.MeshBasicMaterial({ color: LED_ON }), halo = new T.MeshBasicMaterial({ color: LED_ON, transparent: true, opacity: 0.35, depthWrite: false });
-      var h = new T.Mesh(new T.CircleGeometry(0.26, 24), halo); h.position.set(BX + lx, ly, 0.255); g.add(h);
-      var led = new T.Mesh(new T.CircleGeometry(0.16, 24), core); led.position.set(BX + lx, ly, 0.26); g.add(led);
-      lamps.push({ core: core, halo: halo });
+      var mat = new T.MeshBasicMaterial({ map: lampTexture(blinkOn) });
+      var led = new T.Mesh(new T.PlaneGeometry(0.42, 0.42), mat); led.position.set(BX + lx, ly, 0.255); g.add(led);
+      lamps.push(mat);
     });
     // 左邊綠底里程牌
     var mt = new T.CanvasTexture(mileCanvas(s));
@@ -292,15 +308,15 @@
     m.triggerRepaint();
   }
   function disposeModel(md) {
-    md.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+    md.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map && o.material.map !== lampTex.on && o.material.map !== lampTex.off) o.material.map.dispose(); o.material.dispose(); } });   // 閃光燈的貼圖是共用的，不丟
   }
   // 多則訊息輪流顯示(只換畫面上的看板)
   // 閃光燈：兩盞一起一亮一暗(只有畫面上有看板、網頁在前景時才重畫)；偏黃的綠色 LED
-  var blinkOn = true, LED_ON = 0xC4F23A, LED_OFF = 0x2C3512;
+  var blinkOn = true;
   function blinkTick() {
     if (document.hidden || !visible.length) return;
     blinkOn = !blinkOn;
-    visible.forEach(function (s) { var md = models[s.id]; if (md && md.lamps) md.lamps.forEach(function (lm) { lm.core.color.setHex(blinkOn ? LED_ON : LED_OFF); lm.halo.opacity = blinkOn ? 0.35 : 0; }); });
+    visible.forEach(function (s) { var md = models[s.id]; if (md && md.lamps) md.lamps.forEach(function (lm) { lm.map = lampTexture(blinkOn); lm.needsUpdate = true; }); });
     if (window.map) window.map.triggerRepaint();
   }
   function rotatePages() {

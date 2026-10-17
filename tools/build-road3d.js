@@ -66,11 +66,12 @@ lap(`讀道路：${all.length} 段(主線 ${all.filter((w) => !w.link).length}�
 
 // ── 2～5. 修正、曲線、路寬、高度、護欄 ──
 const rep = FIX.run(mains, { lanesDone: true });
-lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(沒分開的 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里；分隔島花台 ${rep.med.hedgeKm.toFixed(1)} 公里、草地 ${rep.med.grassKm.toFixed(1)} 公里`);
+lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(槽化區沒到尖端 ${rep.junc.partial}、整段疊在本線上 ${rep.junc.covered}、沒取樣到 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里；分隔島花台 ${rep.med.hedgeKm.toFixed(1)} 公里、草地 ${rep.med.grassKm.toFixed(1)} 公里`);
 
 // ── 6. 體檢 ──
 const ang = (a, b, c) => { const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]); return lu && lv ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI : 0; };
 const report = { generated: new Date().toISOString(), stage: 3, ways: mains.length, kinks: { '6-10': 0, '10-20': 0, '>20': 0 }, kinkExamples: [], folds: 0, gaps: 0, overlapKm: 0 };
+report.junctions = { count: rep.junc.count, partial: rep.junc.partial, covered: rep.junc.covered, partialExamples: rep.junc.exPartial, coveredExamples: rep.junc.exCovered };
 const ll6 = (w, i) => { const p = w.P[i], m = [w.m0[0] + p[0] / w.k, w.m0[1] + p[1] / w.k]; return FIX.unmerc(m[0], m[1]).map((v) => +v.toFixed(5)); };
 for (const w of mains) {
   if (!w.ok) continue;

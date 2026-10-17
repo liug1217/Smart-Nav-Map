@@ -2,7 +2,8 @@
 // 放大到 zoom 16 以上，把底圖的一般道路(openmaptiles transportation：primary / secondary / tertiary / minor / service)畫成 3D 路面：
 //   - 底圖的道路被切成一塊一塊(圖磚)，先去掉重複的、切邊多出來的小尾巴，再接成完整的一條(路口斷開)
 //   - 曲線跟國道一樣用向心 Catmull-Rom 樣條(road_3d_shape.js)：通過每個原始點、沒有折角
-//   - 路寬照道路等級：省道級(primary) 雙向 4 線、縣道級(secondary) 雙向 4 線(較窄)、區道(tertiary) 雙向 2 線、巷弄 6 公尺、服務道路 4 公尺；單行道減半
+//   - 路寬：OSM 有標車道數的路(road3d-city/，tools/build-city-lanes.js 產生)照車道數；沒標的照道路等級：
+//     省道級(primary) 雙向 4 線、縣道級(secondary) 雙向 4 線(較窄)、區道(tertiary) 雙向 2 線、巷弄 6 公尺、服務道路 4 公尺；單行道減半
 //   - 標線：primary / secondary 中央雙黃線＋白色車道虛線＋路面邊線；tertiary 中央黃虛線＋邊線；巷弄、服務道路不畫；路口裡面不畫標線
 //   - 從平面的國道上面跨過去的路：抬到國道上方 5.3 公尺(淨空 4.5)，用 4% 坡度接回地面，兩側紐澤西護欄(只有面向車道那面是斜的)
 //   - 不卡：畫面還在建好的範圍裡不重建；底圖、國道 3D 載入新資料只做記號，最多每 5 秒重建一次；
@@ -10,7 +11,7 @@
 // 圖層放在路況綠線、導航路線的下面(路況顏色、導航路線照樣畫在上面)，國道 3D 路面的下面
 (function () {
   'use strict';
-  var MIN_ZOOM = 16, LAYER = 'snm-road-3d-city';
+  var MIN_ZOOM = 15, LAYER = 'snm-road-3d-city';
   var CLASS = {   // 寬(公尺)、車道寬、每個方向幾線、高度(大路畫在小路上面，路口不打架)、標線
     primary:   { lanes: 2, lane: 3.5, edge: 1.5, y: 0.030, mark: 'double' },
     secondary: { lanes: 2, lane: 3.25, edge: 1.0, y: 0.026, mark: 'double' },
@@ -21,6 +22,55 @@
   var renderer = null, camera = null, chunk = null, timer = null, builtFor = null, mats = null, dirty = false, job = null, BUDGET = 6;
   // 紐澤西護欄(抬高那段的兩側)：背面直立、面向車道那面斜的；x = 0 在路面邊緣、往路裡面
   var JERSEY = [[0, 0], [0, 0.85], [0.22, 0.85], [0.28, 0.33], [0.41, 0.08], [0.46, 0]];
+
+  // ── 車道數(road3d-city/ 圖磚，zoom 13，跟國道 3D 一樣只抓畫面附近的) ──
+  var LANE_DIR = 'road3d-city/', laneIndex = null, laneIdxState = 'none', laneTiles = {}, laneGrid = {}, LKX = 111320 * Math.cos(23.7 * Math.PI / 180), LKY = 110540;
+  function l2x(lon) { return Math.floor((lon + 180) / 360 * 8192); }
+  function l2y(lat) { var r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 8192); }
+  function loadLanes(box) {
+    if (laneIdxState === 'none') { laneIdxState = 'loading'; fetch(LANE_DIR + 'index.json').then(function (r) { return r.json(); }).then(function (l) { laneIndex = {}; l.forEach(function (k) { laneIndex[k] = 1; }); laneIdxState = 'ready'; loadLanes(box); }).catch(function () { laneIdxState = 'failed'; }); return; }
+    if (laneIdxState !== 'ready') return;
+    for (var x = l2x(box.w); x <= l2x(box.e); x++) for (var y = l2y(box.n); y <= l2y(box.s); y++) (function (k) {
+      if (laneTiles[k] || !laneIndex[k]) return;
+      laneTiles[k] = 'loading';
+      fetch(LANE_DIR + '13/' + k + '.json').then(function (r) { return r.json(); }).then(function (j) {
+        laneTiles[k] = 'ready';
+        (j.w || []).forEach(function (rec) {
+          var d = rec[2], X = d[0], Y = d[1], c = [[X / 1e6, Y / 1e6]];
+          for (var i = 2; i < d.length; i += 2) { X += d[i]; Y += d[i + 1]; c.push([X / 1e6, Y / 1e6]); }
+          var w = { lanes: rec[0], oneway: rec[1] === 1, c: c };
+          for (i = 0; i < c.length - 1; i++) {
+            var gx0 = Math.floor(Math.min(c[i][0], c[i + 1][0]) * LKX / 50), gx1 = Math.floor(Math.max(c[i][0], c[i + 1][0]) * LKX / 50);
+            var gy0 = Math.floor(Math.min(c[i][1], c[i + 1][1]) * LKY / 50), gy1 = Math.floor(Math.max(c[i][1], c[i + 1][1]) * LKY / 50);
+            for (var gx = gx0; gx <= gx1; gx++) for (var gy = gy0; gy <= gy1; gy++) (laneGrid[gx + ',' + gy] = laneGrid[gx + ',' + gy] || []).push([w, i]);
+          }
+        });
+        if (builtFor && !job) { builtFor = null; soon(); }   // 車道數到了：重建一次(照車道數畫)
+      }).catch(function () { laneTiles[k] = null; });
+    })(x + '_' + y);
+  }
+  // 這點(方向 dir：東、北單位向量)附近 8 公尺內、方向差 30 度內最近那條 OSM 路的車道數(雙向道路是兩個方向加起來)
+  function laneAt(p, dir) {
+    var x = p[0] * LKX, y = p[1] * LKY, cx = Math.floor(x / 50), cy = Math.floor(y / 50), best = null;
+    for (var a = cx - 1; a <= cx + 1; a++) for (var b = cy - 1; b <= cy + 1; b++) (laneGrid[a + ',' + b] || []).forEach(function (e) {
+      var w = e[0], i = e[1], A = w.c[i], B = w.c[i + 1], ax = A[0] * LKX, ay = A[1] * LKY, dx = B[0] * LKX - ax, dy = B[1] * LKY - ay, L2 = dx * dx + dy * dy;
+      if (!L2) return;
+      var t = ((x - ax) * dx + (y - ay) * dy) / L2;
+      if (t < -0.05 || t > 1.05) return;
+      var L = Math.sqrt(L2), d = Math.abs((x - ax) * dy - (y - ay) * dx) / L, cos = (dx * dir[0] + dy * dir[1]) / L;
+      if (d > 8 || (w.oneway ? cos < 0.87 : Math.abs(cos) < 0.87)) return;
+      if (!best || d < best.d) best = { d: d, w: w };
+    });
+    return best ? best.w.lanes : null;
+  }
+  // 這條路用的車道設定：有車道數就照它(每個方向幾線)，沒有就照道路等級
+  function laneSpec(r) {
+    var k = CLASS[r.cls];
+    if (k.fixedW || !r.lanesT) return k;
+    var per = r.oneway ? r.lanesT : Math.max(1, Math.round(r.lanesT / 2));
+    return { lanes: per, lane: k.lane, edge: k.edge, y: k.y, mark: per >= 2 && !r.oneway ? 'double' : k.mark };
+  }
+  function roadW(r) { var k = laneSpec(r); return k.fixedW ? (r.oneway ? Math.max(3.5, k.fixedW * 0.7) : k.fixedW) : (r.oneway ? k.lanes : k.lanes * 2) * k.lane + k.edge * 2; }
 
   function widthOf(c, oneway) {
     var k = CLASS[c];
@@ -90,7 +140,7 @@
     };
     Object.keys(edges).forEach(function (key) {
       if (used[key]) return;
-      var e = edges[key], line = [e.a, e.c], keys = [e.ka, e.kc];
+      var e = edges[key], line = [e.a, e.c], keys = [e.ka, e.kc], endE = [e, e];
       used[key] = 1;
       [true, false].forEach(function (atEnd) {
         var k = atEnd ? keys[keys.length - 1] : keys[0], cur = e;
@@ -102,8 +152,22 @@
           if (atEnd) { line.push(np); keys.push(nk); } else { line.unshift(np); keys.unshift(nk); }
           k = nk; cur = nx;
         }
+        endE[atEnd ? 1 : 0] = cur;
       });
-      out.push({ cls: e.cls, oneway: e.oneway, coords: line, endsDeg: [live(keys[0]).length, live(keys[keys.length - 1]).length] });
+      // 頭尾的延伸點(貝茲曲線、接縫斜接用)：接在這個點、轉角最小(30 度內)的那條路的下一個點；沒有就沒有
+      var ghost = function (k, q, own) {
+        var c = line[q === 0 ? 0 : line.length - 1], inner = line[q === 0 ? 1 : line.length - 2], best = null, bt = 30;
+        var d1 = [(c[0] - inner[0]) * kx, (c[1] - inner[1]) * ky], l1 = Math.hypot(d1[0], d1[1]) || 1;
+        live(k).forEach(function (x) {
+          var ed = edges[x]; if (!ed || ed === own) return;
+          var far = ed.ka === k ? ed.c : ed.a, d2 = [(far[0] - c[0]) * kx, (far[1] - c[1]) * ky], l2 = Math.hypot(d2[0], d2[1]) || 1;
+          var tv = Math.acos(Math.max(-1, Math.min(1, (d1[0] * d2[0] + d1[1] * d2[1]) / (l1 * l2)))) * 180 / Math.PI;
+          if (tv < bt) { bt = tv; best = far; }
+        });
+        return best;
+      };
+      out.push({ cls: e.cls, oneway: e.oneway, coords: line, endsDeg: [live(keys[0]).length, live(keys[keys.length - 1]).length],
+        ghostA: ghost(keys[0], 0, endE[0]), ghostB: ghost(keys[keys.length - 1], 1, endE[1]) });
     });
     return out;
   }
@@ -118,9 +182,17 @@
     var bb = m.getBounds(), pw = (bb.getEast() - bb.getWest()) * 0.6, ph = (bb.getNorth() - bb.getSouth()) * 0.6;   // 多建一點範圍，開車時不用一直重建
     var box = { w: bb.getWest() - pw, e: bb.getEast() + pw, s: bb.getSouth() - ph, n: bb.getNorth() + ph };
     var roads = collect(box);
+    loadLanes(box);
+    if (!roads.length) { builtFor = null; clearTimeout(timer); timer = setTimeout(check, 1500); return; }   // 底圖的道路還沒載入：等一下再試(不然會建出空的)
+    // 每條路中間那一點找車道數
+    roads.forEach(function (r) {
+      if (CLASS[r.cls].fixedW) return;
+      var c = r.coords, i = Math.floor((c.length - 1) / 2), A = c[i], Bq = c[i + 1] || c[i], dx = (Bq[0] - A[0]) * LKX, dy = (Bq[1] - A[1]) * LKY, l = Math.hypot(dx, dy);
+      if (l > 0.1) r.lanesT = laneAt([(A[0] + Bq[0]) / 2, (A[1] + Bq[1]) / 2], [dx / l, dy / l]);
+    });
     var c = m.getCenter(), origin = maplibregl.MercatorCoordinate.fromLngLat([c.lng, c.lat], 0), sc = origin.meterInMercatorCoordinateUnits();
     var K = function (q) { return q[0].toFixed(6) + ',' + q[1].toFixed(6); }, junW = {};
-    roads.forEach(function (r) { var w = widthOf(r.cls, r.oneway); [r.coords[0], r.coords[r.coords.length - 1]].forEach(function (q) { var k = K(q); junW[k] = Math.max(junW[k] || 0, w / 2); }); });
+    roads.forEach(function (r) { var w = roadW(r); [r.coords[0], r.coords[r.coords.length - 1]].forEach(function (q) { var k = K(q); junW[k] = Math.max(junW[k] || 0, w / 2); }); });
     builtFor = { box: box, zoom: m.getZoom(), at: Date.now() }; dirty = false;
     job = { roads: roads, i: 0, origin: origin, sc: sc, junW: junW, K: K, B: { asphalt: new Bucket(), white: new Bucket(), yellow: new Bucket(), concrete: new Bucket() }, keys: null, meshes: [] };
     requestAnimationFrame(step);
@@ -151,8 +223,11 @@
       var P0 = [], last = null;
       r.coords.forEach(function (q) { var p = local(q); if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.3) { P0.push(p); last = p; } });
       if (P0.length < 2) return;
-      var P = RS.curve(P0, []), fr = RS.frame(P, function (tx, tz) { return [-tz, tx]; }), n = P.length, S = fr.S, R = fr.R, segR = fr.seg, L = S[n - 1];
-      var k = CLASS[r.cls], W = widthOf(r.cls, r.oneway), hw = W / 2;
+      // 貝茲曲線：頭尾用接續那條路的點當延伸點(接縫兩邊切線一樣、不會折角)，接縫的斜接方向也照它
+      var gA = r.ghostA ? local(r.ghostA) : null, gB = r.ghostB ? local(r.ghostB) : null;
+      var unit = function (a, b) { var dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
+      var P = RS.curve(P0, [], gA, gB), fr = RS.frame(P, function (tx, tz) { return [-tz, tx]; }, gA ? unit(gA, P0[0]) : null, gB ? unit(P0[P0.length - 1], gB) : null), n = P.length, S = fr.S, R = fr.R, segR = fr.seg, L = S[n - 1];
+      var k = laneSpec(r), W = roadW(r), hw = W / 2;
       // 從平面國道上面跨過去：抬高
       var H = S.map(function () { return 0; }), cross = [];
       if (window._snmRoad3dAt) for (var s0 = 0; s0 <= L; s0 += 4) {
@@ -163,8 +238,16 @@
       }
       if (cross.length) H = S.map(function (s) { var h = 0; cross.forEach(function (x) { h = Math.max(h, x[1] - 0.04 * Math.max(0, Math.abs(s - x[0]) - 15)); }); return h; });
       var pt = function (q, o, y) { return [P[q][0] + R[q][0] * o, H[q] + y, P[q][1] + R[q][1] * o]; };
+      // 沿線的帶狀(路面、實線)：有 from / to 就剛好切在那裡(路口裡面不畫，不會整段伸進路口)
+      var at = function (q, t, o, y) { var rr = t <= 0 ? R[q] : t >= 1 ? R[q + 1] : segR[q]; return [P[q][0] + (P[q + 1][0] - P[q][0]) * t + rr[0] * o, H[q] + (H[q + 1] - H[q]) * t + y, P[q][1] + (P[q + 1][1] - P[q][1]) * t + rr[1] * o]; };
       var strip = function (bk, o1, o2, y, from, to) {
-        for (var q = 0; q < n - 1; q++) { if (from != null && (S[q + 1] < from || S[q] > to)) continue; bk.quad(pt(q, o1, y), pt(q, o2, y), pt(q + 1, o2, y), pt(q + 1, o1, y)); }
+        for (var q = 0; q < n - 1; q++) {
+          if (from == null) { bk.quad(pt(q, o1, y), pt(q, o2, y), pt(q + 1, o2, y), pt(q + 1, o1, y)); continue; }
+          var a0 = Math.max(S[q], from), a1 = Math.min(S[q + 1], to), len = (S[q + 1] - S[q]) || 1;
+          if (a1 - a0 < 0.02) continue;
+          var t0 = (a0 - S[q]) / len, t1 = (a1 - S[q]) / len;
+          bk.quad(at(q, t0, o1, y), at(q, t0, o2, y), at(q, t1, o2, y), at(q, t1, o1, y));
+        }
       };
       var dashed = function (bk, o, wd, y, on, period, from, to) {
         for (var q = 0; q < n - 1; q++) {
@@ -193,6 +276,9 @@
           strip(B.white, -hw + k.edge, -hw + k.edge + 0.15, my, from, to);
           for (var l2 = 1; l2 < k.lanes; l2++) dashed(B.white, -hw + k.edge + l2 * k.lane, 0.12, my, 4, 10, from, to);
         }
+        // 停止線(白實線、寬 35 公分)：路口前、駛入路口那半邊(靠右行駛：路尾畫右半邊、路頭畫左半邊；單行道路尾整個路面)
+        if (r.endsDeg[1] >= 3) strip(B.white, r.oneway ? -hw + k.edge : 0.25, hw - k.edge, my + 0.002, to - 0.35, to);
+        if (r.endsDeg[0] >= 3 && !r.oneway) strip(B.white, -hw + k.edge, -0.25, my + 0.002, from, from + 0.35);
       }
       // 抬高的那段：兩側紐澤西護欄＋橋面版側邊
       if (cross.length) {
@@ -271,7 +357,11 @@
     if (job) return;   // 正在建
     build();
   }
+  // 有新資料(dirty)：5 秒後一定再檢查一次(地圖沒在動也會重建)；已經排了就不重排
+  var laterTimer = null;
+  function later() { if (laterTimer) return; laterTimer = setTimeout(function () { laterTimer = null; check(); }, 5200); }
   function soon(force) { if (force) builtFor = null; clearTimeout(timer); timer = setTimeout(check, 300); }
+  window._snmRoad3dCityState = function () { var mv = []; if (chunk) chunk.scene.traverse(function (o) { if (o.isMesh) mv.push(o.geometry.attributes.position.count); }); return { chunk: !!chunk, meshes: mv, job: job && { i: job.i, n: job.roads.length, keys: job.keys }, builtFor: builtFor, lanes: Object.keys(laneTiles).length, laneIdxState: laneIdxState }; };   // 除錯用
   window._snmReloadRoad3dCity = function () { renderer = null; chunk = null; builtFor = null; job = null; soon(true); };   // 換地圖樣式後重加
   function init() {
     var m = window.map;
@@ -280,11 +370,11 @@
       m.on('moveend', function () { soon(); });
       var lastMove = 0;   // 導航時鏡頭一直在動：移動中也每 1 秒檢查(離開上次建好的範圍才重建)
       m.on('move', function () { var now = Date.now(); if (now - lastMove > 1000) { lastMove = now; check(); } });
-      m.on('sourcedata', function (e) { if (e.isSourceLoaded && (e.sourceId === 'openmaptiles' || e.sourceId === 'snm-roads') && m.getZoom() >= MIN_ZOOM) { dirty = true; if (!builtFor) soon(); } });   // 道路資料載完：記下來，之後再建(不要每載一塊就重建)
+      m.on('sourcedata', function (e) { if (e.isSourceLoaded && (e.sourceId === 'openmaptiles' || e.sourceId === 'snm-roads') && m.getZoom() >= MIN_ZOOM) { dirty = true; if (!builtFor) soon(); else later(); } });   // 道路資料載完：記下來，之後再建(不要每載一塊就重建)
       soon(true);
     };
     if (m.loaded()) go(); else m.once('load', go);
-    window.addEventListener('snm-road3d-data', function () { dirty = true; });   // 國道 3D 載入新的：記下來，之後再重建(跨過國道的路重新抬高；不要每載一塊就重建)
+    window.addEventListener('snm-road3d-data', function () { dirty = true; later(); });   // 國道 3D 載入新的：記下來，之後再重建(跨過國道的路重新抬高；不要每載一塊就重建)
   }
   init();
 })();

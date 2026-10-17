@@ -9,7 +9,7 @@
   // 路燈晚上 6 點到早上 6 點亮(暖白)，白天熄燈(灰)
   function lampColor() { var h = new Date().getHours(); return h >= 18 || h < 6 ? 0xFFF1C2 : 0x9AA0A6; }
   setInterval(function () { if (mats && !document.hidden && mats.lamp.color.getHex() !== lampColor()) { mats.lamp.color.setHex(lampColor()); if (window.map) window.map.triggerRepaint(); } }, 60000);
-  var MIN_ZOOM = 16, LAYER = 'snm-lamps-3d', SPACING = 50, LAMP_H = 11, REACH = 2.6;
+  var MIN_ZOOM = 14, LAYER = 'snm-lamps-3d', SPACING = 50, LAMP_H = 11, REACH = 2.6;
   var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   var renderer = null, camera = null, chunk = null, builtFor = null, timer = null, loading = false, mats = null;
 

@@ -12343,6 +12343,7 @@ setTimeout(() => {
     _live.addEventListener('counts', function (e) { try { updateOnlineUI(JSON.parse(e.data)); } catch (_) {} });
     _live.addEventListener('traffic', liveTraffic);
     _live.addEventListener('cars', liveCars);
+    _live.addEventListener('update', function (e) { try { if (window._snmUpdateStatus) window._snmUpdateStatus(JSON.parse(e.data)); } catch (_) {} });   // 網站更新中 / 更新完成
     // 斷線時瀏覽器會自己重連(伺服器設定 3 秒)
   }
   function closeLive() { if (_live) { _live.close(); _live = null; } }
@@ -12610,10 +12611,81 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="cms_3d.js?v=14"></script>
+<script src="cms_3d.js?v=15"></script>
 <!-- 🛣 國道、快速道路 3D 路面(第 1 階段：主線；放大到 zoom 16 才畫) -->
 <script src="road_3d_shape.js?v=6"></script>
-<script src="road_3d.js?v=44"></script>
+<script src="road_3d.js?v=46"></script>
+<!-- 🟢 網站更新中提示、更新通知(推播) -->
+<style>
+.snmUpdPill{ position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:1001; display:none; align-items:center; gap:8px;
+  padding:7px 14px; border-radius:18px; background:rgba(255,255,255,0.8); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+  border:0.5px solid #d9d9d9; box-shadow:0 4px 4px rgba(0,0,0,0.25); font:600 13px "SF Pro Display","SF Pro Text",Arial,sans-serif; color:#0B7A3E; white-space:nowrap; cursor:default; }
+.snmUpdPill .dot{ width:9px; height:9px; border-radius:50%; background:#16C060; box-shadow:0 0 0 3px rgba(22,192,96,0.25); animation:snmUpdBreath 1.4s ease-in-out infinite; }
+.snmUpdPill.done{ cursor:pointer; }
+.snmUpdPill.done .dot{ animation:none; }
+@keyframes snmUpdBreath{0%,100%{opacity:1;}50%{opacity:0.35;}}
+.snmPushAsk{ position:fixed; left:16px; right:16px; bottom:118px; z-index:1001; display:none; padding:14px 16px; border-radius:20px;
+  background:rgba(255,255,255,0.8); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:0.5px solid #d9d9d9; box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  font:14px "SF Pro Display","SF Pro Text",Arial,sans-serif; color:#1c1c1e; }
+.snmPushAsk .btns{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+.snmPushAsk button{ border:none; border-radius:16px; padding:7px 16px; font-weight:600; font-size:13px; font-family:inherit; cursor:pointer; }
+.snmPushAsk .yes{ background:#16C060; color:#fff; }
+.snmPushAsk .no{ background:rgba(0,0,0,0.06); color:#333; }
+</style>
+<div class="snmUpdPill" id="snmUpdPill"><span class="dot"></span><span id="snmUpdText">系統更新中…</span></div>
+<div class="snmPushAsk" id="snmPushAsk">🔔 要在智行地圖更新時收到通知嗎？<div class="btns"><button class="no" id="snmPushNo">不用</button><button class="yes" id="snmPushYes">開啟通知</button></div></div>
+<script>
+(function () {
+  var pill = document.getElementById('snmUpdPill'), txt = document.getElementById('snmUpdText'), loadedAt = Date.now(), hideT = null;
+  function api() { return window._snmApiBase || '/api'; }
+  // 更新狀態(即時通道的 update 事件、回到畫面時查一次)：更新中 → 綠色「系統更新中…」；剛更新完 → 「更新完成，點這裡重新整理」15 秒
+  window._snmUpdateStatus = function (s) {
+    if (!s) return;
+    clearTimeout(hideT);
+    if (s.updating) {
+      pill.classList.remove('done');
+      txt.textContent = '系統更新中…' + (s.notes ? '(' + s.notes.slice(0, 18) + (s.notes.length > 18 ? '…' : '') + ')' : '');
+      pill.style.display = 'flex';
+      return;
+    }
+    if (s.doneAt && s.doneAt > loadedAt - 60000 && Date.now() - s.doneAt < 10 * 60000) {   // 打開網頁後才更新完的：提醒重新整理
+      pill.classList.add('done'); txt.textContent = '✅ 更新完成，點這裡重新整理'; pill.style.display = 'flex';
+      hideT = setTimeout(function () { pill.style.display = 'none'; }, 15000);
+    } else pill.style.display = 'none';
+  };
+  pill.addEventListener('click', function () { if (pill.classList.contains('done')) location.reload(); });
+  function check() { fetch(api() + '/update', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { if (j && j.ok) window._snmUpdateStatus(j.data); }).catch(function () {}); }
+  setTimeout(check, 3000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+
+  // ── 更新通知(推播)：手機要支援(iPhone 要先「加入主畫面」才收得到) ──
+  var can = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  function b64ToBytes(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var r = atob(s), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
+  function subscribe() {
+    return navigator.serviceWorker.register('sw.js').then(function (reg) {
+      return navigator.serviceWorker.ready.then(function () { return fetch(api() + '/push', { cache: 'no-store' }); }).then(function (r) { return r.json(); }).then(function (j) {
+        return reg.pushManager.getSubscription().then(function (old) {
+          return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(j.data.publicKey) });
+        });
+      });
+    }).then(function (sub) {
+      return fetch(api() + '/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON() }) });
+    });
+  }
+  window._snmPushSubscribe = subscribe;   // 除錯用
+  if (can && Notification.permission === 'granted') setTimeout(function () { subscribe().catch(function () {}); }, 5000);   // 已經允許過：確認訂閱還在
+  var ask = document.getElementById('snmPushAsk'), asked = false;
+  try { asked = !!localStorage.getItem('snm_push_asked'); } catch (_) {}
+  // 第一次用 30 秒後問一次(導航中不打擾)
+  if (can && Notification.permission === 'default' && !asked) setTimeout(function () { if (!document.body.classList.contains('navigating')) ask.style.display = 'block'; }, 30000);
+  function done() { ask.style.display = 'none'; try { localStorage.setItem('snm_push_asked', '1'); } catch (_) {} }
+  document.getElementById('snmPushNo').addEventListener('click', done);
+  document.getElementById('snmPushYes').addEventListener('click', function () {
+    done();
+    Notification.requestPermission().then(function (p) { if (p === 'granted') subscribe().catch(function (e) { console.log('push subscribe failed', e); }); });
+  });
+})();
+</script>
 <!-- 🔴 導航時從目前位置拉一條紅色直線到目的地 -->
 <script>
 (function () {
@@ -12629,21 +12701,22 @@ setTimeout(() => {
   }
   setInterval(function () {
     var m = window.map;
-    if (!m || !m.isStyleLoaded()) return;
+    if (!m || document.hidden || !m.isStyleLoaded()) return;   // 網頁在背景時不做事(省電)
+    var on = document.body.classList.contains('navigating') && window._navDestCoord && window.currentLat != null;
+    if (!on && !shown) return;   // 沒在導航：什麼都不用做
     if (!m.getSource(SRC)) m.addSource(SRC, { type: 'geojson', data: empty });   // 換地圖樣式後重加
     if (!m.getLayer(LAYER)) m.addLayer({ id: LAYER, type: 'line', source: SRC, layout: { 'line-cap': 'round' }, paint: { 'line-color': '#E53935', 'line-width': 3, 'line-opacity': 0.85 } });   // 加在最上層，車子還是在它上面
-    var on = document.body.classList.contains('navigating') && window._navDestCoord && window.currentLat != null;
     if (on) { m.getSource(SRC).setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [carFront(m), window._navDestCoord] } }); shown = true; }
     else if (shown) { m.getSource(SRC).setData(empty); shown = false; }
   }, 1000);
 })();
 </script>
 <!-- 🏙 一般道路 3D 路面(省道、縣道、市區道路、巷弄) -->
-<script src="road_3d_city.js?v=1"></script>
+<script src="road_3d_city.js?v=8"></script>
 <!-- 🌤 天空(照太陽高度角換顏色) -->
-<script src="sky.js?v=3"></script>
+<script src="sky.js?v=4"></script>
 <!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
-<script src="lamps_3d.js?v=4"></script>
+<script src="lamps_3d.js?v=5"></script>
 </body>
 </html>
   

@@ -205,6 +205,7 @@ server.listen(PORT, () => {
   console.log('────────────────────────────────────────────');
   console.log(' 智行地圖後端伺服器已啟動');
   console.log(' 本機網址：http://localhost:' + PORT + '/api/health');
+  try { require('../lib/update-status').adminKey(); console.log(' 更新用的管理密碼放在：' + require('../lib/update-status').adminKeyFile() + '(tools/release.js 會自己讀)'); } catch (_) {}
   console.log(' 資料資料夾：' + process.env.SNM_DATA_DIR);
   console.log(' 關閉伺服器：按 Ctrl + C');
   console.log('────────────────────────────────────────────');

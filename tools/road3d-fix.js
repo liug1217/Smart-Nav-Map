@@ -567,7 +567,8 @@ function junctions(ways, nodeIdx) {
   };
   const li = (arr, k, t) => arr[k] + (arr[Math.min(arr.length - 1, k + 1)] - arr[k]) * t;
   const lip = (P, k, t) => { const a = P[k], b = P[Math.min(P.length - 1, k + 1)]; return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; };
-  let count = 0, skipped = 0;
+  let count = 0, skipped = 0, partial = 0, covered = 0;
+  const exPartial = [], exCovered = [];   // 體檢報告：前 20 處的位置
   for (const list of nodeIdx.values()) {
     if (list.length < 2) continue;
     const ents = list.filter((o) => o.w.ok && o.w.oneway);
@@ -661,15 +662,19 @@ function junctions(ways, nodeIdx) {
         if (sep == null && side && gap >= 0) sep = rec.length - 1;
         if (sep != null && gap >= NOSE) { nose = rec.length - 1; break; }
       }
-      if (!side || sep == null || nose == null) { skipped++; continue; }
+      if (!rec.length) { skipped++; continue; }
+      // 分開了但 500 公尺內空隙一直沒到 1.5 公尺：槽化區畫到取樣的最後
+      if (side && sep != null && nose == null) { nose = rec.length - 1; partial++; if (exPartial.length < 20) exPartial.push({ id: A.id, at: chkInv(rec[0].p).map((v) => +v.toFixed(5)) }); }
+      // 從頭到尾都疊在本線上：疊住的那段匝道不畫、本線加寬蓋住(不會兩層柏油、標線疊在一起閃)
+      else if (!side || sep == null) { side = rec.reduce((a2, r2) => a2 + r2.pr.lat, 0) >= 0 ? 1 : -1; sep = nose = rec.length - 1; covered++; if (exCovered.length < 20) exCovered.push({ id: A.id, at: chkInv(rec[0].p).map((v) => +v.toFixed(5)) }); }
       count++;
       // 支線還疊在本線上的那段不畫；本線往那側加寬(每段本線各自算)
       const rangeOn = (aw, q0, q1) => { const ss = rec.slice(q0, q1 + 1).filter((r) => r.Aw === aw).map((r) => r.sA); return ss.length ? [Math.min(...ss), Math.max(...ss)] : null; };
       for (const aw of aCh) { const r = rangeOn(aw, 0, sep); if (r) aw.skip.push([r[0] - (r[0] < 1 ? 1 : 0), r[1] + (r[1] > aw.S[aw.P.length - 1] - 1 ? 1 : 0)]); }
-      // 本線往那側加寬：要蓋住還疊在上面的支線(need)，前後每 15 公尺收 1 公尺慢慢變回原寬(減速 / 加速車道的漸變段)
+      // 本線往那側加寬：要蓋住還疊在上面的支線(need)，前後每 18 公尺收 1 公尺慢慢變回原寬(減速 / 加速車道的漸變段；規範：設計速率 100 時漸變段 70 公尺)
       const need = [];
       for (let q = 0; q <= sep; q++) need.push([rec[q].pr.c.d(rec[q].pr.s), Math.max(0, side * rec[q].pr.lat + rec[q].hA - rec[q].hB)]);
-      const TAPER = 1 / 15, envelope = (d) => { let v = 0; for (const [dq, vq] of need) v = Math.max(v, vq - TAPER * Math.abs(d - dq)); return v; };
+      const TAPER = 1 / 18, envelope = (d) => { let v = 0; for (const [dq, vq] of need) v = Math.max(v, vq - TAPER * Math.abs(d - dq)); return v; };
       const vMax = Math.max(0, ...need.map((x) => x[1])), dLo = Math.min(...need.map((x) => x[0])) - vMax / TAPER, dHi = Math.max(...need.map((x) => x[0]));   // 分開之後不加寬(那裡是匝道自己的路面和槽化區)
       const segs = chain.map((c) => ({ w: c.w, d: c.d }));
       const back = diverge ? through.up : through.down;
@@ -699,7 +704,7 @@ function junctions(ways, nodeIdx) {
       for (const aw of aCh) { const r = rangeOn(aw, 0, nose); if (r) aw.hideX.push([-side, diverge ? r[0] : r[0] - 5, diverge ? r[1] + 5 : r[1]]); }
     }
   }
-  return { count, skipped };
+  return { count, skipped, partial, covered, exPartial, exCovered };
 }
 
 // ── 5. 護欄落在別條路上 ──

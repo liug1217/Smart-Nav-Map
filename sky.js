@@ -78,7 +78,7 @@
     if (!m) { setTimeout(init, 500); return; }
     m.on('style.load', apply);   // 換地圖樣式後天空會被清掉
     if (m.isStyleLoaded()) apply(); else m.once('load', apply);
-    setInterval(apply, 60000);
+    setInterval(function () { if (!document.hidden) apply(); }, 60000);   // 網頁在背景時不重算(省電)
     document.addEventListener('visibilitychange', function () { if (!document.hidden) apply(); });
   }
   init();
