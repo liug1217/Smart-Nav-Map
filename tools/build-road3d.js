@@ -1,11 +1,11 @@
-// 產生 3D 道路資料(road3d/)。第 2 階段：國道、快速道路的主線＋匝道、交流道(分流、匯流、槽化區)
+// 產生 3D 道路資料(road3d/)。第 3 階段(真的高架)：國道、快速道路的主線＋匝道、交流道(分流、匯流、槽化區)
 // 電腦把全部都算好，手機(road_3d.js)只照著畫：
 //   1. 讀 OpenStreetMap 的國道、快速道路(主線＋匝道)；車道數沒標的用接點車道數守恆推
 //   2. 同一個點每條路的座標統一、很近的頭尾接起來；接點、接縫先改成曲線
 //   3. 對向車道疊在一起：兩個方向各往外推一半，中間留 0.8 公尺放中央護欄；匝道跟別條路平行疊在一起也推開
 //   3b. 交流道：匝道還疊在本線上的那段不畫、本線加寬(減速 / 加速車道，有漸變段)、分開後到尖端是槽化區
 //   4. 曲線：向心 Catmull-Rom 樣條換成三次貝茲曲線(road_3d_shape.js)，通過每個原始點、沒有折角、跨路段也平順
-//   5. 每點的路寬(車道數不同時漸變)、高度(第 1 階段橋只微抬 1.2 公尺)、會落在別條路上的護欄段落
+//   5. 每點的路寬(車道數不同時漸變)、高度(橋每層 6 公尺，上下交叉保證淨空)、會落在別條路上的護欄段落
 //   6. 全台體檢(折角、頭尾沒接上、路面疊在一起、邊線折回)，寫進 road3d/report.json
 //
 // 用法：node --max-old-space-size=8192 tools/build-road3d.js <overpass 下載結果.json>
@@ -63,11 +63,11 @@ lap(`讀道路：${all.length} 段(主線 ${all.filter((w) => !w.link).length}�
 
 // ── 2～5. 修正、曲線、路寬、高度、護欄 ──
 const rep = FIX.run(mains, { lanesDone: true });
-lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(沒分開的 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里`);
+lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(沒分開的 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里`);
 
 // ── 6. 體檢 ──
 const ang = (a, b, c) => { const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]); return lu && lv ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI : 0; };
-const report = { generated: new Date().toISOString(), stage: 2, ways: mains.length, kinks: { '6-10': 0, '10-20': 0, '>20': 0 }, kinkExamples: [], folds: 0, gaps: 0, overlapKm: 0 };
+const report = { generated: new Date().toISOString(), stage: 3, ways: mains.length, kinks: { '6-10': 0, '10-20': 0, '>20': 0 }, kinkExamples: [], folds: 0, gaps: 0, overlapKm: 0 };
 const ll6 = (w, i) => { const p = w.P[i], m = [w.m0[0] + p[0] / w.k, w.m0[1] + p[1] / w.k]; return FIX.unmerc(m[0], m[1]).map((v) => +v.toFixed(5)); };
 for (const w of mains) {
   if (!w.ok) continue;
