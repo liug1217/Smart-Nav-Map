@@ -533,7 +533,7 @@ body.searchOpen .searchBarWrap{
   display:flex;
   flex-direction:column;
 }
-body.searchOpen .searchBar{ flex-shrink:0; } /* 大小、圓角、陰影都跟沒點開時一樣 */
+body.searchOpen .searchBar{ flex-shrink:0; backdrop-filter:none; -webkit-backdrop-filter:none; } /* 大小、圓角、陰影都跟沒點開時一樣；搜尋頁本身已經是毛玻璃，搜尋框不再疊一層(疊兩層會比頁面白、模糊也不一樣) */
 body.searchOpen .searchBackBtn{ display:block; }
 body.searchOpen .searchChips{
   display:flex;
@@ -546,8 +546,8 @@ body.searchOpen .searchChips{
 body.searchOpen .searchChips::-webkit-scrollbar{ display:none; }
 .searchChips button{
   flex-shrink:0;
-  border:1px solid #DADCE0;
-  background:#FFFFFF;
+  border:0.5px solid #d9d9d9; /* 跟卡片一樣的玻璃材質 */
+  background:rgba(255,255,255,0.8);
   color:#3C4043;
   border-radius:18px;
   padding:7px 13px;
@@ -556,7 +556,7 @@ body.searchOpen .searchChips::-webkit-scrollbar{ display:none; }
   white-space:nowrap;
   cursor:pointer;
 }
-.searchChips button:active{ background:#F1F3F4; }
+.searchChips button:active{ background:rgba(241,243,244,0.9); }
 .searchChips button{ display:inline-flex; align-items:center; gap:6px; }
 .searchChips .chipLogo{ width:20px; height:20px; display:block; flex-shrink:0; } /* 跟地圖上的店家圖示同一張圖 */
 body.searchOpen .searchResultsList{
@@ -1556,12 +1556,12 @@ body.speedLimitShown .onlineCapsule{ visibility:hidden; }
   width:168px;
   padding:10px;
   box-sizing:border-box;
-  background:rgba(255,255,255,0.88);
-  border:1px solid rgba(255,255,255,0.95);
-  box-shadow:0 6px 18px rgba(14,26,45,0.18);
-  border-radius:8px;
-  backdrop-filter:blur(18px);
-  -webkit-backdrop-filter:blur(18px);
+  background:rgba(255,255,255,0.8); /* 跟卡片一樣的白色毛玻璃 */
+  border:0.5px solid #d9d9d9;
+  box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  border-radius:16px;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
   z-index:4;
   font-family:"SF Pro Display","SF Pro Text",Arial,sans-serif;
   display:none;
@@ -2934,9 +2934,11 @@ function _flipCell(cell, from, to) {
       if(d <= CCTV_AUTO_SHOW_RADIUS_KM && d < nearestDist){ nearest = cam; nearestDist = d; }
     }
     if(nearest){
-      if(window.cctvActiveCameraId !== nearest.id){
-        const label = window.buildCctvLabel ? window.buildCctvLabel(nearest) : (nearest.road + ' ' + nearest.mile);
-        window.switchCctvCamera(nearest.url, label, nearest.id, true);
+      // 監視器資料沒有 id 欄位(以前用 nearest.id 比，兩邊都是 undefined → 永遠當成已經在顯示，畫面從來不會跳出來)：改用影像網址當辨識碼
+      const camKey = nearest.id != null ? String(nearest.id) : (nearest.url || (nearest.road + '|' + nearest.mile + '|' + nearest.lat + ',' + nearest.lon));
+      if(window.cctvActiveCameraId !== camKey){
+        const label = window.buildCctvLabel ? window.buildCctvLabel(nearest) : [nearest.road, nearest.mile, nearest.dir].filter(Boolean).join(' ');
+        window.switchCctvCamera(nearest.url, label, camKey, true);
         if (typeof window._coinCctv === 'function') window._coinCctv();
         if (typeof window._hintCoinCctv === 'function') window._hintCoinCctv();
       }
