@@ -12618,13 +12618,22 @@ setTimeout(() => {
 <script>
 (function () {
   var SRC = 'navStraightLine', LAYER = 'navStraightLine', empty = { type: 'FeatureCollection', features: [] }, shown = false;
+  // 起點在車頭正前方：照車頭方向從車子中心往前移半個車長(車身圖示高 50 像素 × 目前的 icon-size × 每像素幾公尺)
+  function carFront(m) {
+    var src = m.getSource('user-pos'), f = src && src._data && src._data.features && src._data.features[0];
+    var p = f && f.geometry && f.geometry.coordinates, lon = p ? p[0] : window.currentLon, lat = p ? p[1] : window.currentLat;   // 用車子圖示畫的位置(有對齊到道路)
+    var hd = ((f && f.properties && f.properties.heading) || 0) * Math.PI / 180, z = m.getZoom();
+    var size = z <= 19 ? 0.9 : 0.9 * Math.pow(2, Math.min(z, 22) - 19);   // 跟 user-car 的 icon-size 一樣
+    var mpp = 40075016 * Math.cos(lat * Math.PI / 180) / (512 * Math.pow(2, z)), d = 25 * size * mpp;   // 半個車長(剛好從車頭接出去)
+    return [lon + Math.sin(hd) * d / (111320 * Math.cos(lat * Math.PI / 180)), lat + Math.cos(hd) * d / 110540];
+  }
   setInterval(function () {
     var m = window.map;
     if (!m || !m.isStyleLoaded()) return;
     if (!m.getSource(SRC)) m.addSource(SRC, { type: 'geojson', data: empty });   // 換地圖樣式後重加
     if (!m.getLayer(LAYER)) m.addLayer({ id: LAYER, type: 'line', source: SRC, layout: { 'line-cap': 'round' }, paint: { 'line-color': '#E53935', 'line-width': 3, 'line-opacity': 0.85 } });   // 加在最上層，車子還是在它上面
     var on = document.body.classList.contains('navigating') && window._navDestCoord && window.currentLat != null;
-    if (on) { m.getSource(SRC).setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[window.currentLon, window.currentLat], window._navDestCoord] } }); shown = true; }
+    if (on) { m.getSource(SRC).setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [carFront(m), window._navDestCoord] } }); shown = true; }
     else if (shown) { m.getSource(SRC).setData(empty); shown = false; }
   }, 1000);
 })();
