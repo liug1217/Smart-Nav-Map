@@ -193,17 +193,68 @@ function separate(ways) {
     // 沒推的路(匝道等)：接點移過去，往裡面 100 公尺慢慢變回原位
     const S = [0]; for (let i = 1; i < n; i++) S.push(S[i - 1] + dist(orig[i - 1], orig[i]));
     const out = orig.map((c) => c.slice());
+    // 每點的移動 = 附近被移的接點的加權平均(權重：100 公尺內 smoothstep)；接點本身一定剛好移到跟別條路一樣的位置
+    const acc = orig.map(() => [0, 0, 0]);
     moves.forEach((mv, i) => {
       if (!mv) return;
       for (let j = 0; j < n; j++) {
         const d = Math.abs(S[j] - S[i]); if (d > 100) continue;
         const wt = 1 - d / 100, f = wt * wt * (3 - 2 * wt);
-        out[j][0] += mv[0] * f; out[j][1] += mv[1] * f;
+        acc[j][0] += mv[0] * f; acc[j][1] += mv[1] * f; acc[j][2] += f;
       }
     });
+    for (let j = 0; j < n; j++) {
+      if (moves[j]) { out[j] = [orig[j][0] + moves[j][0], orig[j][1] + moves[j][1]]; continue; }
+      const wsum = Math.max(1, acc[j][2]);
+      out[j] = [orig[j][0] + acc[j][0] / wsum, orig[j][1] + acc[j][1] / wsum];
+    }
     w.ll = out; followed++;
   }
+  unifyNodes(ways);
   return { pushed, maxPush, followed };
+}
+// 同一個 OSM 節點在每條路上的座標一定要一模一樣(差 1e-6 度手機就認不出是同一點，高度會接不起來)：
+// 以「主線、路中間經過那條」的位置為準，全部統一
+function unifyNodes(ways) {
+  const best = new Map();
+  for (const w of ways) w.nodes.forEach((id, i) => {
+    if (id == null) return;
+    const inner = i > 0 && i < w.ll.length - 1, rank = (w.link ? 0 : 2) + (inner ? 1 : 0), b = best.get(id);
+    if (!b || rank > b.rank) best.set(id, { rank, c: w.ll[i] });
+  });
+  let fixed = 0;
+  for (const w of ways) w.ll = w.ll.map((c, i) => { const id = w.nodes[i], b = id != null && best.get(id); if (b && (b.c[0] !== c[0] || b.c[1] !== c[1])) { fixed++; return b.c.slice(); } return c; });
+  return fixed;
+}
+// 原始資料兩條路頭尾畫得很近(0.6 公尺內)卻不是同一個點：接起來
+//   頭尾附近 0.6 公尺內的點(包括已經好幾條路接在一起的點)歸成一組，整組改成同一個位置(主線、路中間經過那條的點優先)
+function snapEnds(ways) {
+  const at = new Map(), K = 1e5, grid = new Map();
+  for (const w of ways) w.ll.forEach((c, i) => {
+    const k = key(c);
+    if (!at.has(k)) { at.set(k, { c, rank: -1, list: [] }); const g = Math.floor(c[0] * K) + ',' + Math.floor(c[1] * K); if (!grid.has(g)) grid.set(g, []); grid.get(g).push(k); }
+    const e = at.get(k), inner = i > 0 && i < w.ll.length - 1;
+    e.list.push({ w, i }); e.rank = Math.max(e.rank, (w.link ? 0 : 2) + (inner ? 1 : 0));
+  });
+  const parent = new Map(), find = (k) => { while (parent.get(k) !== k) k = parent.get(k); return k; };
+  for (const k of at.keys()) parent.set(k, k);
+  for (const [k, e] of at) {
+    if (!e.list.some((o) => o.i === 0 || o.i === o.w.ll.length - 1)) continue;   // 只處理有路的頭尾在這裡的點
+    const gx = Math.floor(e.c[0] * K), gy = Math.floor(e.c[1] * K);
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (const k2 of grid.get((gx + x) + ',' + (gy + y)) || []) {
+      if (k2 === k || dist(e.c, at.get(k2).c) >= 0.6) continue;
+      const r1 = find(k), r2 = find(k2); if (r1 !== r2) parent.set(r1, r2);
+    }
+  }
+  const groups = new Map();
+  for (const k of at.keys()) { const r = find(k); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(k); }
+  let n = 0;
+  for (const ks of groups.values()) {
+    if (ks.length < 2) continue;
+    const rep = ks.map((k) => at.get(k)).sort((p, q) => q.rank - p.rank || (key(p.c) < key(q.c) ? -1 : 1))[0].c;
+    for (const k of ks) for (const o of at.get(k).list) { o.w.ll[o.i] = rep.slice(); n++; }
+  }
+  return n;
 }
 function dist(a, b) { const A = merc(a[0], a[1]), B = merc(b[0], b[1]); return Math.hypot(B[0] - A[0], B[1] - A[1]) * kAt((a[1] + b[1]) / 2); }
 
@@ -385,10 +436,12 @@ function railHides(ways) {
 function run(ways) {
   const lanes = inferLanes(ways);
   const round = roundNodes(ways);
+  unifyNodes(ways);
   for (const w of ways) w._ll0 = w.ll.map((c) => c.slice());
   for (const w of ways) w._orig = w.ll;
   const sep = separate(ways);
-  for (const w of ways) w.ll = w.ll.map((c) => [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6]);   // 跟手機拿到的座標一樣(1e-6 度)
+  for (const w of ways) w.ll = w.ll.map((c) => [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6]);
+  snapEnds(ways);   // 跟手機拿到的座標一樣(1e-6 度)
   const nodeIdx = geometry(ways);
   const clr = clearance(ways, nodeIdx);
   const hide = railHides(ways);
