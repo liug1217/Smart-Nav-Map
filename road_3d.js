@@ -103,6 +103,8 @@
   //   JERSEY_IN：車道在 x 大的那邊(中央分隔、花台)；JERSEY_OUT：車道在 x = 0 那邊(橋上外側)
   var JERSEY_IN = [[0.2, 0], [0.2, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
   var JERSEY_OUT = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.46, 0.85], [0.46, 0]];
+  // 半個斷面(背面在 x = 0、車道在 x 大的那邊)：兩個背靠背 = 一道兩面斜角的護欄(底寬 0.6、頂寬 0.16，跟實際的一樣)
+  var JERSEY_HALF = [[0, 0], [0, 0.85], [0.08, 0.85], [0.14, 0.33], [0.27, 0.08], [0.3, 0]];
   var WBEAM = [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]];   // 兩道凸起朝向車道
 
   // 分批建：一塊圖磚可能有一百多條路、上萬個點，一次建完畫面會卡住一秒多；
@@ -335,11 +337,11 @@
       for (var q = 0; q < smp.length - 1; q++) {
         var A0 = smp[q], A1 = smp[q + 1];
         var ra = A0.c + A0.u * HALF_IN, rb = A1.c + A1.u * HALF_IN, la = A0.c - A0.u * HALF_IN, lb = A1.c - A1.u * HALF_IN;
-        for (var j = 0; j < JERSEY_IN.length - 1; j++) {
-          var p0 = JERSEY_IN[j], p1 = JERSEY_IN[j + 1];
+        for (var j = 0; j < JERSEY_HALF.length - 1; j++) {
+          var p0 = JERSEY_HALF[j], p1 = JERSEY_HALF[j + 1];
           // 這條路這邊的護欄(背面在 ra，斜面朝自己的車道)、對向那邊的護欄(鏡射)
-          B.concrete.quad(P3(A0, ra - 0.2 + p0[0], p0[1]), P3(A0, ra - 0.2 + p1[0], p1[1]), P3(A1, rb - 0.2 + p1[0], p1[1]), P3(A1, rb - 0.2 + p0[0], p0[1]));
-          B.concrete.quad(P3(A0, la + 0.2 - p0[0], p0[1]), P3(A0, la + 0.2 - p1[0], p1[1]), P3(A1, lb + 0.2 - p1[0], p1[1]), P3(A1, lb + 0.2 - p0[0], p0[1]));
+          B.concrete.quad(P3(A0, ra + p0[0], p0[1]), P3(A0, ra + p1[0], p1[1]), P3(A1, rb + p1[0], p1[1]), P3(A1, rb + p0[0], p0[1]));
+          B.concrete.quad(P3(A0, la - p0[0], p0[1]), P3(A0, la - p1[0], p1[1]), P3(A1, lb - p1[0], p1[1]), P3(A1, lb - p0[0], p0[1]));
         }
         // 防眩板：一道護欄的地方(split < 0.35)，每 1 公尺一片、斜 60 度、0.85～1.5 公尺高
         if (A0.u < 0.35) {
@@ -872,6 +874,20 @@
     });
   }
   // 電子看板查路面高度：這點(經緯度)最近的 3D 路面 → { h 高度, bearing, side 在路中心右邊幾公尺, half, nhalf, ... }
+  // 電子看板門架：這點附近、跟看板同方向的主線(單行道，找不到才用匝道) → 那一點的路中心、方向、高度、路面左右邊緣(公尺，右正)
+  window._snmRoad3dSpan = function (lon, lat, bearing) {
+    wayGrid();
+    var b = bearing * Math.PI / 180, cs = candidates([lon, lat], [Math.sin(b), Math.cos(b)]).filter(function (c) { return c.w.oneway && !c.opp && c.lat < 40; });
+    if (!cs.length) return null;
+    cs.sort(function (x, y) { return (x.w.link - y.w.link) || (x.lat - y.lat); });
+    var w = cs[0].w, f = cs[0].f, g = geoAt(w, f);
+    if (!g) return null;
+    // 路中心那一點的經緯度、方向
+    var d = f * w._L, i = 0; while (i < w.coords.length - 2 && w._len[i + 1] < d) i++;
+    var A = w.coords[i], Bc = w.coords[i + 1], t = (d - w._len[i]) / ((w._len[i + 1] - w._len[i]) || 1);
+    return { lon: A[0] + (Bc[0] - A[0]) * t, lat: A[1] + (Bc[1] - A[1]) * t, bearing: (Math.atan2((Bc[0] - A[0]) * KX, (Bc[1] - A[1]) * KY) * 180 / Math.PI + 360) % 360,
+      h: g.h, left: g.nhalf, right: g.half, link: w.link, id: w.id };
+  };
   window._snmRoad3dAt = function (lon, lat, maxD) {
     var g = wayGrid(), x = lon * KX, y = lat * KY, cx = Math.floor(x / 50), cy = Math.floor(y / 50), best = null;
     for (var a = cx - 1; a <= cx + 1; a++) for (var b = cy - 1; b <= cy + 1; b++) (g[a + ',' + b] || []).forEach(function (e) {

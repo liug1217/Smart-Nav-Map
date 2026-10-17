@@ -136,40 +136,46 @@
       m.quaternion.setFromUnitVectors(UP, d.normalize());
       g.add(m); return m;
     };
-    var SPAN = 11, H = 7, TH = 1.1, TZ = 0.42;   // 國道單向 3 線道＋路肩約 20 公尺，門架跨 22 公尺；桁架高 1.1、厚 0.84
-    [-SPAN, SPAN].forEach(function (px) {
+    // 門架跨距照 3D 路面：左柱立在中央分隔那側(路面左緣外 0.5 公尺)、右柱立在外側護欄外面(路面右緣外 0.9 公尺)；
+    //   3D 道路還沒載入時先用一般值(左右各 11 公尺)。原點 = 路中心，+x 往右
+    var sp = s.span, XL = sp ? sp.left - 0.5 : -11, XR = sp ? sp.right + 0.9 : 11;
+    var H = 7, TH = 1.1, TZ = 0.42;   // 桁架高 1.1、厚 0.84
+    [XL, XR].forEach(function (px) {
       rod([px, 0, 0], [px, H + TH + 0.3, 0], 0.26);                                   // 圓柱立柱
       var base = new T.Mesh(new T.CylinderGeometry(0.5, 0.55, 0.25, 16), steel); base.position.set(px, 0.12, 0); g.add(base);   // 柱腳
       var cap = new T.Mesh(new T.CylinderGeometry(0.3, 0.26, 0.12, 16), steel); cap.position.set(px, H + TH + 0.36, 0); g.add(cap); // 柱頂蓋
     });
     // 桁架：前後兩片，每片上下弦桿＋豎桿＋斜撐(圓管)，前後之間再用橫桿連起來
-    var L = SPAN + 0.3, step = 1.1;
+    var nSeg = Math.max(4, Math.round((XR - XL) / 1.1)), step = (XR - XL) / nSeg;   // 豎桿間隔約 1.1 公尺，剛好分完整段
     [-TZ, TZ].forEach(function (z) {
-      rod([-L, H, z], [L, H, z], 0.085);
-      rod([-L, H + TH, z], [L, H + TH, z], 0.085);
-      var k = 0;
-      for (var x = -SPAN; x < SPAN - 0.01; x += step, k++) {
+      rod([XL - 0.3, H, z], [XR + 0.3, H, z], 0.085);
+      rod([XL - 0.3, H + TH, z], [XR + 0.3, H + TH, z], 0.085);
+      for (var k = 0; k < nSeg; k++) {
+        var x = XL + k * step;
         rod([x, H, z], [x, H + TH, z], 0.04);                                                    // 豎桿
         rod(k % 2 ? [x, H, z] : [x, H + TH, z], k % 2 ? [x + step, H + TH, z] : [x + step, H, z], 0.04); // 斜撐(左右交錯)
       }
-      rod([SPAN, H, z], [SPAN, H + TH, z], 0.04);
+      rod([XR, H, z], [XR, H + TH, z], 0.04);
     });
-    for (var x2 = -SPAN; x2 <= SPAN + 0.01; x2 += step * 2) {
+    for (var k2 = 0; k2 <= nSeg; k2 += 2) {
+      var x2 = XL + k2 * step;
       rod([x2, H, -TZ], [x2, H, TZ], 0.035); rod([x2, H + TH, -TZ], [x2, H + TH, TZ], 0.035);
     }
     // LED 看板：黑色箱體＋正面發光面板(用 MeshBasic，不受光線影響，夜裡也看得清楚)
-    var BW = 8, BH = 2.3, BY = H + TH + BH / 2 + 0.15;
-    box(BW + 0.3, BH + 0.3, 0.6, dark, 0.8, BY, 0);
+    // 看板在車道正上方(路面中間偏左一點：外側路肩比較寬)；路很窄時看板跟著變窄
+    var BW = Math.min(8, XR - XL - 4), BH = 2.3, BY = H + TH + BH / 2 + 0.15, BX = sp ? (sp.left + sp.right) / 2 - 1 : 0.8;
+    box(BW + 0.3, BH + 0.3, 0.6, dark, BX, BY, 0);
     var tex = new T.CanvasTexture(boardCanvas(s.pages[0])); tex.anisotropy = 4;
     var face = new T.Mesh(new T.PlaneGeometry(BW, BH), new T.MeshBasicMaterial({ map: tex }));
-    face.position.set(0.8, BY, 0.31); g.add(face);
+    face.position.set(BX, BY, 0.31); g.add(face);
     // 看板上方兩盞小燈
-    [-BW / 2 + 1.2, BW / 2 - 1.2].forEach(function (lx) { box(0.5, 0.4, 0.4, dark, 0.8 + lx, BY + BH / 2 + 0.45, 0.05); });
+    [-BW / 2 + 1.2, BW / 2 - 1.2].forEach(function (lx) { box(0.5, 0.4, 0.4, dark, BX + lx, BY + BH / 2 + 0.45, 0.05); });
     // 左邊綠底里程牌
     var mt = new T.CanvasTexture(mileCanvas(s));
     var mile = new T.Mesh(new T.PlaneGeometry(2.4, 0.8), new T.MeshBasicMaterial({ map: mt }));
-    mile.position.set(-5.4, H + TH / 2, TZ + 0.12); g.add(mile);
-    box(2.5, 0.9, 0.08, dark, -5.4, H + TH / 2, TZ + 0.07);
+    var MX = Math.min(XL + 1.7, BX - BW / 2 - 1.4);   // 綠底里程牌：靠左柱
+    mile.position.set(MX, H + TH / 2, TZ + 0.12); g.add(mile);
+    box(2.5, 0.9, 0.08, dark, MX, H + TH / 2, TZ + 0.07);
     g.rotation.y = -signBearing(s) * Math.PI / 180;   // 正面(+z)轉到面向來車
     var scene = new T.Scene();
     scene.add(new T.AmbientLight(0xffffff, 0.6));
@@ -200,9 +206,10 @@
       });
     }
   };
-  function signLon(s) { return s.snap ? s.snap.lon : s.lon; }
-  function signLat(s) { return s.snap ? s.snap.lat : s.lat; }
-  function signBearing(s) { return s.snap ? s.snap.bearing : s.bearing; }
+  // 位置：有 3D 道路就立在那條路的路中心(跟著 3D 路面的彎度、推開後的位置)，沒有就吸附到底圖的國道線
+  function signLon(s) { return s.span ? s.span.lon : s.snap ? s.snap.lon : s.lon; }
+  function signLat(s) { return s.span ? s.span.lat : s.snap ? s.snap.lat : s.lat; }
+  function signBearing(s) { return s.span ? s.span.bearing : s.snap ? s.snap.bearing : s.bearing; }
   // 地圖底圖的國道線(openmaptiles transportation 的 motorway)：找 60 公尺內、行車方向跟看板一致(差 50 度內)、最近的那條，把看板投影上去
   function snapSigns(list) {
     var m = window.map, need = list.filter(function (s) { return !s.snap && (s.snapTries || 0) < 4; });
@@ -238,7 +245,7 @@
   }
   function modelMatrix(s) {
     // 門架立在 3D 路面上(高架上的看板跟著抬高；road_3d.js 查路面高度)
-    var a = window._snmRoad3dAt ? window._snmRoad3dAt(signLon(s), signLat(s), 30) : null;
+    var a = s.span || (window._snmRoad3dAt ? window._snmRoad3dAt(signLon(s), signLat(s), 30) : null);
     var T = window.THREE, mc = maplibregl.MercatorCoordinate.fromLngLat([signLon(s), signLat(s)], a ? a.h : 0), sc = mc.meterInMercatorCoordinateUnits();
     return new T.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new T.Vector3(sc, -sc, sc)).multiply(new T.Matrix4().makeRotationAxis(new T.Vector3(1, 0, 0), Math.PI / 2));
   }
@@ -255,11 +262,15 @@
     snapSigns(near);
     if (near.filter(function (s) { return !s.snap; }).length !== before) updateHitSource();   // 有看板吸附到車道了，點擊位置也跟著移
     near.forEach(function (s) {
+      // 3D 路面上那條路的寬度、位置(從吸附到底圖國道線的位置、方向去找，原始座標可能偏太遠)
+      var sp = window._snmRoad3dSpan ? window._snmRoad3dSpan((s.snap || s).lon, (s.snap || s).lat, (s.snap || s).bearing) : null;
+      if (sp) s.span = sp;
+      var key = s.pages.map(function (p) { return p.text; }).join('|') + (s.span ? '|' + s.span.left.toFixed(1) + ',' + s.span.right.toFixed(1) : '');
       var md = models[s.id];
-      if (!md || md.key !== s.pages.map(function (p) { return p.text; }).join('|')) {   // 新看板或訊息換了才重建
+      if (!md || md.key !== key) {   // 新看板、訊息換了、路寬變了才重建
         if (md) disposeModel(md);
         md = models[s.id] = buildModel(s);
-        md.key = s.pages.map(function (p) { return p.text; }).join('|');
+        md.key = key;
         md.sign = s;
       }
       md.group.rotation.y = -signBearing(s) * Math.PI / 180;   // 吸附到車道後方向可能變了
@@ -340,6 +351,7 @@
     if (threeState === 'ready') { addLayer(); refreshVisible(); }
   }
   // 換地圖樣式後圖層會被清掉，重加
+  window._snmCms3dState = function () { return { signs: signs, visible: visible }; };   // 除錯用
   window._snmReloadCms3d = function () {
     renderer = null; models = {}; visible = [];
     if (window.THREE && window.map && window.map.getZoom() >= MIN_ZOOM) { addLayer(); if (signs.length) updateHitSource(); refreshVisible(); }

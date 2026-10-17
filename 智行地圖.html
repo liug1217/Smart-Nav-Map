@@ -4634,7 +4634,8 @@ function _flipCell(cell, from, to) {
   // 🎥 導航鏡頭:平常 3D(zoom 17、傾斜 60°);接近轉彎 150m 內拉遠成平面(zoom 16、傾斜 0°),轉完 4 秒後回 3D
   const NAV_TURN_VIEW_M = 150;
   const NAV_TURN_HOLD_MS = 4000;
-  window.NAV_CAM = { normal: { zoom: 17, pitch: 60 }, turn: { zoom: 16, pitch: 0 } };
+  // 全面 3D 之後鏡頭拉近：平常 zoom 19(看得到 3D 道路、車道、標線)，接近轉彎拉遠到 18、平面；傾斜角不變
+  window.NAV_CAM = { normal: { zoom: 19, pitch: 60 }, turn: { zoom: 18, pitch: 0 } };
   // 時間觸發門檻（仿 OsmAnd：115s遠、22s中、6.7s近），依實際速度動態計算，上下限保護
   // 回傳陣列由遠到近，最多 3 個值
   const rect8 = document.getElementById('rect8');
@@ -6415,7 +6416,7 @@ function _flipCell(cell, from, to) {
         // 重新規劃：直接縮放到使用者目前位置，繼續導航視角
         map.easeTo({
           center: [origin.lon, origin.lat],
-          zoom: 17,
+          zoom: window.NAV_CAM.normal.zoom,
           duration: 800,
           padding: getUserCameraPadding(),
           bearing: (window.compassHeading != null ? window.compassHeading : 0)
@@ -6428,7 +6429,7 @@ function _flipCell(cell, from, to) {
           if (window._setFollowUser) window._setFollowUser(true);
           map.easeTo({
             center: [origin.lon, origin.lat],
-            zoom: 17,
+            zoom: window.NAV_CAM.normal.zoom,
             duration: 1200,
             padding: getUserCameraPadding(),
             bearing: (window.compassHeading != null ? window.compassHeading : 0)
@@ -7214,7 +7215,8 @@ map.on('load', function() {
       source: 'user-pos',
       layout: {
         'icon-image': 'car-icon',
-        'icon-size': 1,
+        // 地圖放大時車子跟著變大(不然拉近看 3D 道路時車子很小)
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.9, 17, 1, 19, 1.8, 20, 2.4],
         // 車頭朝向「地圖上的實際行進方向」:鏡頭跟隨時地圖跟著轉,車子照樣朝上;
         // 用手轉動地圖時,車子跟著道路一起轉,不會自己原地打轉
         'icon-rotate': ['get', 'heading'],
@@ -7228,7 +7230,8 @@ map.on('load', function() {
     // 頭像在車子上方、車牌在車子下方：正對螢幕，離車子中心 24px(車子 40×55，轉向、傾斜時大約都不會蓋到)
     const _labelLayout = function (img, anchor, dy) {
       return {
-        'icon-image': img, 'icon-anchor': anchor, 'icon-offset': [0, dy],
+        // 車子跟著縮放變大(user-car 的 icon-size)，頭像、車牌離車子的距離也照同樣比例
+        'icon-image': img, 'icon-anchor': anchor, 'icon-offset': ['interpolate', ['linear'], ['zoom'], 15, ['literal', [0, dy * 0.9]], 17, ['literal', [0, dy]], 19, ['literal', [0, dy * 1.8]], 20, ['literal', [0, dy * 2.4]]],
         'icon-rotation-alignment': 'viewport', 'icon-pitch-alignment': 'viewport',
         'icon-allow-overlap': true, 'icon-ignore-placement': true
       };
@@ -7892,10 +7895,10 @@ setTimeout(() => {
         if(window._setFollowUser) window._setFollowUser(true);
         window._cameraFollow = true;
         // 縮放目標交給鏡頭跟隨迴圈逐幀趨近，避免跟迴圈本身的置中互相打架而卡住不放大
-        window._camZoomGoal = 17;
+        window._camZoomGoal = 18;   // 放大到看得到 3D 道路
       } else {
         navigator.geolocation.getCurrentPosition(function(pos){
-          map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:17, duration:600 });
+          map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:18, duration:600 });
         });
       }
     });
@@ -12588,10 +12591,10 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="cms_3d.js?v=10"></script>
+<script src="cms_3d.js?v=11"></script>
 <!-- 🛣 國道、快速道路 3D 路面(第 1 階段：主線；放大到 zoom 16 才畫) -->
 <script src="road_3d_shape.js?v=6"></script>
-<script src="road_3d.js?v=40"></script>
+<script src="road_3d.js?v=41"></script>
 <!-- 🌤 天空(照太陽高度角換顏色) -->
 <script src="sky.js?v=2"></script>
 <!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
