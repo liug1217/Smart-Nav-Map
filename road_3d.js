@@ -4,7 +4,8 @@
 // 這裡只照著畫：
 //   - 路面：深灰色柏油；車道 3.75 公尺、內側路肩 1、外側路肩 3 公尺(電腦算好的路寬)
 //   - 標線：內側黃實線、外側白實線(寬 15 公分)、車道白色虛線(劃 4 公尺、空 6 公尺)；雙向道路中央雙黃線
-//   - 中央分隔：紐澤西水泥護欄＋綠色防眩板(主線往左多鋪 0.4 公尺，跟對向之間的空隙鋪滿)
+//   - 中央分隔：紐澤西水泥護欄＋綠色防眩板(主線往左多鋪 0.4 公尺，跟對向之間的空隙鋪滿)；
+//     窄的分隔島(上下行路面之間 4 公尺內)只畫一道、立在正中間，空隙鋪滿(電腦算好由哪一邊畫)
 //   - 外側：平地鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、橋上紐澤西水泥護欄；會落在別條路上的那段不畫
 //   - 高架：橋每層 6 公尺(電腦算好高度、上下交叉的淨空)；兩側 1.4 公尺深的箱型梁、底面、每 30 公尺一座橋墩(柱子＋帽梁)，
 //     橋墩不會立在底下別條路的路面上
@@ -47,7 +48,7 @@
     for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; coords.push([x / 1e6, y / 1e6]); }
     var n = coords.length, dd = e.d || [0, 0, 0, 0];
     return { id: r[0], link: !!(f & 1), cls: f & 2 ? 'trunk' : 'motorway', oneway: !!(f & 4), bridge: !!(f & 8), lanes: r[2], coords: coords,
-      W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [], aL: perPoint(e.aL, n, 0), aR: perPoint(e.aR, n, 0), skip: e.x || [], gores: e.g || [],
+      W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [], aL: perPoint(e.aL, n, 0), aR: perPoint(e.aR, n, 0), skip: e.x || [], gores: e.g || [], medC: e.mc || [], medS: e.ms || [],
       dirB: dd[0] || dd[1] ? [dd[0] / 1e4, dd[1] / 1e4] : null, dirA: dd[2] || dd[3] ? [dd[2] / 1e4, dd[3] / 1e4] : null };
   }
   function loadIndex(cb) {
@@ -165,6 +166,13 @@
     for (i = 0; i + 1 < w.skip.length; i += 2) skip.push([w.skip[i] / 1e6 * L, w.skip[i + 1] / 1e6 * L]);
     skip.forEach(function (r) { hidden['1'].push(r); hidden['-1'].push(r); hidden['0'].push(r); });
     var inSkip = function (s) { return skip.some(function (r) { return s >= r[0] && s <= r[1]; }); };
+    // 窄分隔島：這邊負責畫的段落每點的空隙(公尺，-1 = 不是)；對向負責的段落中央護欄不畫
+    var medGap = S.map(function () { return -1; });
+    for (i = 0; i + 3 < w.medC.length; i += 4) {
+      var m0 = w.medC[i] / 1e6 * L, m1 = w.medC[i + 1] / 1e6 * L, g0 = w.medC[i + 2] / 100, g1 = w.medC[i + 3] / 100;
+      for (var mk = 0; mk < n; mk++) if (S[mk] >= m0 - 0.01 && S[mk] <= m1 + 0.01) medGap[mk] = Math.max(medGap[mk], g0 + (g1 - g0) * ((S[mk] - m0) / ((m1 - m0) || 1)));
+    }
+    for (i = 0; i + 1 < w.medS.length; i += 2) hidden['0'].push([w.medS[i] / 1e6 * L, w.medS[i + 1] / 1e6 * L]);
     var ov = function (o, k) { return typeof o === 'number' ? o : o[k]; };
     var plus = function (o, d) { return typeof o === 'number' ? o + d : o.map(function (v) { return v + d; }); };
     var pt = function (k, o, y) { var v = ov(o, k); return [P[k][0] + R[k][0] * v, H[k] + y, P[k][1] + R[k][1] * v]; };
@@ -239,7 +247,8 @@
     };
     var onBridge = w.bridge;
     // 路面(主線往左多鋪 0.4 公尺：跟對向之間的空隙鋪滿；匝道沒有中央分隔，不多鋪)
-    var deckL = w.oneway && !w.link ? plus(nhalf, -MEDIAN_FILL) : nhalf;
+    //   窄分隔島由這邊畫的地方：整個空隙鋪滿
+    var deckL = w.oneway && !w.link ? nhalf.map(function (v, k) { return v - (medGap[k] >= 0 ? Math.max(MEDIAN_FILL, medGap[k]) : MEDIAN_FILL); }) : nhalf;
     strip(B.asphalt, deckL, half, 0.03);
     // 高架：兩側 1.4 公尺深的箱型梁、底面(離地不到 1.4 公尺的地方梁到地面為止)、每 30 公尺一座橋墩(柱子＋帽梁)
     var GD = 1.4, depth = function (k) { return Math.min(GD, H[k]); };
@@ -288,7 +297,8 @@
     if (w.oneway && w.link) edge(plus(nhalf, 0.3), -1, '-1');   // 匝道：左邊也是護欄(沒有中央分隔)
     if (w.oneway && !w.link) {
       // 中央分隔：紐澤西水泥護欄＋綠色防眩板(每 1 公尺一片、斜 60 度、0.85～1.5 公尺高)
-      var med = plus(nhalf, -0.1);
+      //   窄分隔島：護欄中心立在兩邊路面正中間(護欄底寬 0.66)
+      var med = nhalf.map(function (v, k) { return medGap[k] >= 0 ? v - medGap[k] / 2 - 0.33 : v - 0.1; });
       wall(B.concrete, med, 1, JERSEY, '0');
       every(1, 0.5, '0', function (k, tt) {
         var r = segR[k], f = [r[1], -r[0]], c = at(k, tt, plus(med, 0.33), 0), y0 = c[1] + 0.85, y1 = c[1] + 1.5;
