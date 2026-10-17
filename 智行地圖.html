@@ -2891,6 +2891,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._snmReloadAvoidLayer === 'function') window._snmReloadAvoidLayer();
     if (typeof window._snmReloadRoad3d === 'function') window._snmReloadRoad3d();
     if (typeof window._snmReloadCms3d === 'function') window._snmReloadCms3d();
+    if (typeof window._snmReloadCams3d === 'function') window._snmReloadCams3d();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -12591,8 +12592,10 @@ setTimeout(() => {
 <!-- 🌤 天空(照太陽高度角換顏色) -->
 <script src="sky.js?v=1"></script>
 <script src="road_3d_shape.js?v=2"></script>
-<script src="road_3d.js?v=23"></script>
-<script src="cms_3d.js?v=9"></script>
+<script src="road_3d.js?v=25"></script>
+<!-- 📹 監視器、測速照相 3D 模型(放大到 zoom 16 才畫) -->
+<script src="cams_3d.js?v=1"></script>
+<script src="cms_3d.js?v=10"></script>
 </body>
 </html>
   

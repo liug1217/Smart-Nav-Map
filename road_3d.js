@@ -9,7 +9,7 @@
 // 資料：OpenStreetMap 的車道數 lanes、單行道、橋梁，事先切成 zoom 13 圖磚的小檔案(road3d/，用 tools/build-road3d.js 產生)，
 //       只抓畫面附近那幾塊、同一塊只抓一次。沒標車道數的用一般值：國道 3、快速道路 2、匝道 1。
 //       檔案抓不到(離線)時改用底圖的道路線。
-// 圖層放在路況綠線、導航路線的下面；放大到看得到 3D 時，國道的綠線、塞車顏色、導航路線改畫在 3D 路面上(高架上也對得上)，車子抬到橋面高度。
+// 圖層放在平面道路線、導航路線的上面(高架底下經過的路被橋面蓋住)、3D 建築和文字標籤的下面；放大到看得到 3D 時，國道的綠線、塞車顏色、導航路線改畫在 3D 路面上(高架上也對得上)，車子抬到橋面高度。
 (function () {
   'use strict';
   var MIN_ZOOM = 16, TILE_Z = 13, MAX_CHUNKS = 16;
@@ -129,6 +129,7 @@
           if (t.chunk) disposeChunk(t.chunk);
           t.chunk = threeState === 'ready' ? buildChunk(key) : null;
           ovSoon();   // 抓到新的路：線重新對一次
+          window.dispatchEvent(new Event('snm-road3d-data'));   // 看板、監視器照路面高度重新擺
           window.map && window.map.triggerRepaint();
           pump();
         };
@@ -157,7 +158,7 @@
   function buildChunk(key) {
     var T = window.THREE, t = tiles[key], xy = key.split('/'), box = tileBox(+xy[0], +xy[1]);
     var origin = maplibregl.MercatorCoordinate.fromLngLat([(box.w + box.e) / 2, (box.n + box.s) / 2], 0), sc = origin.meterInMercatorCoordinateUnits();
-    var B = { asphalt: new Bucket(), concrete: new Bucket(), under: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket() };
+    var B = { asphalt: new Bucket(), concrete: new Bucket(), under: new Bucket(), steel: new Bucket(), lamp: new Bucket(), white: new Bucket(), yellow: new Bucket() };
     // 匝道接點：主線外側護欄在這附近 120 公尺不畫；匝道兩端 60 公尺不畫
     var junc = [];
     t.ids.forEach(function (id) {
@@ -352,7 +353,8 @@
     var skipEnds = function (k) { return S[k + 1] < 60 || S[k] > L - 60; };
     var skipJunc = function (k) { return nearJunc(P[k], 120) || nearJunc(P[k + 1], 120); };
     var edge = function (o, side, skip, hs) {   // 外側：橋上混凝土、平地鋼板；hs = 不畫的段落(會落在別條路上)
-      if (hb > 0) wall(B.concrete, o, side, parapet, skip, hs); else guardrail(o, side, skip, hs);
+      // 橋上：紐澤西型混凝土護欄(跟中央分隔一樣，底寬 0.66，外緣貼齊路面邊緣)；平地：鋼板護欄
+      if (hb > 0) wall(B.concrete, plus(o, -0.36 * side), side, jersey, skip, hs); else guardrail(o, side, skip, hs);
     };
     if (w.oneway) {
       strip(B.yellow, a, plus(a, 0.15), my);                // 內側路面邊線(黃實線)
@@ -375,7 +377,35 @@
       edge(plus(half, -0.3), 1, skipEnds, '1');
       edge(plus(nhalf, 0.3), -1, skipEnds, '-1');
     }
-    return { w: w, P: P, segR: segR, R: R, H: H, S: S, L: L, a: a, b: b };   // 疊線(路況、導航路線)、車子高度用
+    // 路燈：主線立在中央分隔護欄上(燈臂伸向自己的車道)，匝道 / 雙向道路立在外側；每 50 公尺一支，護欄不畫的地方(接到別條路)不立
+    var LAMP_H = 10, ARM = 2.4;
+    var lamp = function (k, tt, o, dirArm) {
+      var r = segR[k], fw = [r[1], -r[0]], base = at(k, tt, o, 0), top = base[1] + LAMP_H;
+      var post = function (cx, cz, w0, y0, y1, bk) {
+        var cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(function (q) { return [cx + r[0] * q[0] * w0 + fw[0] * q[1] * w0, cz + r[1] * q[0] * w0 + fw[1] * q[1] * w0]; });
+        for (var e = 0; e < 4; e++) { var A0 = cs[e], A1 = cs[(e + 1) % 4]; bk.quad([A0[0], y0, A0[1]], [A1[0], y0, A1[1]], [A1[0], y1, A1[1]], [A0[0], y1, A0[1]]); }
+        bk.quad([cs[0][0], y1, cs[0][1]], [cs[1][0], y1, cs[1][1]], [cs[2][0], y1, cs[2][1]], [cs[3][0], y1, cs[3][1]]);
+      };
+      post(base[0], base[2], 0.09, base[1], top, B.steel);                                                     // 燈桿
+      var ex = base[0] + r[0] * dirArm * ARM, ez = base[2] + r[1] * dirArm * ARM, hw = 0.05;                    // 燈臂(往車道伸出去)
+      B.steel.quad([base[0] + fw[0] * hw, top, base[2] + fw[1] * hw], [ex + fw[0] * hw, top, ez + fw[1] * hw], [ex - fw[0] * hw, top, ez - fw[1] * hw], [base[0] - fw[0] * hw, top, base[2] - fw[1] * hw]);
+      B.steel.quad([base[0] + fw[0] * hw, top - 0.1, base[2] + fw[1] * hw], [ex + fw[0] * hw, top - 0.1, ez + fw[1] * hw], [ex + fw[0] * hw, top, ez + fw[1] * hw], [base[0] + fw[0] * hw, top, base[2] + fw[1] * hw]);
+      var lx = ex + r[0] * dirArm * 0.25, lz = ez + r[1] * dirArm * 0.25, cs2 = [[-0.35, -0.13], [0.35, -0.13], [0.35, 0.13], [-0.35, 0.13]].map(function (q) { return [lx + r[0] * q[0] + fw[0] * q[1], lz + r[1] * q[0] + fw[1] * q[1]]; });
+      B.steel.quad([cs2[0][0], top + 0.04, cs2[0][1]], [cs2[1][0], top + 0.04, cs2[1][1]], [cs2[2][0], top + 0.04, cs2[2][1]], [cs2[3][0], top + 0.04, cs2[3][1]]);   // 燈罩
+      B.lamp.quad([cs2[0][0], top - 0.06, cs2[0][1]], [cs2[3][0], top - 0.06, cs2[3][1]], [cs2[2][0], top - 0.06, cs2[2][1]], [cs2[1][0], top - 0.06, cs2[1][1]]);   // 燈(朝下發光)
+    };
+    for (var sl = 25; sl < L - 10; sl += 50) {
+      var kl = 0; while (kl < n - 2 && S[kl + 1] < sl) kl++;
+      var tl = (sl - S[kl]) / ((S[kl + 1] - S[kl]) || 1);
+      if (w.oneway && !w.link) {
+        if (isHidden('0', sl)) continue;
+        lamp(kl, tl, nhalf[kl] + 0.23 + (nhalf[kl + 1] - nhalf[kl]) * tl, 1);
+      } else {
+        if (isHidden('1', sl) || skipEnds(kl)) continue;
+        lamp(kl, tl, half[kl] - 0.35 + (half[kl + 1] - half[kl]) * tl, -1);
+      }
+    }
+    return { w: w, P: P, segR: segR, R: R, H: H, S: S, L: L, a: a, b: b, half: half, nhalf: nhalf };   // 疊線(路況、導航路線)、車子、監視器、看板高度用
   }
 
   // 這點(經緯度)在不在別條、比 top 低的路的路面上(橋墩用)
@@ -406,6 +436,7 @@
       asphalt: new T.MeshLambertMaterial({ color: 0x4A4D52, side: ds }),
       concrete: new T.MeshLambertMaterial({ color: 0xCFCCC4, side: ds }),
       under: new T.MeshLambertMaterial({ color: 0x9A978F, side: ds }),   // 橋面版底面(陰影處)
+      lamp: new T.MeshBasicMaterial({ color: 0xFFF3C4, side: ds }),      // 路燈燈面(不受光線影響，看起來是亮的)
       steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: ds }),
       white: mark(0xF4F4F4),
       yellow: mark(0xF2BE1A),
@@ -733,8 +764,9 @@
     }
   };
   // 放在路況綠線、導航路線的下面(路況顏色、導航路線還是看得到)
+  // 高架抬高後，從高架底下經過的路(綠線、地面的導航路線)要被橋面蓋住：3D 路面放在所有平面道路線的上面、3D 建築和文字標籤的下面
   function beforeId(m) {
-    var ids = ['snm-roads-outline-minor', 'navRoute-outline', 'snm-traffic-casing', 'navRoute-arrows', 'user-car'];
+    var ids = ['building-3d', 'user-pulse', 'user-car'];
     for (var i = 0; i < ids.length; i++) if (m.getLayer(ids[i])) return ids[i];
     return undefined;
   }
@@ -789,12 +821,42 @@
     setTimeout(ovSoon, 300);   // 換樣式後圖層、資料來源都是新的：重新接手
     if (window.THREE && window.map && window.map.getZoom() >= MIN_ZOOM) addLayer();
   };
+  window._snmRoad3dAt = function (lon, lat, maxD) {
+    var g = wayGrid(), x = lon * KX, y = lat * KY, cx = Math.floor(x / 50), cy = Math.floor(y / 50), best = null;
+    for (var a = cx - 1; a <= cx + 1; a++) for (var b = cy - 1; b <= cy + 1; b++) (g[a + ',' + b] || []).forEach(function (e) {
+      var w = e[0], i = e[1], A = w.coords[i], Bc = w.coords[i + 1], ax = A[0] * KX, ay = A[1] * KY, dx = Bc[0] * KX - ax, dy = Bc[1] * KY - ay, L2 = dx * dx + dy * dy;
+      if (!L2) return;
+      var t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)), L = Math.sqrt(L2);
+      var lat2 = ((x - ax) * dy - (y - ay) * dx) / L, d = Math.hypot(x - ax - dx * t, y - ay - dy * t);   // 右正
+      if (d > (maxD || 25) || (best && d >= best.d)) return;
+      best = { d: d, w: w, f: (w._len[i] + L * t) / w._L, side: lat2, bearing: (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360, lon: A[0] + (Bc[0] - A[0]) * t, lat: A[1] + (Bc[1] - A[1]) * t };
+    });
+    if (!best) return null;
+    var out = null;
+    Object.keys(tiles).some(function (k) {
+      var ch = tiles[k].chunk, gg = ch && ch.geo.find(function (q) { return q.w === best.w; });
+      if (!gg) return false;
+      var s = best.f * gg.L, i = 0; while (i < gg.S.length - 2 && gg.S[i + 1] < s) i++;
+      var t = (s - gg.S[i]) / ((gg.S[i + 1] - gg.S[i]) || 1), li = function (arr) { return arr[i] + (arr[i + 1] - arr[i]) * t; };
+      out = { h: li(gg.H), bearing: best.bearing, side: best.side, half: li(gg.half), nhalf: li(gg.nhalf), lon: best.lon, lat0: best.lat, oneway: best.w.oneway, link: best.w.link, id: best.w.id };
+      return true;
+    });
+    return out;
+  };
   window._snmRoad3dState = function () { return { tiles: tiles, ways: ways, threeState: threeState, ovGreen: ovGreen, ovItems: ovItems, ovData: ovData, carShift: carShift }; };   // 除錯用
   var timer = null, liftTimer = null, wasActive = false;
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
     var go = function () { m.on('moveend', function () { clearTimeout(timer); timer = setTimeout(check, 250); }); check(); };
+    // 主程式會重排路線圖層(放到 3D 建築下面)：重排後把 3D 路面再放回它們上面
+    var placing = false;
+    m.on('styledata', function () {
+      if (placing || !m.getLayer(LAYER)) return;
+      var o = m.style && m.style._order, b = beforeId(m);
+      if (!o || !b || o.indexOf(LAYER) === o.indexOf(b) - 1) return;
+      placing = true; try { m.moveLayer(LAYER, b); } catch (e) {} placing = false;
+    });
     if (m.loaded()) go(); else m.once('load', go);
   }
   init();
