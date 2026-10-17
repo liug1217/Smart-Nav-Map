@@ -6,6 +6,9 @@
 // 底圖的道路被切成一塊一塊(圖磚)，重複的路燈(5 公尺內)只留一支
 (function () {
   'use strict';
+  // 路燈晚上 6 點到早上 6 點亮(暖白)，白天熄燈(灰)
+  function lampColor() { var h = new Date().getHours(); return h >= 18 || h < 6 ? 0xFFF1C2 : 0x9AA0A6; }
+  setInterval(function () { if (mats && !document.hidden && mats.lamp.color.getHex() !== lampColor()) { mats.lamp.color.setHex(lampColor()); if (window.map) window.map.triggerRepaint(); } }, 60000);
   var MIN_ZOOM = 16, LAYER = 'snm-lamps-3d', SPACING = 50, LAMP_H = 11, REACH = 2.6;
   var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   var renderer = null, camera = null, chunk = null, builtFor = null, timer = null, loading = false, mats = null;
@@ -137,7 +140,7 @@
     }
     if (!mats) {
       var T = window.THREE;
-      mats = { steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: T.DoubleSide }), lamp: new T.MeshBasicMaterial({ color: 0xFFF3C4, side: T.DoubleSide }) };
+      mats = { steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: T.DoubleSide }), lamp: new T.MeshBasicMaterial({ color: lampColor(), side: T.DoubleSide }) };
     }
     if (!m.getLayer(LAYER)) m.addLayer(customLayer, m.getLayer('user-car') ? 'user-car' : undefined);
     // 還在上次建好的範圍裡就不重建；道路資料剛載入(上次沒抓到什麼)最多每 3 秒補建一次

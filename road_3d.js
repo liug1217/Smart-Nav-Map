@@ -515,7 +515,7 @@
       grass: new T.MeshLambertMaterial({ vertexColors: true, side: ds }),   // 分隔島草地、灌木(每格自己的顏色)
       steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: ds }),
       glare: new T.MeshLambertMaterial({ color: 0x3F8A55, side: ds }),
-      lamp: new T.MeshBasicMaterial({ color: 0xFFF3C4, side: ds }),   // 路燈燈面(看起來是亮的)
+      lamp: new T.MeshBasicMaterial({ color: lampColor(), side: ds }),   // 路燈燈面：晚上 6 點到早上 6 點亮(暖白)，白天熄燈(灰)
       white: mark(0xF4F4F4), yellow: mark(0xF2BE1A)
     };
   }
@@ -919,6 +919,14 @@
     var gg = geoAt(best.w, best.f);
     return gg ? { h: gg.h, half: gg.half, nhalf: gg.nhalf, bearing: best.bearing, side: best.side, oneway: best.w.oneway, link: best.w.link, id: best.w.id } : null;
   };
+
+  // ── 路燈開關：晚上 6 點到早上 6 點亮燈 ──
+  function lampColor() { var h = new Date().getHours(); return h >= 18 || h < 6 ? 0xFFF1C2 : 0x9AA0A6; }
+  setInterval(function () {
+    if (!mats || document.hidden) return;
+    var c = lampColor();
+    if (mats.lamp.color.getHex() !== c) { mats.lamp.color.setHex(c); if (window.map) window.map.triggerRepaint(); }
+  }, 60000);
 
   // ── 圖層 ──
   var customLayer = {
