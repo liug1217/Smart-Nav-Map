@@ -9,7 +9,7 @@
 // 資料：OpenStreetMap 的車道數 lanes、單行道、橋梁，事先切成 zoom 13 圖磚的小檔案(road3d/，用 tools/build-road3d.js 產生)，
 //       只抓畫面附近那幾塊、同一塊只抓一次。沒標車道數的用一般值：國道 3、快速道路 2、匝道 1。
 //       檔案抓不到(離線)時改用底圖的道路線。
-// 圖層放在路況綠線、導航路線的下面：路況顏色、導航路線、車子都照樣蓋在路面上看得到。
+// 圖層放在路況綠線、導航路線的下面；放大到看得到 3D 時，國道的綠線、塞車顏色、導航路線改畫在 3D 路面上(高架上也對得上)，車子抬到橋面高度。
 (function () {
   'use strict';
   var MIN_ZOOM = 16, TILE_Z = 13, MAX_CHUNKS = 16;
@@ -59,7 +59,12 @@
           for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; coords.push([x / 1e6, y / 1e6]); }
           var w = makeWay('o' + r[0], f & 2 ? 'trunk' : 'motorway', !!(f & 1), coords, null,
             { oneway: f & 4 ? 'yes' : 'no', lanes: r[2] || '', bridge: f & 8 ? 'yes' : '', layer: r[3] });
-          w.hide = (r[5] && r[5].h) || [];   // 這幾段護欄不畫(電腦算好：會落在別條路上)[邊, 起, 迄(占整條的比例 × 1e6)]
+          var ex = r[5] || {};
+          w.hide = ex.h || [];
+          w.ends = ex.e ? [ex.e[0] / 100, ex.e[1] / 100] : null;   // 頭尾高度(電腦算好)
+          w.bumps = [];   // 上下交叉要抬到的高度 [比例, 公尺]
+          for (var bi = 0; ex.b && bi + 1 < ex.b.length; bi += 2) w.bumps.push([ex.b[bi] / 1e6, ex.b[bi + 1] / 100]);
+            // 這幾段護欄不畫(電腦算好：會落在別條路上)[邊, 起, 迄(占整條的比例 × 1e6)]
           return w;
         });
       });
@@ -123,6 +128,7 @@
           t.state = state; t.retryAt = state === 'fallback' ? Date.now() + 60000 : 0;
           if (t.chunk) disposeChunk(t.chunk);
           t.chunk = threeState === 'ready' ? buildChunk(key) : null;
+          ovSoon();   // 抓到新的路：線重新對一次
           window.map && window.map.triggerRepaint();
           pump();
         };
@@ -131,9 +137,8 @@
     }
   }
 
-  // ── 高度：橋梁抬高(每層 1.2 公尺，剛好高過下面道路的護欄)，橋頭用引道慢慢降到地面 ──
-  // 抬太高的話，畫在地面上的導航路線、路況線、車子會跟橋面對不起來，所以只抬一點點
-  function baseH(w) { return w.bridge ? 1.2 * Math.max(1, w.layer) : 0; }
+  // ── 高度：橋梁每層 6 公尺(真的高架)，橋頭用引道慢慢降到地面；上下交叉的淨空、頭尾高度電腦都算好了(w.ends、w.bumps) ──
+  function baseH(w) { return window.RoadShape.baseH(w); }
   function endH(w, i) {
     var list = nodeIdx[nodeKey(w, i)] || [], inner = -1, sum = 0, n = 0;
     list.forEach(function (o) {
@@ -152,7 +157,7 @@
   function buildChunk(key) {
     var T = window.THREE, t = tiles[key], xy = key.split('/'), box = tileBox(+xy[0], +xy[1]);
     var origin = maplibregl.MercatorCoordinate.fromLngLat([(box.w + box.e) / 2, (box.n + box.s) / 2], 0), sc = origin.meterInMercatorCoordinateUnits();
-    var B = { asphalt: new Bucket(), concrete: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket() };
+    var B = { asphalt: new Bucket(), concrete: new Bucket(), under: new Bucket(), steel: new Bucket(), white: new Bucket(), yellow: new Bucket() };
     // 匝道接點：主線外側護欄在這附近 120 公尺不畫；匝道兩端 60 公尺不畫
     var junc = [];
     t.ids.forEach(function (id) {
@@ -171,7 +176,8 @@
     var juncLocal = junc.map(function (c) { var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0); return [(m.x - origin.x) / sc, (m.y - origin.y) / sc]; });
     var nearJunc = function (p, d) { for (var k = 0; k < juncLocal.length; k++) { var dx = p[0] - juncLocal[k][0], dz = p[1] - juncLocal[k][1]; if (dx * dx + dz * dz < d * d) return true; } return false; };
 
-    t.ids.forEach(function (id) { var w = ways[id]; if (w) buildWay(w, origin, sc, B, nearJunc); });
+    var geo = [];
+    t.ids.forEach(function (id) { var w = ways[id], g = w && buildWay(w, origin, sc, B, nearJunc); if (g) geo.push(g); });
 
     var group = new T.Group(), any = false;
     Object.keys(B).forEach(function (k) {
@@ -191,7 +197,9 @@
     scene.add(group);
     var matrix = new T.Matrix4().makeTranslation(origin.x, origin.y, origin.z).scale(new T.Vector3(sc, -sc, sc))
       .multiply(new T.Matrix4().makeRotationAxis(new T.Vector3(1, 0, 0), Math.PI / 2));
-    return { scene: scene, matrix: matrix, box: t.ext || box };
+    var chunk = { scene: scene, matrix: matrix, box: t.ext || box, geo: geo };
+    addOverlay(chunk);
+    return chunk;
   }
 
   function buildWay(w, origin, sc, B, nearJunc) {
@@ -222,10 +230,11 @@
     var fr = RS.frame(P, function (tx, tz) { return [-tz, tx]; }, prev ? dirOf(prev, true) : null, next ? dirOf(next, false) : null);
     var n = P.length, S = fr.S, segR = fr.seg, R = fr.R, L = S[n - 1], i;
     var Wv = RS.widths(w, S, prev ? RS.widthOf(prev) : null, next ? RS.widthOf(next) : null);
-    var hb = baseH(w), H = RS.heights(S, hb, endH(w, 0), endH(w, w.coords.length - 1));
+    var hb = baseH(w), H = RS.heights(S, hb, w.ends ? w.ends[0] : endH(w, 0), w.ends ? w.ends[1] : endH(w, w.coords.length - 1), w.bumps);
     // 護欄不畫的段落(沿路距離)：1 右、-1 左、0 中央
     var hidden = { '1': [], '-1': [], '0': [] };
-    for (i = 0; i + 2 < w.hide.length; i += 3) hidden[w.hide[i]].push([w.hide[i + 1] / 1e6 * L, w.hide[i + 2] / 1e6 * L]);
+    var hideList = w.hide || [];
+    for (i = 0; i + 2 < hideList.length; i += 3) hidden[hideList[i]].push([hideList[i + 1] / 1e6 * L, hideList[i + 2] / 1e6 * L]);
     // 偏移：一個數字 = 整條一樣；陣列 = 每點不同(路寬漸變)
     var ov = function (o, k) { return typeof o === 'number' ? o : o[k]; };
     var plus = function (o, d) { return typeof o === 'number' ? o + d : o.map(function (v) { return v + d; }); };
@@ -313,9 +322,31 @@
     // 路面：主線往左多鋪一點(跟對向之間的空隙鋪滿，中央護欄底下不會露出地面)
     var deckL = w.oneway && !w.link ? plus(nhalf, -RS.MEDIAN_FILL) : nhalf;
     strip(B.asphalt, deckL, half, 0.03);
-    if (hb > 0) {   // 橋：路面兩側的橋面版側邊
-      wall(B.concrete, deckL, -1, [[0, 0.03], [0, -0.5]]);
-      wall(B.concrete, half, 1, [[0, 0.03], [0, -0.5]]);
+    // 高架：兩側 1.4 公尺深的箱型梁、底面、每 30 公尺一座橋墩(柱子＋帽梁)
+    var GD = 1.4;
+    var depth = function (k) { return Math.min(GD, H[k]); };
+    for (var kb = 0; kb < n - 1; kb++) {
+      if (H[kb] < 0.3 && H[kb + 1] < 0.3) continue;
+      var d0 = depth(kb), d1 = depth(kb + 1);
+      B.concrete.quad(pt(kb, deckL, 0.03), pt(kb + 1, deckL, 0.03), pt(kb + 1, deckL, -d1), pt(kb, deckL, -d0));
+      B.concrete.quad(pt(kb, half, 0.03), pt(kb, half, -d0), pt(kb + 1, half, -d1), pt(kb + 1, half, 0.03));
+      if (H[kb] > GD + 0.1 && H[kb + 1] > GD + 0.1) B.under.quad(pt(kb, deckL, -d0), pt(kb, half, -d0), pt(kb + 1, half, -d1), pt(kb + 1, deckL, -d1));
+    }
+    var box = function (c, u, f, w0, l0, y0, y1) {   // 中心 c、橫向 u、沿路 f、寬 w0、長 l0、從 y0 到 y1(絕對高度)
+      var cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(function (q) { return [c[0] + u[0] * q[0] * w0 / 2 + f[0] * q[1] * l0 / 2, c[1] + u[1] * q[0] * w0 / 2 + f[1] * q[1] * l0 / 2]; });
+      for (var e = 0; e < 4; e++) { var A0 = cs[e], A1 = cs[(e + 1) % 4]; B.concrete.quad([A0[0], y0, A0[1]], [A1[0], y0, A1[1]], [A1[0], y1, A1[1]], [A0[0], y1, A0[1]]); }
+      B.concrete.quad([cs[0][0], y1, cs[0][1]], [cs[1][0], y1, cs[1][1]], [cs[2][0], y1, cs[2][1]], [cs[3][0], y1, cs[3][1]]);
+    };
+    for (var sp = 15; sp < L; sp += 30) {
+      var kp = 0; while (kp < n - 2 && S[kp + 1] < sp) kp++;
+      var tp = (sp - S[kp]) / ((S[kp + 1] - S[kp]) || 1), hp = H[kp] + (H[kp + 1] - H[kp]) * tp;
+      if (hp < 3.5) continue;
+      var r0 = segR[kp], fw = [r0[1], -r0[0]], mid0 = (deckL[kp] + half[kp]) / 2, wd = half[kp] - deckL[kp];
+      var cx = P[kp][0] + (P[kp + 1][0] - P[kp][0]) * tp + r0[0] * mid0, cz = P[kp][1] + (P[kp + 1][1] - P[kp][1]) * tp + r0[1] * mid0;
+      var ll = new maplibregl.MercatorCoordinate(origin.x + cx * sc, origin.y + cz * sc, 0).toLngLat();
+      if (onLowerRoad([ll.lng, ll.lat], w, hp - GD - 1)) continue;   // 橋墩不能立在底下別條路的路面上
+      box([cx, cz], r0, fw, Math.min(3.2, wd * 0.22), 1.8, 0, hp - GD - 1.0);           // 柱子
+      box([cx, cz], r0, fw, wd * 0.8, 2.0, hp - GD - 1.0, hp - GD);                      // 帽梁
     }
     var my = 0.06;   // 標線比路面高一點點，不會閃
     var skipEnds = function (k) { return S[k + 1] < 60 || S[k] > L - 60; };
@@ -344,8 +375,26 @@
       edge(plus(half, -0.3), 1, skipEnds, '1');
       edge(plus(nhalf, 0.3), -1, skipEnds, '-1');
     }
+    return { w: w, P: P, segR: segR, R: R, H: H, S: S, L: L, a: a, b: b };   // 疊線(路況、導航路線)、車子高度用
   }
 
+  // 這點(經緯度)在不在別條、比 top 低的路的路面上(橋墩用)
+  function onLowerRoad(p, self, top) {
+    var g = wayGrid(), x = p[0] * KX, y = p[1] * KY, cx = Math.floor(x / 50), cy = Math.floor(y / 50);
+    for (var a = cx - 1; a <= cx + 1; a++) for (var b = cy - 1; b <= cy + 1; b++) {
+      var list = g[a + ',' + b] || [];
+      for (var q = 0; q < list.length; q++) {
+        var w = list[q][0], i = list[q][1];
+        if (w === self || baseH(w) >= top) continue;
+        var A = w.coords[i], Bc = w.coords[i + 1], ax = A[0] * KX, ay = A[1] * KY, dx = Bc[0] * KX - ax, dy = Bc[1] * KY - ay, L2 = dx * dx + dy * dy;
+        if (!L2) continue;
+        var t = ((x - ax) * dx + (y - ay) * dy) / L2;
+        if (t < 0 || t > 1) continue;
+        if (Math.abs((x - ax) * dy - (y - ay) * dx) / Math.sqrt(L2) < window.RoadShape.widthOf(w) / 2 + 1.5) return true;
+      }
+    }
+    return false;
+  }
   function disposeChunk(c) {
     if (!c) return;
     c.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
@@ -356,10 +405,307 @@
     mats = {
       asphalt: new T.MeshLambertMaterial({ color: 0x4A4D52, side: ds }),
       concrete: new T.MeshLambertMaterial({ color: 0xCFCCC4, side: ds }),
+      under: new T.MeshLambertMaterial({ color: 0x9A978F, side: ds }),   // 橋面版底面(陰影處)
       steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: ds }),
       white: mark(0xF4F4F4),
       yellow: mark(0xF2BE1A),
     };
+  }
+
+  // ── 畫在橋面上的線：路況綠線、塞車顏色、導航路線(含已行駛的灰色)、車子 ──
+  // 高架抬高後，地圖上畫在地面的線會跟橋面錯開，所以放大到看得到 3D 時：
+  //   - 國道、快速道路的綠色底圖(snm-roads-*-freeway)改畫在每條 3D 路面上，地面那份藏起來
+  //   - 塞車路段、導航路線：把線對到 3D 路面上(每 5 公尺一點，找方向一樣、12 公尺內的路；疊在一起的高架 / 平面用「接得上的那條」決定)，
+  //     對到的那段畫在路面上，地面那份只留沒對到的部分(一般道路還是畫在地面)
+  //   - 車子：在高架上時圖示往上移到橋面的高度
+  var OV_SRC = { navRoute: 'route', navRoutePassed: 'passed', 'snm-traffic-src': 'traffic' };
+  var OV_STYLE = {   // 每種線：外框寬、內線寬(公尺)、高度(比路面高一點，順序：綠色底圖 < 塞車 / 路線 < 已行駛灰色)
+    green: { cw: 3.2, iw: 2.4, y: 0.065 }, traffic: { cw: 3.2, iw: 2.4, y: 0.075 }, route: { cw: 3.2, iw: 2.4, y: 0.075 }, passed: { cw: 3.2, iw: 2.4, y: 0.085 }
+  };
+  var ovData = {}, ovItems = [], ovTimer = null, ovGreen = false;
+  // 接手這些圖層的資料：原本的 setData 先存起來，算好「地面那份」再交給它
+  function hookSources() {
+    var m = window.map;
+    Object.keys(OV_SRC).forEach(function (id) {
+      var src = m.getSource(id);
+      if (!src || src._snmOrig) return;
+      var orig = src.setData.bind(src);
+      src._snmOrig = orig;
+      ovData[OV_SRC[id]] = src._data && typeof src._data === 'object' ? src._data : null;
+      src.setData = function (d) { ovData[OV_SRC[id]] = d; ovSoon(); return src; };
+    });
+  }
+  function ovSoon() { clearTimeout(ovTimer); ovTimer = setTimeout(applyOverlays, 120); }
+  // 地面的國道綠線：放大到 3D 出現時藏起來(改畫在路面上)
+  //   底圖自己的國道線(橘色那幾層，隧道除外)也一起藏，不然高架底下的地面會露出一條
+  function hideFlatFreeway() {
+    var m = window.map;
+    var base = ((m.getStyle() || {}).layers || []).filter(function (l) { return l.type === 'line' && /motorway|trunk/.test(l.id) && !/tunnel/.test(l.id) && !/^snm-/.test(l.id); }).map(function (l) { return l.id; });
+    ['snm-roads-outline-freeway', 'snm-roads-line-freeway'].concat(base).forEach(function (id) {
+      if (!m.getLayer(id) || m.getLayer(id)._snm3d) return;
+      var cur = m.getPaintProperty(id, 'line-opacity');
+      if (Array.isArray(cur)) return;   // 已經是跟縮放有關的設定：不動
+      m.setPaintProperty(id, 'line-opacity', ['step', ['zoom'], typeof cur === 'number' ? cur : 1, MIN_ZOOM, 0]);
+      m.getLayer(id)._snm3d = true;
+    });
+  }
+
+  // 路的格子索引(經緯度 → 本地公尺)
+  var KX = 111320 * Math.cos(23.7 * Math.PI / 180), KY = 110540, gIdx = null, gCount = -1;
+  function wayGrid() {
+    var ids = Object.keys(ways);
+    if (gIdx && gCount === ids.length) return gIdx;
+    gIdx = {}; gCount = ids.length;
+    ids.forEach(function (id) {
+      var w = ways[id], c = w.coords, acc = 0;
+      w._len = []; w._len[0] = 0;
+      for (var i = 1; i < c.length; i++) { acc += Math.hypot((c[i][0] - c[i - 1][0]) * KX, (c[i][1] - c[i - 1][1]) * KY); w._len[i] = acc; }
+      w._L = acc || 1;
+      for (i = 0; i < c.length - 1; i++) {
+        var x0 = Math.floor(Math.min(c[i][0], c[i + 1][0]) * KX / 50), x1 = Math.floor(Math.max(c[i][0], c[i + 1][0]) * KX / 50);
+        var y0 = Math.floor(Math.min(c[i][1], c[i + 1][1]) * KY / 50), y1 = Math.floor(Math.max(c[i][1], c[i + 1][1]) * KY / 50);
+        for (var x = x0; x <= x1; x++) for (var y = y0; y <= y1; y++) (gIdx[x + ',' + y] = gIdx[x + ',' + y] || []).push([w, i]);
+      }
+    });
+    return gIdx;
+  }
+  // 這點(方向 dir)附近的路：[{ w, f(在那條路的比例), lat, opp(雙向道路的反方向) }]
+  function candidates(p, dir) {
+    var g = wayGrid(), out = {}, x = p[0] * KX, y = p[1] * KY, cx = Math.floor(x / 50), cy = Math.floor(y / 50);
+    for (var a = cx - 1; a <= cx + 1; a++) for (var b = cy - 1; b <= cy + 1; b++) (g[a + ',' + b] || []).forEach(function (e) {
+      var w = e[0], i = e[1], A = w.coords[i], Bc = w.coords[i + 1];
+      var ax = A[0] * KX, ay = A[1] * KY, dx = Bc[0] * KX - ax, dy = Bc[1] * KY - ay, L2 = dx * dx + dy * dy;
+      if (!L2) return;
+      var t = ((x - ax) * dx + (y - ay) * dy) / L2;
+      if (t < -0.02 || t > 1.02) return;
+      t = Math.max(0, Math.min(1, t));
+      var L = Math.sqrt(L2), lat = Math.abs((x - ax) * dy - (y - ay) * dx) / L, cos = (dx * dir[0] + dy * dir[1]) / L;
+      if (lat > 12) return;
+      var opp = false;
+      if (cos < 0.8) { if (w.oneway || cos > -0.8) return; opp = true; }
+      var f = (w._len[i] + L * t) / w._L, o = out[w.id];
+      if (!o || lat < o.lat) out[w.id] = { w: w, f: f, lat: lat, opp: opp };
+    });
+    return Object.keys(out).map(function (k) { return out[k]; });
+  }
+  function connected(A, B) {   // 兩條路有接在一起(共用一個點)
+    if (A === B) return true;
+    var key = A.id + '|' + B.id;
+    if (connected.memo[key] !== undefined) return connected.memo[key];
+    var r = A.coords.some(function (c) { return (nodeIdx[c[0].toFixed(6) + ',' + c[1].toFixed(6)] || []).some(function (o) { return o.w === B; }); });
+    connected.memo[key] = connected.memo[B.id + '|' + A.id] = r;
+    return r;
+  }
+  connected.memo = {};
+  // 一條線對到路面上：回傳 { on: [{ w, f0, f1, opp }], off: [[座標...], ...] }
+  function matchLine(coords) {
+    var samples = [], acc = 0, i;
+    for (i = 0; i < coords.length - 1; i++) {
+      var A = coords[i], Bc = coords[i + 1], L = Math.hypot((Bc[0] - A[0]) * KX, (Bc[1] - A[1]) * KY);
+      if (!L) continue;
+      var dir = [(Bc[0] - A[0]) * KX / L, (Bc[1] - A[1]) * KY / L], m = Math.max(1, Math.ceil(L / 5));
+      for (var j = 0; j < m; j++) { var t = (j + 0.5) / m; samples.push({ p: [A[0] + (Bc[0] - A[0]) * t, A[1] + (Bc[1] - A[1]) * t], dir: dir, d: acc + L * t }); }
+      acc += L;
+    }
+    if (!samples.length) return { on: [], off: [coords] };
+    // 動態規劃：每點選一條路(或「不在 3D 路面上」)，同一條 / 接得上的路成本低，跳到沒接在一起的路成本高
+    var NONE = 5, prev = null, back = [];
+    samples.forEach(function (sm, k) {
+      var st = candidates(sm.p, sm.dir).map(function (c) { return { c: c, e: c.lat / 2 }; });
+      st.push({ c: null, e: NONE });
+      st.forEach(function (s) {
+        if (!prev) { s.cost = s.e; s.from = -1; return; }
+        var best = Infinity, bi = -1;
+        prev.forEach(function (q, qi) {
+          var tr = !s.c && !q.c ? 0 : !s.c || !q.c ? 2 : q.c.w === s.c.w ? 0 : connected(q.c.w, s.c.w) ? 1 : 25;
+          if (q.cost + tr < best) { best = q.cost + tr; bi = qi; }
+        });
+        s.cost = best + s.e; s.from = bi;
+      });
+      back.push(st); prev = st;
+    });
+    var pick = [], bi = 0, last = back[back.length - 1];
+    last.forEach(function (s, si) { if (s.cost < last[bi].cost) bi = si; });
+    for (var k = back.length - 1; k >= 0; k--) { pick[k] = back[k][bi].c; bi = back[k][bi].from; }
+    // 連續同一條路 → 一段；沒對到的 → 地面那份
+    var on = [], off = [], run = null, offStart = null;
+    var half = 2.5;
+    for (k = 0; k < samples.length; k++) {
+      var c = pick[k];
+      if (c) {
+        if (offStart !== null) { off.push(slice(coords, offStart, samples[k].d - half)); offStart = null; }
+        var df = half / c.w._L;
+        if (run && run.w === c.w) { run.f0 = Math.min(run.f0, c.f - df); run.f1 = Math.max(run.f1, c.f + df); }
+        else { run = { w: c.w, f0: c.f - df, f1: c.f + df, opp: c.opp }; on.push(run); }
+      } else {
+        run = null;
+        if (offStart === null) offStart = k === 0 ? 0 : samples[k].d - half;
+      }
+    }
+    if (offStart !== null) off.push(slice(coords, offStart, acc));
+    return { on: on, off: off.filter(function (x) { return x.length > 1; }) };
+  }
+  function slice(coords, d0, d1) {   // 沿線距離 d0 ~ d1 那段
+    var out = [], acc = 0;
+    for (var i = 0; i < coords.length - 1; i++) {
+      var A = coords[i], Bc = coords[i + 1], L = Math.hypot((Bc[0] - A[0]) * KX, (Bc[1] - A[1]) * KY);
+      if (!L) continue;
+      var a = Math.max(d0, acc), b = Math.min(d1, acc + L);
+      if (b > a) {
+        var p0 = [A[0] + (Bc[0] - A[0]) * (a - acc) / L, A[1] + (Bc[1] - A[1]) * (a - acc) / L], p1 = [A[0] + (Bc[0] - A[0]) * (b - acc) / L, A[1] + (Bc[1] - A[1]) * (b - acc) / L];
+        if (!out.length) out.push(p0);
+        out.push(p1);
+      }
+      acc += L;
+    }
+    return out;
+  }
+  function linesOf(f) {
+    var g = f && f.geometry;
+    if (!g) return [];
+    return g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+  }
+  // 線有沒有經過已經抓到的 3D 路(沒有就不用對，直接留在地面)
+  function inLoaded(cs) {
+    var e = loadedBox(); if (!e) return false;
+    return cs.some(function (c) { return c[0] >= e.w && c[0] <= e.e && c[1] >= e.s && c[1] <= e.n; });
+  }
+  function loadedBox() {
+    var e = null;
+    Object.keys(tiles).forEach(function (k) { var x = tiles[k].ext; if (!x || !tiles[k].ids.length) return; e = e ? { w: Math.min(e.w, x.w), e: Math.max(e.e, x.e), s: Math.min(e.s, x.s), n: Math.max(e.n, x.n) } : { w: x.w, e: x.e, s: x.s, n: x.n }; });
+    return e;
+  }
+  function active() { var m = window.map; return !!(m && m.getLayer(LAYER) && m.getZoom() >= MIN_ZOOM); }
+  // 重算：哪些線畫在路面上、地面那份剩什麼
+  function applyOverlays() {
+    var m = window.map;
+    if (!m) return;
+    hookSources();
+    var on = active(), items = [];
+    Object.keys(OV_SRC).forEach(function (id) {
+      var kind = OV_SRC[id], src = m.getSource(id), data = ovData[kind];
+      if (!src || !src._snmOrig) return;
+      if (!data || !data.features) { if (data) src._snmOrig(data); return; }
+      if (!on) { src._snmOrig(data); return; }
+      var keep = [];
+      data.features.forEach(function (f) {
+        var p = f.properties || {}, lines = linesOf(f);
+        if (!lines.length || !lines.some(inLoaded) || (kind === 'traffic' && p.roadClass !== 'motorway' && p.roadClass !== 'trunk')) { keep.push(f); return; }
+        lines.forEach(function (cs) {
+          var r = matchLine(cs);
+          r.on.forEach(function (x) { items.push({ kind: kind, w: x.w, f0: x.f0, f1: x.f1, opp: x.opp, color: p.color || (kind === 'passed' ? '#C9CDD2' : '#16E098'), casing: p.casing || (kind === 'passed' ? '#9AA0A6' : kind === 'traffic' ? ({ moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' }[p.trafficLevel] || '#009B65') : '#009B65') }); });
+          r.off.forEach(function (c) { keep.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: c }, properties: p }); });
+        });
+      });
+      src._snmOrig({ type: 'FeatureCollection', features: keep });
+    });
+    // 綠色底圖：地面那份看得到的時候，每條國道、快速道路的 3D 路面都畫綠線
+    var gl = m.getLayer('snm-roads-line-freeway');
+    ovGreen = on && !!gl && m.getLayoutProperty('snm-roads-line-freeway', 'visibility') !== 'none';
+    if (on) hideFlatFreeway();
+    ovItems = items;
+    Object.keys(tiles).forEach(function (k) { if (tiles[k].chunk) addOverlay(tiles[k].chunk); });
+    m.triggerRepaint();
+  }
+
+  // 每塊模型的疊線(換資料時整組重建)
+  function addOverlay(chunk) {
+    var T = window.THREE;
+    if (chunk.ov) { chunk.scene.remove(chunk.ov); chunk.ov.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); chunk.ov = null; }
+    var buckets = {}, bk = function (color) { return (buckets[color] = buckets[color] || new Bucket()); };
+    var byWay = {};
+    ovItems.forEach(function (it) { (byWay[it.w.id] = byWay[it.w.id] || []).push(it); });
+    chunk.geo.forEach(function (g) {
+      var list = (byWay[g.w.id] || []).slice();
+      if (ovGreen) list.unshift({ kind: 'green', f0: 0, f1: 1, opp: false, color: '#16E098', casing: '#009B65' });
+      list.forEach(function (it) {
+        var st = OV_STYLE[it.kind], s0 = Math.max(0, it.f0) * g.L, s1 = Math.min(1, it.f1) * g.L;
+        // 線的中心：單行道 = 車道中間；雙向道路 = 自己方向那半邊中間
+        var c = function (k) { return !g.w.oneway ? (it.opp ? g.a[k] / 2 : g.b[k] / 2) : (g.a[k] + g.b[k]) / 2; };
+        [[st.cw, it.casing, st.y], [st.iw, it.color, st.y + 0.005]].forEach(function (band) {
+          var b = bk(band[1]), hw = band[0] / 2;
+          for (var k = 0; k < g.P.length - 1; k++) {
+            var u0 = Math.max(s0, g.S[k]), u1 = Math.min(s1, g.S[k + 1]);
+            if (u1 - u0 < 0.05) continue;
+            var len = g.S[k + 1] - g.S[k] || 1, t0 = (u0 - g.S[k]) / len, t1 = (u1 - g.S[k]) / len;
+            var at = function (t, o) {
+              var r = t <= 0 ? g.R[k] : t >= 1 ? g.R[k + 1] : g.segR[k], cc = c(k) + (c(k + 1) - c(k)) * t;
+              return [g.P[k][0] + (g.P[k + 1][0] - g.P[k][0]) * t + r[0] * (cc + o), g.H[k] + (g.H[k + 1] - g.H[k]) * t + band[2], g.P[k][1] + (g.P[k + 1][1] - g.P[k][1]) * t + r[1] * (cc + o)];
+            };
+            b.quad(at(t0, -hw), at(t0, hw), at(t1, hw), at(t1, -hw));
+          }
+        });
+        // 導航路線：白色箭頭(每 20 公尺一個 ^，尖端朝行車方向)
+        if (it.kind === 'route') {
+          var dirSign = it.opp ? -1 : 1, white = bk('#FFFFFF');
+          for (var sp = Math.ceil(s0 / 20) * 20 + 10; sp < s1 - 2; sp += 20) {
+            var k = 0; while (k < g.P.length - 2 && g.S[k + 1] < sp) k++;
+            var t = (sp - g.S[k]) / ((g.S[k + 1] - g.S[k]) || 1), r = g.segR[k], fw = [r[1] * dirSign, -r[0] * dirSign];   // 前進方向
+            var cc = c(k) + (c(k + 1) - c(k)) * t, cx = g.P[k][0] + (g.P[k + 1][0] - g.P[k][0]) * t + r[0] * cc, cz = g.P[k][1] + (g.P[k + 1][1] - g.P[k][1]) * t + r[1] * cc;
+            var y = g.H[k] + (g.H[k + 1] - g.H[k]) * t + 0.095, tip = [cx + fw[0] * 0.6, cz + fw[1] * 0.6];
+            [-1, 1].forEach(function (sd) {
+              var tail = [cx - fw[0] * 0.5 + r[0] * sd * 0.8, cz - fw[1] * 0.5 + r[1] * sd * 0.8], nx = (tail[1] - tip[1]), nz = -(tail[0] - tip[0]), nl = Math.hypot(nx, nz) || 1, h2 = 0.13;
+              white.quad([tip[0] + nx / nl * h2, y, tip[1] + nz / nl * h2], [tip[0] - nx / nl * h2, y, tip[1] - nz / nl * h2], [tail[0] - nx / nl * h2, y, tail[1] - nz / nl * h2], [tail[0] + nx / nl * h2, y, tail[1] + nz / nl * h2]);
+            });
+          }
+        }
+      });
+    });
+    var group = new T.Group();
+    Object.keys(buckets).forEach(function (color) {
+      var g2 = new T.BufferGeometry();
+      g2.setAttribute('position', new T.Float32BufferAttribute(buckets[color].p, 3));
+      var mesh = new T.Mesh(g2, ovMat(color));
+      mesh.renderOrder = 3; mesh.frustumCulled = false;
+      group.add(mesh);
+    });
+    chunk.ov = group;
+    chunk.scene.add(group);
+  }
+  var ovMats = {};
+  function ovMat(color) {
+    var T = window.THREE;
+    return ovMats[color] || (ovMats[color] = new T.MeshBasicMaterial({ color: new T.Color(color), side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+  }
+
+  // 車子：在 3D 路面上時往上移到路面的高度(圖示往螢幕上方平移)
+  var CAR_LAYERS = ['user-car', 'user-car-plate', 'user-car-avatar', 'user-compass'], carWay = null, carShift = [0, 0], lastMatrix = null;
+  function carHeight() {
+    var m = window.map, src = m.getSource('user-pos'), d = src && src._data, f = d && d.features && d.features[0];
+    if (!f || !f.geometry) return null;
+    var p = f.geometry.coordinates, hd = ((f.properties && f.properties.heading) || 0) * Math.PI / 180, dir = [Math.sin(hd), Math.cos(hd)];
+    var cs = candidates(p, dir);
+    if (!cs.length) { carWay = null; return { p: p, h: 0 }; }
+    var routeWays = {}; ovItems.forEach(function (it) { if (it.kind === 'route') routeWays[it.w.id] = 1; });
+    var pick = cs.find(function (c) { return carWay && c.w === carWay; }) || cs.find(function (c) { return routeWays[c.w.id]; }) || cs.sort(function (a, b) { return a.lat - b.lat; })[0];
+    carWay = pick.w;
+    // 那條路在這個位置的高度：從已經建好的模型找
+    var h = 0;
+    Object.keys(tiles).some(function (k) {
+      var ch = tiles[k].chunk; if (!ch) return false;
+      var g = ch.geo.find(function (x) { return x.w === pick.w; }); if (!g) return false;
+      var s = pick.f * g.L, i = 0; while (i < g.S.length - 2 && g.S[i + 1] < s) i++;
+      var t = (s - g.S[i]) / ((g.S[i + 1] - g.S[i]) || 1); h = g.H[i] + (g.H[i + 1] - g.H[i]) * t; return true;
+    });
+    return { p: p, h: h };
+  }
+  function liftCar() {
+    var m = window.map;
+    if (!m || !lastMatrix) return;
+    var c = active() ? carHeight() : null, dx = 0, dy = 0;
+    if (c && c.h > 0.3) {
+      var mc = maplibregl.MercatorCoordinate.fromLngLat(c.p, 0), z = c.h * mc.meterInMercatorCoordinateUnits(), M = lastMatrix;
+      var proj = function (zz) { var x = M[0] * mc.x + M[4] * mc.y + M[8] * zz + M[12], y = M[1] * mc.x + M[5] * mc.y + M[9] * zz + M[13], w = M[3] * mc.x + M[7] * mc.y + M[11] * zz + M[15]; return w > 1e-9 ? [x / w, y / w] : null; };
+      var g0 = proj(0), g1 = proj(z), cv = m.getCanvas();
+      if (g0 && g1) { dx = (g1[0] - g0[0]) / 2 * cv.clientWidth; dy = -(g1[1] - g0[1]) / 2 * cv.clientHeight; }   // 車子在鏡頭後面時不算
+    }
+    if (Math.abs(dx - carShift[0]) < 0.5 && Math.abs(dy - carShift[1]) < 0.5) return;
+    carShift = [dx, dy];
+    CAR_LAYERS.forEach(function (id) {
+      if (!m.getLayer(id)) return;
+      if (m.getPaintProperty(id, 'icon-translate-anchor') !== 'viewport') m.setPaintProperty(id, 'icon-translate-anchor', 'viewport');
+      m.setPaintProperty(id, 'icon-translate', [Math.round(dx * 10) / 10, Math.round(dy * 10) / 10]);
+    });
   }
 
   // ── 圖層 ──
@@ -373,6 +719,8 @@
     },
     render: function (gl, matrix) {
       var m = window.map;
+      lastMatrix = matrix;
+      if (!liftTimer) liftTimer = setTimeout(function () { liftTimer = null; liftCar(); }, 100);   // 車子抬到橋面(不在畫面更新中改圖層)
       if (!renderer || m.getZoom() < MIN_ZOOM) return;
       var T = window.THREE, mapM = new T.Matrix4().fromArray(matrix), b = m.getBounds();
       Object.keys(tiles).forEach(function (k) {
@@ -407,9 +755,13 @@
   }
   function check() {
     var m = window.map;
-    if (!m || m.getZoom() < MIN_ZOOM) return;
+    if (!m) return;
+    var nowActive = m.getZoom() >= MIN_ZOOM;
+    if (nowActive !== wasActive) { wasActive = nowActive; ovSoon(); }   // 放大 / 縮小跨過 3D：地面的線換回完整的 / 只留沒對到路面的
+    if (!nowActive) return;
     ensureThree(function () {
       addLayer();
+      hookSources();
       var now = Date.now();
       visibleTiles().forEach(function (k) {
         var t = tiles[k];
@@ -433,10 +785,12 @@
   // 換地圖樣式後圖層會被清掉，重加
   window._snmReloadRoad3d = function () {
     renderer = null;
+    carShift = [0, 0];
+    setTimeout(ovSoon, 300);   // 換樣式後圖層、資料來源都是新的：重新接手
     if (window.THREE && window.map && window.map.getZoom() >= MIN_ZOOM) addLayer();
   };
-  window._snmRoad3dState = function () { return { tiles: tiles, ways: ways, threeState: threeState }; };   // 除錯用
-  var timer = null;
+  window._snmRoad3dState = function () { return { tiles: tiles, ways: ways, threeState: threeState, ovGreen: ovGreen, ovItems: ovItems, ovData: ovData, carShift: carShift }; };   // 除錯用
+  var timer = null, liftTimer = null, wasActive = false;
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }

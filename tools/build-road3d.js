@@ -12,7 +12,8 @@
 //   road3d/13/x_y.json     { w: [[id, flags, lanes, layer, [lon0, lat0, dlon1, dlat1, ...], 細節?], ...] }
 //     flags：1 匝道、2 快速道路(否則國道)、4 單行道、8 橋梁；座標 = 度 × 1e6 的整數，第一點之後存差值(檔案比較小)
 //     單行道 oneway=-1 已經反轉成行車方向；隧道不畫，不收
-//     細節 { h: [邊, 起, 迄, ...] }：這幾段護欄不畫(會落在別條路上)；邊 1 右、-1 左、0 中央；起迄 = 占整條的比例 × 1e6
+//     細節 { h: [邊, 起, 迄, ...] 這幾段護欄不畫(會落在別條路上；邊 1 右、-1 左、0 中央；起迄 = 占整條的比例 × 1e6)，
+//            e: [頭, 尾] 頭尾高度(公分)，b: [比例 × 1e6, 高度公分, ...] 上下交叉要抬到的高度 }
 
 const fs = require('fs');
 const path = require('path');
@@ -48,7 +49,7 @@ for (const e of elements) {
 
 const rep = FIX.run(ways);
 console.log(`修正：推出車道數 ${rep.lanes} 段；對向車道推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺，跟著移的匝道 ${rep.sep.followed} 段)；` +
-  `國道交叉改成橋 ${rep.same} 處；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里(會落在別條路上)`);
+  `上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里(會落在別條路上)`);
 
 const tiles = {};
 for (const w of ways) {
@@ -57,7 +58,11 @@ for (const w of ways) {
   const flat = [pts[0][0], pts[0][1]];
   for (let i = 1; i < pts.length; i++) flat.push(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   const rec = [w.id, flags, w.lanes, w.layer, flat];
-  if (w.hide && w.hide.length) rec.push({ h: [].concat(...w.hide) });
+  const ext = {};
+  if (w.hide && w.hide.length) ext.h = [].concat(...w.hide);
+  if (w.ok) ext.e = [Math.round(w.hs * 100), Math.round(w.he * 100)];   // 頭尾高度(公分)
+  if (w.bumps && w.bumps.length) ext.b = [].concat(...w.bumps.map((b) => [Math.round(b[0] * 1e6), Math.round(b[1] * 100)]));   // 交叉抬高[比例 × 1e6, 高度公分]
+  rec.push(ext);
   // 路經過的每塊圖磚都放一份(App 用 id 去重)
   const keys = new Set();
   for (let i = 0; i < pts.length; i++) {

@@ -4,7 +4,7 @@
 //   - 接續的兩條路(前一條的尾 = 下一條的頭)：
 //       接縫的斜接方向用兩條路的平均(不會有三角形缺口 / 重疊)
 //       寬度不一樣(車道數不同)：接縫用兩邊的平均寬度，往各自裡面每差一個車道 60 公尺慢慢變回自己的寬度
-//   - 高度：跟第一版一樣(橋每層 1.2 公尺，頭尾接別條路照那條的高度，150 公尺內慢慢接過去)
+//   - 高度：橋每層 6 公尺(真的高架)，頭尾接別條路照那條的高度，150 公尺內慢慢接過去；上下交叉保證 4.5 公尺淨空
 // 座標：平面公尺 [x, y]，y 往哪邊都可以(手機 y 往南、電腦 y 往北)，right 參數決定右手方向
 (function (root) {
   'use strict';
@@ -65,12 +65,19 @@
     });
   }
 
-  // 高度(第一版)：hb 這條的高度、hs / he 頭尾要接的高度
-  function heights(S, hb, hs, he) {
+  // 高度：hb 這條的高度(橋每層 6 公尺)、hs / he 頭尾要接的高度(接別條路照那條)，150 公尺內慢慢接過去；
+  //   坡度最多 5%(短的橋不會變成一個尖包)；bumps = [[比例, 高度], ...] 上下交叉時要抬到的高度(電腦算好，前後 15 公尺平的、4% 坡度接回去)
+  var LAYER_H = 6, MAX_SLOPE = 0.05, BUMP_SLOPE = 0.04;
+  function heights(S, hb, hs, he, bumps) {
     var L = S[S.length - 1], ramp = Math.min(150, L / 2);
-    return S.map(function (s) { return hb + (hs - hb) * Math.max(0, 1 - s / ramp) + (he - hb) * Math.max(0, 1 - (L - s) / ramp); });
+    return S.map(function (s) {
+      var h = hb + (hs - hb) * Math.max(0, 1 - s / ramp) + (he - hb) * Math.max(0, 1 - (L - s) / ramp);
+      h = Math.min(h, hs + MAX_SLOPE * s, he + MAX_SLOPE * (L - s));
+      (bumps || []).forEach(function (b) { h = Math.max(h, b[1] - BUMP_SLOPE * Math.max(0, Math.abs(s - b[0] * L) - 15)); });
+      return Math.max(0, h);
+    });
   }
-  function baseH(w) { return w.bridge ? 1.2 * Math.max(1, w.layer) : 0; }
+  function baseH(w) { return w.bridge ? LAYER_H * Math.max(1, w.layer) : 0; }
 
   // 護欄有哪些(第一版的規則)：[{ side: 1 右 / -1 左 / 0 中央, off(k) 橫向位置, rule: 'end' 頭尾 60 公尺不畫 / 'junc' 匝道接點 120 公尺內不畫 / '' }]
   function rails(w, Wv) {
@@ -80,6 +87,6 @@
   // 主線路面往左多鋪 0.4 公尺：跟對向之間的空隙(推開後 0.8 公尺)鋪滿，中央護欄底下不會露出地面
   var MEDIAN_FILL = 0.4;
 
-  var api = { LANE: LANE, MEDIAN_FILL: MEDIAN_FILL, widthOf: widthOf, curve: curve, frame: frame, widths: widths, heights: heights, baseH: baseH, rails: rails };
+  var api = { LANE: LANE, LAYER_H: LAYER_H, MEDIAN_FILL: MEDIAN_FILL, widthOf: widthOf, curve: curve, frame: frame, widths: widths, heights: heights, baseH: baseH, rails: rails };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.RoadShape = api;
 })(this);

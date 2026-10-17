@@ -3,7 +3,8 @@
 //   2. 對向車道疊在一起：OSM 兩個方向的線常常比兩邊路寬加起來還近 → 兩邊路面重疊、中央護欄畫到對向車道上。
 //      量每點跟左邊對向車道的距離，不夠(兩邊半寬 + 0.8 公尺)就兩條各往外推一半(前後 60 公尺平順過渡)，
 //      接在推過的點上的匝道頭尾跟著移(往匝道裡面 100 公尺慢慢變回原位)，路還是接在一起
-//   3. 國道上下交叉卻一樣高(OSM 漏標橋梁)：匝道 / 快速道路 / 短的那條改成橋(高一層)
+//   3. 高架：橋每層 6 公尺；上下交叉保證上層比下層高 5.3 公尺(淨空 4.5)，不夠就在交叉點附近抬高；
+//      每條路頭尾的高度(接在別條路中間就照那條路那點實際的高度)算好存起來，手機照用
 //   4. 護欄會畫在別條路的路面上：用手機一模一樣的畫法(road_3d_shape.js)算出每條路的路面，
 //      護欄每 2 公尺檢查一次，落在別條同高度(差 0.6 公尺內)的路面上就記下來，手機那段不畫
 'use strict';
@@ -178,7 +179,15 @@ function geometry(ways) {
     const sw = (o) => (o ? SH.widthOf({ oneway: o.oneway, link: o.link, lanes: lanesOf(o) }) : null);
     w.P = P; w.S = f.S; w.seg = f.seg; w.R = f.R;
     w.Wv = SH.widths({ oneway: w.oneway, link: w.link, lanes: w.lanesUse }, f.S, sw(prev), sw(next));
-    w.H = SH.heights(f.S, SH.baseH(w), endH(w, 0), endH(w, w.ll.length - 1));
+    // 原始第 i 點在曲線上的哪一點(接點不會被改成曲線，位置一模一樣)
+    w.rawToP = new Map();
+    let pj = 0;
+    w.ll.forEach((c, i) => {
+      const m = merc(c[0], c[1]), p = [(m[0] - m0[0]) * k, (m[1] - m0[1]) * k];
+      for (let j = pj; j < P.length; j++) if (Math.hypot(P[j][0] - p[0], P[j][1] - p[1]) < 0.06) { w.rawToP.set(i, j); pj = j; break; }
+    });
+    w.hs = endH(w, 0); w.he = endH(w, w.ll.length - 1); w.bumps = w.bumps || [];
+    w.H = SH.heights(f.S, SH.baseH(w), w.hs, w.he, w.bumps);
     // 比對用：換到共同座標(長度 × fc)
     const c0 = chk(w.ll[0]); w.fc = KC / k;
     w.Pc = P.map((p) => [c0[0] + p[0] * w.fc, c0[1] + p[1] * w.fc]);
@@ -186,8 +195,12 @@ function geometry(ways) {
   return nodeIdx;
 }
 
-// ── 3. 國道上下交叉卻一樣高 ──
-function fixSameHeight(ways, nodeIdx) {
+// ── 3. 上下交叉的淨空 ──
+//   兩條路的線相交、附近沒有接點：上層 - 下層 ≥ 5.3 公尺(淨空 4.5 + 橋面版)，不夠就把上層在交叉點附近抬高(記成 bumps)
+//   上下：layer 大的在上 → 是橋的在上 → 都一樣就猜(匝道在主線上、快速道路在國道上、短的在上)；兩條都是快速道路平面 → 平面路口
+//   頭尾高度：接在別條路中間就照那條路「那一點實際的高度」(含抬高)，算好存起來(手機直接用)，重複到穩定
+const CLEAR = 5.3;
+function clearance(ways, nodeIdx) {
   const CELL = 60, grid = new Map();
   for (const w of ways) if (w.ok) for (let i = 0; i < w.Pc.length - 1; i++) {
     const a = w.Pc[i], b = w.Pc[i + 1];
@@ -196,32 +209,67 @@ function fixSameHeight(ways, nodeIdx) {
         const k = x * 100003 + y; if (!grid.has(k)) grid.set(k, []); grid.get(k).push([w, i]);
       }
   }
-  const sharesNode = (A, B) => A.ll.some((c) => (nodeIdx.get(key(c)) || []).some((o) => o.w === B));
+  const shares = new Map();   // 兩條路有沒有共用的點
+  for (const list of nodeIdx.values()) for (const a of list) for (const b of list) if (a.w !== b.w) shares.set(a.w.id + ':' + b.w.id, true);
   // 交流道接點(好幾條路共用的點)附近 80 公尺內的交叉是匯流 / 分岔，不算
   const jgrid = new Map();
-  for (const [k0, list] of nodeIdx) { if (list.length < 2) continue; const p = chk(list[0].w.ll[list[0].i]), g = Math.floor(p[0] / 200) * 100003 + Math.floor(p[1] / 200); if (!jgrid.has(g)) jgrid.set(g, []); jgrid.get(g).push(p); void k0; }
+  for (const list of nodeIdx.values()) { if (list.length < 2) continue; const p = chk(list[0].w.ll[list[0].i]), g = Math.floor(p[0] / 200) * 100003 + Math.floor(p[1] / 200); if (!jgrid.has(g)) jgrid.set(g, []); jgrid.get(g).push(p); }
   const nearJ = (p) => { for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (const q of jgrid.get((Math.floor(p[0] / 200) + x) * 100003 + Math.floor(p[1] / 200) + y) || []) if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 80) return true; return false; };
-
-  const fixed = [];
-  const seen = new Set();
+  const cross = [], seen = new Set();
   for (const arr of grid.values()) for (let x = 0; x < arr.length; x++) for (let y = x + 1; y < arr.length; y++) {
     const [A, i] = arr[x], [B, j] = arr[y];
-    if (A === B || seen.has(A.id + ':' + B.id)) continue;
-    if (A.cls !== 'motorway' && B.cls !== 'motorway') continue;   // 快速道路之間可以是平面路口
+    if (A === B || shares.get(A.id + ':' + B.id)) continue;
     const p = A.Pc[i], q = A.Pc[i + 1], r = B.Pc[j], s = B.Pc[j + 1];
     const d = (q[0] - p[0]) * (s[1] - r[1]) - (q[1] - p[1]) * (s[0] - r[0]); if (!d) continue;
     const ta = ((r[0] - p[0]) * (s[1] - r[1]) - (r[1] - p[1]) * (s[0] - r[0])) / d, tb = ((r[0] - p[0]) * (q[1] - p[1]) - (r[1] - p[1]) * (q[0] - p[0])) / d;
-    if (ta < 0.02 || ta > 0.98 || tb < 0.02 || tb > 0.98) continue;
-    const ha = A.H[i] + (A.H[i + 1] - A.H[i]) * ta, hb = B.H[j] + (B.H[j + 1] - B.H[j]) * tb;
-    if (Math.abs(ha - hb) >= 0.3 || sharesNode(A, B) || nearJ([p[0] + (q[0] - p[0]) * ta, p[1] + (q[1] - p[1]) * ta])) continue;
-    seen.add(A.id + ':' + B.id); seen.add(B.id + ':' + A.id);
-    // 改成橋的：匝道 > 快速道路 > 比較短的
-    const up = A.link !== B.link ? (A.link ? A : B) : A.cls !== B.cls ? (A.cls === 'trunk' ? A : B) : (A.S[A.S.length - 1] < B.S[B.S.length - 1] ? A : B);
-    const low = up === A ? B : A;
-    up.bridge = true; up.layer = Math.max(up.layer, low.layer + 1);
-    fixed.push({ up: up.id, low: low.id });
+    if (ta < 0 || ta > 1 || tb < 0 || tb > 1) continue;
+    const kk = A.id + ':' + i + ':' + B.id + ':' + j;
+    if (seen.has(kk)) continue; seen.add(kk);
+    if (nearJ([p[0] + (q[0] - p[0]) * ta, p[1] + (q[1] - p[1]) * ta])) continue;
+    let up;
+    if (A.layer !== B.layer) up = A.layer > B.layer ? A : B;
+    else if (A.bridge !== B.bridge) up = A.bridge ? A : B;
+    else if (A.cls === 'trunk' && B.cls === 'trunk' && !A.bridge) continue;   // 快速道路平面路口
+    else up = A.link !== B.link ? (A.link ? A : B) : A.cls !== B.cls ? (A.cls === 'trunk' ? A : B) : (A.S[A.S.length - 1] <= B.S[B.S.length - 1] ? A : B);
+    const sA = A.S[i] + (A.S[i + 1] - A.S[i]) * ta, sB = B.S[j] + (B.S[j + 1] - B.S[j]) * tb;
+    cross.push(up === A ? { U: A, su: sA, D: B, sd: sB } : { U: B, su: sB, D: A, sd: sA });
   }
-  return fixed;
+  const hAt = (w, s) => { let k = 0; while (k < w.S.length - 2 && w.S[k + 1] < s) k++; const t = (s - w.S[k]) / ((w.S[k + 1] - w.S[k]) || 1); return w.H[k] + (w.H[k + 1] - w.H[k]) * t; };
+  const redo = (w) => { w.H = SH.heights(w.S, SH.baseH(w), w.hs, w.he, w.bumps); };
+  // 頭尾高度：接在別條路中間 → 那條路那一點的高度；頭尾互接 → 平均(第一版)
+  const ends = () => {
+    let changed = 0;
+    for (const w of ways) {
+      if (!w.ok) continue;
+      [0, w.ll.length - 1].forEach((i) => {
+        let inner = -1, sum = 0, n = 0;
+        for (const o of nodeIdx.get(key(w.ll[i])) || []) {
+          const last = o.w.ll.length - 1;
+          if (o.i > 0 && o.i < last && o.w.ok && o.w.rawToP.has(o.i)) inner = Math.max(inner, o.w.H[o.w.rawToP.get(o.i)]);
+          else { sum += SH.baseH(o.w); n++; }
+        }
+        const v = inner >= 0 ? inner : n ? sum / n : SH.baseH(w), key2 = i === 0 ? 'hs' : 'he';
+        if (Math.abs(v - w[key2]) > 0.01) { w[key2] = v; changed++; }
+      });
+    }
+    for (const w of ways) if (w.ok) redo(w);
+    return changed;
+  };
+  let bumped = 0, left = 0;
+  for (let pass = 0; pass < 8; pass++) {
+    let raised = 0;
+    for (const c of cross) {
+      const need = hAt(c.D, c.sd) + CLEAR, have = hAt(c.U, c.su);
+      if (have >= need - 0.02) continue;
+      const fr = c.su / c.U.S[c.U.S.length - 1], ex = c.U.bumps.find((b) => Math.abs(b[0] - fr) < 1e-4);
+      if (ex) ex[1] = Math.max(ex[1], need); else c.U.bumps.push([fr, need]);
+      redo(c.U); raised++;
+    }
+    bumped += raised;
+    if (!ends() && !raised) break;
+  }
+  for (const c of cross) if (hAt(c.U, c.su) - hAt(c.D, c.sd) < CLEAR - 0.05) left++;
+  return { crossings: cross.length, bumped, left };
 }
 
 // ── 4. 護欄落在別條路上 ──
@@ -278,11 +326,10 @@ function run(ways) {
   for (const w of ways) w._orig = w.ll;
   const sep = separate(ways);
   for (const w of ways) w.ll = w.ll.map((c) => [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6]);   // 跟手機拿到的座標一樣(1e-6 度)
-  let nodeIdx = geometry(ways);
-  const same = fixSameHeight(ways, nodeIdx);
-  if (same.length) nodeIdx = geometry(ways);   // 改成橋之後高度重算
+  const nodeIdx = geometry(ways);
+  const clr = clearance(ways, nodeIdx);
   const hide = railHides(ways);
-  return { lanes, sep, same: same.length, hide };
+  return { lanes, sep, clr, hide };
 }
 
-module.exports = { run, inferLanes, separate, geometry, fixSameHeight, railHides };
+module.exports = { CLEAR, run, inferLanes, separate, geometry, clearance, railHides };
