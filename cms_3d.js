@@ -138,7 +138,8 @@
     };
     // 門架跨距照 3D 路面：左柱立在中央分隔那側(路面左緣外 0.5 公尺)、右柱立在外側護欄外面(路面右緣外 0.9 公尺)；
     //   3D 道路還沒載入時先用一般值(左右各 11 公尺)。原點 = 路中心，+x 往右
-    var sp = s.span, XL = sp ? sp.left - 0.5 : -11, XR = sp ? sp.right + 0.9 : 11;
+    //   左柱插在中央分隔島正中間(花台的樹籬中間、一道護欄的中心)；找不到對向車道才立在路面左緣外 0.5 公尺
+    var sp = s.span, XL = sp ? (sp.med != null && sp.med < sp.left - 0.3 ? sp.med : sp.left - 0.5) : -11, XR = sp ? sp.right + 0.9 : 11;
     var H = 7, TH = 1.1, TZ = 0.42;   // 桁架高 1.1、厚 0.84
     [XL, XR].forEach(function (px) {
       rod([px, 0, 0], [px, H + TH + 0.3, 0], 0.26);                                   // 圓柱立柱
@@ -162,18 +163,26 @@
       rod([x2, H, -TZ], [x2, H, TZ], 0.035); rod([x2, H + TH, -TZ], [x2, H + TH, TZ], 0.035);
     }
     // LED 看板：黑色箱體＋正面發光面板(用 MeshBasic，不受光線影響，夜裡也看得清楚)
-    // 看板在車道正上方(路面中間偏左一點：外側路肩比較寬)；路很窄時看板跟著變窄
-    var BW = Math.min(8, XR - XL - 4), BH = 2.3, BY = H + TH + BH / 2 + 0.15, BX = sp ? (sp.left + sp.right) / 2 - 1 : 0.8;
+    // 看板在門架正中間；路很窄時看板跟著變窄(左邊留位置給里程牌)
+    var BW = Math.min(8, XR - XL - 6), BH = 2.3, BY = H + TH + BH / 2 + 0.15, BX = (XL + XR) / 2;
     box(BW + 0.3, BH + 0.3, 0.6, dark, BX, BY, 0);
     var tex = new T.CanvasTexture(boardCanvas(s.pages[0])); tex.anisotropy = 4;
     var face = new T.Mesh(new T.PlaneGeometry(BW, BH), new T.MeshBasicMaterial({ map: tex }));
     face.position.set(BX, BY, 0.31); g.add(face);
-    // 看板上方兩盞小燈
-    [-BW / 2 + 1.2, BW / 2 - 1.2].forEach(function (lx) { box(0.5, 0.4, 0.4, dark, BX + lx, BY + BH / 2 + 0.45, 0.05); });
+    // 看板上方兩盞閃光燈：黑色燈殼＋正面偏黃的綠色圓形 LED(亮的燈芯＋外圈光暈)，兩盞一起一亮一暗(blinkTick 每 0.6 秒切換)
+    var lamps = [];
+    [-BW / 2 + 1.2, BW / 2 - 1.2].forEach(function (lx) {
+      var ly = BY + BH / 2 + 0.45;
+      box(0.5, 0.45, 0.4, dark, BX + lx, ly, 0.05);
+      var core = new T.MeshBasicMaterial({ color: LED_ON }), halo = new T.MeshBasicMaterial({ color: LED_ON, transparent: true, opacity: 0.35, depthWrite: false });
+      var h = new T.Mesh(new T.CircleGeometry(0.26, 24), halo); h.position.set(BX + lx, ly, 0.255); g.add(h);
+      var led = new T.Mesh(new T.CircleGeometry(0.16, 24), core); led.position.set(BX + lx, ly, 0.26); g.add(led);
+      lamps.push({ core: core, halo: halo });
+    });
     // 左邊綠底里程牌
     var mt = new T.CanvasTexture(mileCanvas(s));
     var mile = new T.Mesh(new T.PlaneGeometry(2.4, 0.8), new T.MeshBasicMaterial({ map: mt }));
-    var MX = Math.min(XL + 1.7, BX - BW / 2 - 1.4);   // 綠底里程牌：靠左柱
+    var MX = XL + 1.7;   // 綠底里程牌：固定靠左柱
     mile.position.set(MX, H + TH / 2, TZ + 0.12); g.add(mile);
     box(2.5, 0.9, 0.08, dark, MX, H + TH / 2, TZ + 0.07);
     g.rotation.y = -signBearing(s) * Math.PI / 180;   // 正面(+z)轉到面向來車
@@ -182,7 +191,7 @@
     var sun = new T.DirectionalLight(0xffffff, 0.7); sun.position.set(0.4, 1, 0.6); scene.add(sun);
     var fill = new T.DirectionalLight(0xffffff, 0.25); fill.position.set(-0.6, 0.4, -0.5); scene.add(fill);   // 背光面也看得出圓管立體感
     scene.add(g);
-    return { scene: scene, group: g, face: face, tex: tex, page: 0 };
+    return { scene: scene, group: g, face: face, tex: tex, page: 0, lamps: lamps };
   }
 
   // ── MapLibre 自訂圖層：每座看板一個模型，用地圖的投影矩陣畫 ──
@@ -265,7 +274,7 @@
       // 3D 路面上那條路的寬度、位置(從吸附到底圖國道線的位置、方向去找，原始座標可能偏太遠)
       var sp = window._snmRoad3dSpan ? window._snmRoad3dSpan((s.snap || s).lon, (s.snap || s).lat, (s.snap || s).bearing) : null;
       if (sp) s.span = sp;
-      var key = s.pages.map(function (p) { return p.text; }).join('|') + (s.span ? '|' + s.span.left.toFixed(1) + ',' + s.span.right.toFixed(1) : '');
+      var key = s.pages.map(function (p) { return p.text; }).join('|') + (s.span ? '|' + s.span.left.toFixed(1) + ',' + s.span.right.toFixed(1) + ',' + (s.span.med != null ? s.span.med.toFixed(1) : '') : '');
       var md = models[s.id];
       if (!md || md.key !== key) {   // 新看板、訊息換了、路寬變了才重建
         if (md) disposeModel(md);
@@ -286,6 +295,14 @@
     md.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
   }
   // 多則訊息輪流顯示(只換畫面上的看板)
+  // 閃光燈：兩盞一起一亮一暗(只有畫面上有看板、網頁在前景時才重畫)；偏黃的綠色 LED
+  var blinkOn = true, LED_ON = 0xC4F23A, LED_OFF = 0x2C3512;
+  function blinkTick() {
+    if (document.hidden || !visible.length) return;
+    blinkOn = !blinkOn;
+    visible.forEach(function (s) { var md = models[s.id]; if (md && md.lamps) md.lamps.forEach(function (lm) { lm.core.color.setHex(blinkOn ? LED_ON : LED_OFF); lm.halo.opacity = blinkOn ? 0.35 : 0; }); });
+    if (window.map) window.map.triggerRepaint();
+  }
   function rotatePages() {
     if (document.hidden || !visible.length) return;
     var changed = false;
@@ -362,6 +379,7 @@
     var go = function () { m.on('moveend', check); check(); };
     if (m.loaded()) go(); else m.once('load', go);
     pageTimer = setInterval(rotatePages, PAGE_MS);
+    setInterval(blinkTick, 600);   // 看板上方的綠色閃光燈
     document.addEventListener('visibilitychange', autoLoad);
     var refit = null;
     window.addEventListener('snm-road3d-data', function () { clearTimeout(refit); refit = setTimeout(refreshVisible, 200); });   // 3D 路面載入後：門架改立在路面高度

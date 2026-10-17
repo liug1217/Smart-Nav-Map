@@ -885,8 +885,25 @@
     // 路中心那一點的經緯度、方向
     var d = f * w._L, i = 0; while (i < w.coords.length - 2 && w._len[i + 1] < d) i++;
     var A = w.coords[i], Bc = w.coords[i + 1], t = (d - w._len[i]) / ((w._len[i + 1] - w._len[i]) || 1);
-    return { lon: A[0] + (Bc[0] - A[0]) * t, lat: A[1] + (Bc[1] - A[1]) * t, bearing: (Math.atan2((Bc[0] - A[0]) * KX, (Bc[1] - A[1]) * KY) * 180 / Math.PI + 360) % 360,
-      h: g.h, left: g.nhalf, right: g.half, link: w.link, id: w.id };
+    var lon0 = A[0] + (Bc[0] - A[0]) * t, lat0 = A[1] + (Bc[1] - A[1]) * t;
+    // 中央分隔島中心：左邊對向車道(單行主線)的路面左緣跟這條路面左緣的正中間(門架左柱插在那裡：花台的樹籬中間、一道護欄的中心)
+    var med = null, opp = null, gr = wayGrid(), px = lon0 * KX, py = lat0 * KY, fx = Math.sin(b), fy = Math.cos(b), cx0 = Math.floor(px / 50), cy0 = Math.floor(py / 50);
+    for (var ga = cx0 - 1; ga <= cx0 + 1; ga++) for (var gb = cy0 - 1; gb <= cy0 + 1; gb++) (gr[ga + ',' + gb] || []).forEach(function (e) {
+      var o = e[0], k = e[1];
+      if (o === w || !o.oneway || o.link) return;
+      var P0 = o.coords[k], P1 = o.coords[k + 1], ax = P0[0] * KX, ay = P0[1] * KY, dx = P1[0] * KX - ax, dy = P1[1] * KY - ay, L2 = dx * dx + dy * dy;
+      if (!L2) return;
+      var Ls = Math.sqrt(L2);
+      if ((dx * fx + dy * fy) / Ls > -0.8) return;   // 方向相反
+      var tt = ((px - ax) * dx + (py - ay) * dy) / L2;
+      if (tt < 0 || tt > 1) return;
+      var qx = ax + dx * tt - px, qy = ay + dy * tt - py, left = -qx * fy + qy * fx;   // 往左為正
+      if (left <= 0 || left > 40 || (opp && left >= opp.d)) return;
+      opp = { w: o, d: left, f: (o._len[k] + Ls * tt) / o._L };
+    });
+    if (opp) { var go = geoAt(opp.w, opp.f); if (go && Math.abs(go.h - g.h) < 1) med = -(opp.d + Math.abs(g.nhalf) - Math.abs(go.nhalf)) / 2; }
+    return { lon: lon0, lat: lat0, bearing: (Math.atan2((Bc[0] - A[0]) * KX, (Bc[1] - A[1]) * KY) * 180 / Math.PI + 360) % 360,
+      h: g.h, left: g.nhalf, right: g.half, med: med, link: w.link, id: w.id };
   };
   window._snmRoad3dAt = function (lon, lat, maxD) {
     var g = wayGrid(), x = lon * KX, y = lat * KY, cx = Math.floor(x / 50), cy = Math.floor(y / 50), best = null;

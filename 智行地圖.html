@@ -2497,13 +2497,27 @@ function _flipCell(cell, from, to) {
     container: 'map',
     style: DEFAULT_STYLE_URL,
     center: [121.394, 24.951],
-    zoom: 16,
+    zoom: 19,   // 預設就放大到看得到 3D 道路(跟導航的鏡頭一樣)
     pitch: 60,
+    maxPitch: 85,   // 可以往下拉到幾乎平視，看得到地平線上的天空(sky.js)；導航的預設角度不變
     bearing: -20,
     antialias: false,
     preserveDrawingBuffer: true
   });
   window.map = map;
+
+  // 車子(脈衝圈、指南針、車子、車牌、頭像)永遠在最上層：國道路牌、路名不會蓋到車子
+  (function () {
+    const CAR = ['user-pulse', 'user-compass', 'user-car', 'user-car-plate', 'user-car-avatar'];
+    let moving = false;
+    map.on('styledata', function () {
+      if (moving) return;
+      const o = map.style && map.style._order; if (!o) return;
+      const have = CAR.filter(function (id) { return o.indexOf(id) >= 0; });
+      if (!have.length || o.slice(-have.length).join('|') === have.join('|')) return;
+      moving = true; have.forEach(function (id) { try { map.moveLayer(id); } catch (_) {} }); moving = false;
+    });
+  })();
 
   // 路線類圖層一律放在 3D 建築下面(之後才加的圖層、換地圖樣式後也會自動移過去)
   // 每次都照固定順序整組重排(由下到上)：綠色道路 → 備選路線 → 導航路線 → 塞車線 → 路線箭頭 → 轉彎大箭頭。
@@ -2889,6 +2903,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._reloadFwShields === 'function') window._reloadFwShields();
     if (typeof window._snmReloadAvoidLayer === 'function') window._snmReloadAvoidLayer();
     if (typeof window._snmReloadRoad3d === 'function') window._snmReloadRoad3d();
+    if (typeof window._snmReloadRoad3dCity === 'function') window._snmReloadRoad3dCity();
     if (typeof window._snmReloadCms3d === 'function') window._snmReloadCms3d();
     if (typeof window._snmReloadLamps3d === 'function') window._snmReloadLamps3d();
   };
@@ -7895,10 +7910,10 @@ setTimeout(() => {
         if(window._setFollowUser) window._setFollowUser(true);
         window._cameraFollow = true;
         // 縮放目標交給鏡頭跟隨迴圈逐幀趨近，避免跟迴圈本身的置中互相打架而卡住不放大
-        window._camZoomGoal = 18;   // 放大到看得到 3D 道路
+        window._camZoomGoal = window.NAV_CAM.normal.zoom;   // 跟導航一樣放大到看得到 3D 道路
       } else {
         navigator.geolocation.getCurrentPosition(function(pos){
-          map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:18, duration:600 });
+          map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:window.NAV_CAM.normal.zoom, duration:600 });
         });
       }
     });
@@ -12591,10 +12606,12 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="cms_3d.js?v=11"></script>
+<script src="cms_3d.js?v=14"></script>
 <!-- 🛣 國道、快速道路 3D 路面(第 1 階段：主線；放大到 zoom 16 才畫) -->
 <script src="road_3d_shape.js?v=6"></script>
-<script src="road_3d.js?v=41"></script>
+<script src="road_3d.js?v=43"></script>
+<!-- 🏙 一般道路 3D 路面(省道、縣道、市區道路、巷弄) -->
+<script src="road_3d_city.js?v=1"></script>
 <!-- 🌤 天空(照太陽高度角換顏色) -->
 <script src="sky.js?v=2"></script>
 <!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
