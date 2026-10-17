@@ -2892,6 +2892,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._snmReloadRoad3d === 'function') window._snmReloadRoad3d();
     if (typeof window._snmReloadCms3d === 'function') window._snmReloadCms3d();
     if (typeof window._snmReloadCams3d === 'function') window._snmReloadCams3d();
+    if (typeof window._snmReloadRoad3dCity === 'function') window._snmReloadRoad3dCity();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -12591,8 +12592,10 @@ setTimeout(() => {
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
 <!-- 🌤 天空(照太陽高度角換顏色) -->
 <script src="sky.js?v=1"></script>
-<script src="road_3d_shape.js?v=2"></script>
-<script src="road_3d.js?v=26"></script>
+<script src="road_3d_shape.js?v=3"></script>
+<script src="road_3d.js?v=27"></script>
+<!-- 🏙 一般道路 3D 路面 -->
+<script src="road_3d_city.js?v=1"></script>
 <!-- 📹 監視器、測速照相 3D 模型(放大到 zoom 16 才畫) -->
 <script src="cams_3d.js?v=1"></script>
 <script src="cms_3d.js?v=10"></script>

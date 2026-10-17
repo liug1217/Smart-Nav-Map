@@ -287,7 +287,10 @@ function geometry(ways) {
     w.ll.forEach((c) => { const m = merc(c[0], c[1]), p = [(m[0] - m0[0]) * k, (m[1] - m0[1]) * k]; if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.3) { P0.push(p); shared.push((nodeIdx.get(key(c)) || []).length > 1); last = p; } });
     w.ok = P0.length >= 2;
     if (!w.ok) continue;
-    const P = SH.curve(P0, shared), prev = cont(w, false), next = cont(w, true);
+    const prev = cont(w, false), next = cont(w, true);
+    const toL = (c) => { const m = merc(c[0], c[1]); return [(m[0] - m0[0]) * k, (m[1] - m0[1]) * k]; };
+    // 接續的路：前一條倒數第二點、下一條第二點給曲線當延伸點(接縫兩邊切線一樣)
+    const P = SH.curve(P0, shared, prev ? toL(prev.ll[prev.ll.length - 2]) : null, next ? toL(next.ll[1]) : null);
     const f = SH.frame(P, rightN, prev ? dirOf(prev, true) : null, next ? dirOf(next, false) : null);
     const sw = (o) => (o ? SH.widthOf({ oneway: o.oneway, link: o.link, lanes: lanesOf(o) }) : null);
     w.P = P; w.S = f.S; w.seg = f.seg; w.R = f.R;

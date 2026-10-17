@@ -1,6 +1,6 @@
 // ===== 3D 道路的形狀(手機 road_3d.js 跟電腦 tools/build-road3d.js 共用，兩邊算出來一模一樣) =====
 // 第一版的畫法：照 OSM 的線拉出路面；這裡多了幾個修正：
-//   - 轉角改成二次貝茲曲線(兩邊各取一段，不超過那段的一半、最多 40 公尺)，跟別條路共用的點不動
+//   - 曲線：向心 Catmull-Rom 樣條(每段三次貝茲)，通過每個原始點、切線連續、不打結；跨接續的路段也平順
 //   - 接續的兩條路(前一條的尾 = 下一條的頭)：
 //       接縫的斜接方向用兩條路的平均(不會有三角形缺口 / 重疊)
 //       寬度不一樣(車道數不同)：接縫用兩邊的平均寬度，往各自裡面每差一個車道 60 公尺慢慢變回自己的寬度
@@ -13,24 +13,36 @@
   // 寬度：車道 3.75、單行道內側路肩 1、外側 3(匝道 2)；雙向兩邊各 1.5
   function widthOf(w) { return w.oneway ? w.lanes * LANE + 1 + (w.link ? 2 : 3) : w.lanes * LANE + 3; }
 
-  // 轉角貝茲曲線；shared[i] = 第 i 點是接點(不動)
-  function curve(P0, shared) {
+  // 曲線：向心 Catmull-Rom 樣條(centripetal，alpha = 0.5)，每一段換成三次貝茲曲線
+  //   - 曲線一定通過每個原始點(包括交流道接點)，切線連續，整條路沒有任何折角
+  //   - 向心版不會在點距不均勻時繞圈、打結或衝過頭(一般的 Catmull-Rom / 二次貝茲在 OSM 這種點距忽大忽小的資料會)
+  //   - ghostA / ghostB：接續的前一條路倒數第二點 / 下一條路第二點，接縫兩邊的切線一樣，跨路段也是平順的
+  //   - 取點：照轉彎量決定(每轉 1.5 度一點，最密每 1 公尺一點)，直線不多取點
+  function curve(P0, shared, ghostA, ghostB) {
+    var n = P0.length;
+    if (n < 2) return P0.slice();
+    var refl = function (a, b) { return [2 * a[0] - b[0], 2 * a[1] - b[1]]; };
+    var at = function (i) { return i < 0 ? (ghostA || refl(P0[0], P0[1])) : i >= n ? (ghostB || refl(P0[n - 1], P0[n - 2])) : P0[i]; };
     var P = [P0[0]];
     var add = function (p) { var q = P[P.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.05) P.push(p); };
-    for (var i = 1; i < P0.length - 1; i++) {
-      var a = P0[i - 1], b = P0[i], c = P0[i + 1];
-      var la = Math.hypot(b[0] - a[0], b[1] - a[1]), lc = Math.hypot(c[0] - b[0], c[1] - b[1]);
-      var cosT = ((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])) / (la * lc || 1);
-      var deg = Math.acos(Math.max(-1, Math.min(1, cosT))) * 180 / Math.PI;
-      if (shared[i] || deg < 1) { add(b); continue; }
-      var d = Math.min(40, la / 2, lc / 2), q0 = [b[0] + (a[0] - b[0]) * d / la, b[1] + (a[1] - b[1]) * d / la], q2 = [b[0] + (c[0] - b[0]) * d / lc, b[1] + (c[1] - b[1]) * d / lc];
-      var m = Math.max(2, Math.ceil(deg / 3));
-      for (var j = 0; j <= m; j++) {
-        var t = j / m, u0 = (1 - t) * (1 - t), u1 = 2 * (1 - t) * t, u2 = t * t;
-        add([u0 * q0[0] + u1 * b[0] + u2 * q2[0], u0 * q0[1] + u1 * b[1] + u2 * q2[1]]);
+    for (var i = 0; i < n - 1; i++) {
+      var p0 = at(i - 1), p1 = P0[i], p2 = P0[i + 1], p3 = at(i + 2);
+      var d1 = Math.pow(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), 0.5) || 1e-6, d2 = Math.pow(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), 0.5) || 1e-6, d3 = Math.pow(Math.hypot(p3[0] - p2[0], p3[1] - p2[1]), 0.5) || 1e-6;
+      // 向心 Catmull-Rom → 三次貝茲控制點(Yuksel 等人的公式)
+      var b1 = [(d1 * d1 * p2[0] - d2 * d2 * p0[0] + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1[0]) / (3 * d1 * (d1 + d2)),
+                (d1 * d1 * p2[1] - d2 * d2 * p0[1] + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1[1]) / (3 * d1 * (d1 + d2))];
+      var b2 = [(d3 * d3 * p1[0] - d2 * d2 * p3[0] + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2[0]) / (3 * d3 * (d3 + d2)),
+                (d3 * d3 * p1[1] - d2 * d2 * p3[1] + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2[1]) / (3 * d3 * (d3 + d2))];
+      // 這段總共轉多少：用控制多邊形(p1 → b1 → b2 → p2)兩個轉角加起來(曲線轉的一定不超過它；S 形的也算得到)
+      var ang = function (a0, a1, a2) { var u = [a1[0] - a0[0], a1[1] - a0[1]], v = [a2[0] - a1[0], a2[1] - a1[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]); return lu && lv ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI : 0; };
+      var turn = ang(p1, b1, b2) + ang(b1, b2, p2);
+      var len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), m = Math.min(Math.max(1, Math.ceil(len / 1)), Math.max(1, Math.ceil(turn / 1.5)));
+      for (var j = 1; j <= m; j++) {
+        var t = j / m, u = 1 - t;
+        if (j === m) { add(p2); break; }
+        add([u * u * u * p1[0] + 3 * u * u * t * b1[0] + 3 * u * t * t * b2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * b1[1] + 3 * u * t * t * b2[1] + t * t * t * p2[1]]);
       }
     }
-    add(P0[P0.length - 1]);
     return P;
   }
 

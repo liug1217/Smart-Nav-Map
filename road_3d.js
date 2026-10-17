@@ -215,8 +215,6 @@
     });
     if (P0.length < 2) return;
     // 形狀(road_3d_shape.js，跟電腦算的一模一樣)：轉角貝茲曲線(接點不動)；接續的路：接縫斜接方向用兩條平均、車道數不同時寬度漸變
-    var P = RS.curve(P0, shared);
-    if (P.length < 2) return;
     var cont = function (atEnd) {   // 接續的路：這個點只有兩條路用，一條在這裡結束、一條在這裡開始
       var list = nodeIdx[nodeKey(w, atEnd ? w.coords.length - 1 : 0)] || [];
       if (list.length !== 2) return null;
@@ -229,6 +227,9 @@
       return [(Bp[0] - A[0]) / l, (Bp[1] - A[1]) / l];
     };
     var prev = cont(false), next = cont(true);
+    // 曲線(向心 Catmull-Rom)：接續的前一條倒數第二點、下一條第二點當延伸點，跨路段也平順
+    var P = RS.curve(P0, shared, prev ? local(prev.coords[prev.coords.length - 2]) : null, next ? local(next.coords[1]) : null);
+    if (P.length < 2) return;
     var fr = RS.frame(P, function (tx, tz) { return [-tz, tx]; }, prev ? dirOf(prev, true) : null, next ? dirOf(next, false) : null);
     var n = P.length, S = fr.S, segR = fr.seg, R = fr.R, L = S[n - 1], i;
     var Wv = RS.widths(w, S, prev ? RS.widthOf(prev) : null, next ? RS.widthOf(next) : null);
