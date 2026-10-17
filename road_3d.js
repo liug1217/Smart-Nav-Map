@@ -2,7 +2,8 @@
 // 放大到 zoom 16 以上，把國道(motorway)、快速道路(trunk)與匝道畫成立體道路：
 //   - 路面寬度照實際車道數：車道 3.75 公尺、外側路肩 3 公尺、內側路肩 1 公尺(匝道外側路肩 2 公尺)
 //   - 標線：車道線白色虛線(劃 4 公尺、空 6 公尺)、外側路面邊線白色實線、內側路面邊線黃色實線；雙向道路中間雙黃線
-//   - 護欄：外側鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、中央分隔混凝土護欄(紐澤西護欄)、橋上兩側混凝土護欄
+//   - 護欄：外側鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、中央分隔混凝土護欄(紐澤西護欄)、橋上外側也是紐澤西護欄
+//   - 路燈：道路兩側外面，每 50 公尺一支
 //   - 匝道進出口(分流、匯流)那段不畫外側護欄，車道才接得起來
 //   - 轉角都改成貝茲曲線(彎道圓順)，匝道接點不動；接續的路接縫斜接、車道數不同時寬度漸變(road_3d_shape.js)
 //   - 電腦先修好的：對向車道疊在一起已推開(中間 0.8 公尺鋪滿)、沒標的車道數已推好、會落在別條路上的護欄那段不畫
@@ -377,34 +378,53 @@
       edge(plus(half, -0.3), 1, skipEnds, '1');
       edge(plus(nhalf, 0.3), -1, skipEnds, '-1');
     }
-    // 路燈：主線立在中央分隔護欄上(燈臂伸向自己的車道)，匝道 / 雙向道路立在外側；每 50 公尺一支，護欄不畫的地方(接到別條路)不立
-    var LAMP_H = 10, ARM = 2.4;
-    var lamp = function (k, tt, o, dirArm) {
-      var r = segR[k], fw = [r[1], -r[0]], base = at(k, tt, o, 0), top = base[1] + LAMP_H;
-      var post = function (cx, cz, w0, y0, y1, bk) {
-        var cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(function (q) { return [cx + r[0] * q[0] * w0 + fw[0] * q[1] * w0, cz + r[1] * q[0] * w0 + fw[1] * q[1] * w0]; });
-        for (var e = 0; e < 4; e++) { var A0 = cs[e], A1 = cs[(e + 1) % 4]; bk.quad([A0[0], y0, A0[1]], [A1[0], y0, A1[1]], [A1[0], y1, A1[1]], [A0[0], y1, A0[1]]); }
-        bk.quad([cs[0][0], y1, cs[0][1]], [cs[1][0], y1, cs[1][1]], [cs[2][0], y1, cs[2][1]], [cs[3][0], y1, cs[3][1]]);
-      };
-      post(base[0], base[2], 0.09, base[1], top, B.steel);                                                     // 燈桿
-      var ex = base[0] + r[0] * dirArm * ARM, ez = base[2] + r[1] * dirArm * ARM, hw = 0.05;                    // 燈臂(往車道伸出去)
-      B.steel.quad([base[0] + fw[0] * hw, top, base[2] + fw[1] * hw], [ex + fw[0] * hw, top, ez + fw[1] * hw], [ex - fw[0] * hw, top, ez - fw[1] * hw], [base[0] - fw[0] * hw, top, base[2] - fw[1] * hw]);
-      B.steel.quad([base[0] + fw[0] * hw, top - 0.1, base[2] + fw[1] * hw], [ex + fw[0] * hw, top - 0.1, ez + fw[1] * hw], [ex + fw[0] * hw, top, ez + fw[1] * hw], [base[0] + fw[0] * hw, top, base[2] + fw[1] * hw]);
-      var lx = ex + r[0] * dirArm * 0.25, lz = ez + r[1] * dirArm * 0.25, cs2 = [[-0.35, -0.13], [0.35, -0.13], [0.35, 0.13], [-0.35, 0.13]].map(function (q) { return [lx + r[0] * q[0] + fw[0] * q[1], lz + r[1] * q[0] + fw[1] * q[1]]; });
-      B.steel.quad([cs2[0][0], top + 0.04, cs2[0][1]], [cs2[1][0], top + 0.04, cs2[1][1]], [cs2[2][0], top + 0.04, cs2[2][1]], [cs2[3][0], top + 0.04, cs2[3][1]]);   // 燈罩
-      B.lamp.quad([cs2[0][0], top - 0.06, cs2[0][1]], [cs2[3][0], top - 0.06, cs2[3][1]], [cs2[2][0], top - 0.06, cs2[2][1]], [cs2[1][0], top - 0.06, cs2[1][1]]);   // 燈(朝下發光)
+    // 路燈：立在道路兩側的外面(單行道的主線、匝道立在自己右邊外側 → 上下行合起來就是整條路的兩側；雙向道路兩邊都立、前後錯開)
+    //   造型：圓的鋼管燈桿(下粗上細)＋底座，頂端往上彎再水平伸向車道的燈臂，扁長的 LED 燈頭(朝下發光)
+    //   平地立在鋼板護欄外面，橋上立在外側混凝土護欄頂上；每 50 公尺一支，護欄不畫的地方(接到別條路)不立
+    var LAMP_H = 11, REACH = 2.6;
+    var tube = function (a0, a1, r0, r1, bk) {   // 兩點之間的八角管(r0 → r1 粗細)
+      var d = [a1[0] - a0[0], a1[1] - a0[1], a1[2] - a0[2]], L0 = Math.hypot(d[0], d[1], d[2]) || 1;
+      d = [d[0] / L0, d[1] / L0, d[2] / L0];
+      var u = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+      var e1 = [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]], l1 = Math.hypot(e1[0], e1[1], e1[2]); e1 = [e1[0] / l1, e1[1] / l1, e1[2] / l1];
+      var e2 = [d[1] * e1[2] - d[2] * e1[1], d[2] * e1[0] - d[0] * e1[2], d[0] * e1[1] - d[1] * e1[0]];
+      var ring = function (c, r) { var out = []; for (var q = 0; q < 8; q++) { var t = q / 8 * Math.PI * 2, cs = Math.cos(t) * r, sn = Math.sin(t) * r; out.push([c[0] + e1[0] * cs + e2[0] * sn, c[1] + e1[1] * cs + e2[1] * sn, c[2] + e1[2] * cs + e2[2] * sn]); } return out; };
+      var A0 = ring(a0, r0), A1 = ring(a1, r1);
+      for (var q = 0; q < 8; q++) bk.quad(A0[q], A0[(q + 1) % 8], A1[(q + 1) % 8], A1[q]);
     };
-    for (var sl = 25; sl < L - 10; sl += 50) {
-      var kl = 0; while (kl < n - 2 && S[kl + 1] < sl) kl++;
-      var tl = (sl - S[kl]) / ((S[kl + 1] - S[kl]) || 1);
-      if (w.oneway && !w.link) {
-        if (isHidden('0', sl)) continue;
-        lamp(kl, tl, nhalf[kl] + 0.23 + (nhalf[kl + 1] - nhalf[kl]) * tl, 1);
-      } else {
-        if (isHidden('1', sl) || skipEnds(kl)) continue;
-        lamp(kl, tl, half[kl] - 0.35 + (half[kl + 1] - half[kl]) * tl, -1);
+    var lamp = function (k, tt, o, dirArm, baseY) {
+      var r = segR[k], fw = [r[1], -r[0]], g0 = at(k, tt, o, baseY), y0 = g0[1], top = y0 + LAMP_H;
+      var P0 = [g0[0], y0, g0[2]], P1 = [g0[0], top - 0.6, g0[2]];
+      tube(P0, P1, 0.13, 0.08, B.steel);                                                        // 燈桿(下粗上細)
+      // 底座
+      var cs0 = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(function (q) { return [g0[0] + r[0] * q[0] * 0.25 + fw[0] * q[1] * 0.25, g0[2] + r[1] * q[0] * 0.25 + fw[1] * q[1] * 0.25]; });
+      for (var e = 0; e < 4; e++) { var c0 = cs0[e], c1 = cs0[(e + 1) % 4]; B.steel.quad([c0[0], y0, c0[1]], [c1[0], y0, c1[1]], [c1[0], y0 + 0.12, c1[1]], [c0[0], y0 + 0.12, c0[1]]); }
+      // 燈臂：往上彎再伸向車道(三段)
+      var out = function (dist, y) { return [g0[0] + r[0] * dirArm * dist, y, g0[2] + r[1] * dirArm * dist]; };
+      var A1 = out(0.35, top - 0.15), A2 = out(1.0, top + 0.05), A3 = out(REACH, top + 0.12);
+      tube(P1, A1, 0.08, 0.065, B.steel); tube(A1, A2, 0.065, 0.055, B.steel); tube(A2, A3, 0.055, 0.05, B.steel);
+      // LED 燈頭：扁長、沿著燈臂方向，底下是發光面
+      var hx = A3[0] + r[0] * dirArm * 0.4, hz = A3[2] + r[1] * dirArm * 0.4, hy = A3[1];
+      var hc = [[-0.55, -0.17], [0.55, -0.17], [0.55, 0.17], [-0.55, 0.17]].map(function (q) { return [hx + r[0] * dirArm * q[0] + fw[0] * q[1], hz + r[1] * dirArm * q[0] + fw[1] * q[1]]; });
+      B.steel.quad([hc[0][0], hy + 0.08, hc[0][1]], [hc[1][0], hy + 0.06, hc[1][1]], [hc[2][0], hy + 0.06, hc[2][1]], [hc[3][0], hy + 0.08, hc[3][1]]);   // 上蓋
+      for (var e2 = 0; e2 < 4; e2++) { var d0 = hc[e2], d1 = hc[(e2 + 1) % 4]; B.steel.quad([d0[0], hy - 0.04, d0[1]], [d1[0], hy - 0.04, d1[1]], [d1[0], hy + 0.07, d1[1]], [d0[0], hy + 0.07, d0[1]]); }
+      B.lamp.quad([hc[0][0], hy - 0.045, hc[0][1]], [hc[3][0], hy - 0.045, hc[3][1]], [hc[2][0], hy - 0.045, hc[2][1]], [hc[1][0], hy - 0.045, hc[1][1]]);   // 發光面(朝下)
+    };
+    // 外側位置：平地在鋼板護欄外面 0.6 公尺；橋上在外側混凝土護欄頂上(護欄外緣往內 0.33、高 0.85)
+    var sideSpot = function (k, tt, side) {
+      var e = side > 0 ? half[k] + (half[k + 1] - half[k]) * tt : nhalf[k] + (nhalf[k + 1] - nhalf[k]) * tt;
+      return hb > 0 ? { o: e - side * 0.33, y: 0.85 } : { o: e + side * 0.6, y: 0 };
+    };
+    var sides = w.oneway ? [1] : [1, -1];
+    sides.forEach(function (side) {
+      for (var sl = side > 0 ? 25 : 50; sl < L - 10; sl += 50) {
+        var kl = 0; while (kl < n - 2 && S[kl + 1] < sl) kl++;
+        var tl = (sl - S[kl]) / ((S[kl + 1] - S[kl]) || 1);
+        if (isHidden(side > 0 ? '1' : '-1', sl) || ((w.link || !w.oneway) && skipEnds(kl))) continue;
+        var sp = sideSpot(kl, tl, side);
+        lamp(kl, tl, sp.o, -side, sp.y);   // 燈臂伸向車道
       }
-    }
+    });
     return { w: w, P: P, segR: segR, R: R, H: H, S: S, L: L, a: a, b: b, half: half, nhalf: nhalf };   // 疊線(路況、導航路線)、車子、監視器、看板高度用
   }
 
