@@ -6327,6 +6327,8 @@ function _flipCell(cell, from, to) {
       window._navRouteGeometry = route.geometry; // 供樣式切換後重建圖層用
 
       if (window._snmRoutePassedClear) window._snmRoutePassedClear(); // 新路線(含重新規劃)：已行駛從頭算
+      // 目的地(路線最後一點)：導航時從目前位置拉一條紅色直線到這裡
+      window._navDestCoord = plannedRouteCoordinates[plannedRouteCoordinates.length - 1] || null;
       if (window.navRouteSource) {
         window.navRouteSource.setData({
           type: 'FeatureCollection',
@@ -7232,8 +7234,8 @@ map.on('load', function() {
       source: 'user-pos',
       layout: {
         'icon-image': 'car-icon',
-        // 地圖放大時車子跟著變大(不然拉近看 3D 道路時車子很小)
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.9, 17, 1, 19, 1.8, 20, 2.4],
+        // 車子大小：zoom 19 時車寬約 2.7 公尺(在一個車道 3.75 公尺裡面，左右各留一點)；再放大照真實比例變大，縮小時維持這個大小
+        'icon-size': ['interpolate', ['exponential', 2], ['zoom'], 15, 0.9, 19, 0.9, 20, 1.8, 22, 7.2],
         // 車頭朝向「地圖上的實際行進方向」:鏡頭跟隨時地圖跟著轉,車子照樣朝上;
         // 用手轉動地圖時,車子跟著道路一起轉,不會自己原地打轉
         'icon-rotate': ['get', 'heading'],
@@ -7248,7 +7250,7 @@ map.on('load', function() {
     const _labelLayout = function (img, anchor, dy) {
       return {
         // 車子跟著縮放變大(user-car 的 icon-size)，頭像、車牌離車子的距離也照同樣比例
-        'icon-image': img, 'icon-anchor': anchor, 'icon-offset': ['interpolate', ['linear'], ['zoom'], 15, ['literal', [0, dy * 0.9]], 17, ['literal', [0, dy]], 19, ['literal', [0, dy * 1.8]], 20, ['literal', [0, dy * 2.4]]],
+        'icon-image': img, 'icon-anchor': anchor, 'icon-offset': ['interpolate', ['exponential', 2], ['zoom'], 15, ['literal', [0, dy * 0.9]], 19, ['literal', [0, dy * 0.9]], 20, ['literal', [0, dy * 1.8]], 22, ['literal', [0, dy * 7.2]]],
         'icon-rotation-alignment': 'viewport', 'icon-pitch-alignment': 'viewport',
         'icon-allow-overlap': true, 'icon-ignore-placement': true
       };
@@ -12612,6 +12614,21 @@ setTimeout(() => {
 <!-- 🛣 國道、快速道路 3D 路面(第 1 階段：主線；放大到 zoom 16 才畫) -->
 <script src="road_3d_shape.js?v=6"></script>
 <script src="road_3d.js?v=44"></script>
+<!-- 🔴 導航時從目前位置拉一條紅色直線到目的地 -->
+<script>
+(function () {
+  var SRC = 'navStraightLine', LAYER = 'navStraightLine', empty = { type: 'FeatureCollection', features: [] }, shown = false;
+  setInterval(function () {
+    var m = window.map;
+    if (!m || !m.isStyleLoaded()) return;
+    if (!m.getSource(SRC)) m.addSource(SRC, { type: 'geojson', data: empty });   // 換地圖樣式後重加
+    if (!m.getLayer(LAYER)) m.addLayer({ id: LAYER, type: 'line', source: SRC, layout: { 'line-cap': 'round' }, paint: { 'line-color': '#E53935', 'line-width': 3, 'line-opacity': 0.85 } });   // 加在最上層，車子還是在它上面
+    var on = document.body.classList.contains('navigating') && window._navDestCoord && window.currentLat != null;
+    if (on) { m.getSource(SRC).setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[window.currentLon, window.currentLat], window._navDestCoord] } }); shown = true; }
+    else if (shown) { m.getSource(SRC).setData(empty); shown = false; }
+  }, 1000);
+})();
+</script>
 <!-- 🏙 一般道路 3D 路面(省道、縣道、市區道路、巷弄) -->
 <script src="road_3d_city.js?v=1"></script>
 <!-- 🌤 天空(照太陽高度角換顏色) -->
