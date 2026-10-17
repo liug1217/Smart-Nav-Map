@@ -2889,6 +2889,7 @@ function _flipCell(cell, from, to) {
     if (typeof window._reloadFwShields === 'function') window._reloadFwShields();
     if (typeof window._snmReloadAvoidLayer === 'function') window._snmReloadAvoidLayer();
     if (typeof window._snmReloadCms3d === 'function') window._snmReloadCms3d();
+    if (typeof window._snmReloadLamps3d === 'function') window._snmReloadLamps3d();
   };
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -12587,6 +12588,10 @@ setTimeout(() => {
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
 <script src="cms_3d.js?v=9"></script>
+<!-- 🌤 天空(照太陽高度角換顏色) -->
+<script src="sky.js?v=2"></script>
+<!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
+<script src="lamps_3d.js?v=1"></script>
 </body>
 </html>
   
