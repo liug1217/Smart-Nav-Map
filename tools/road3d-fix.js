@@ -760,12 +760,14 @@ function railHides(ways) {
   return { hiddenKm: hiddenM / 1000 };
 }
 
-// ── 6. 中央分隔島(在地面、上下行同高度的地方) ──
-//   每條主線每點找左邊的對向車道，量兩邊路面之間的空隙：
-//     空隙 5 公尺內：花台＋樹籬(兩道水泥護欄中間一整排修剪過的灌木，不裝防眩板)
-//     空隙 5～30 公尺：兩道護欄＋防眩板照舊，中間鋪草
-//   id 小的那條負責畫(整個空隙)，另一條那段不畫自己的中央護欄(花台)或不用管(草地)
-const HEDGE_MAX = 5, MED_MAX = 30;
+// ── 6. 中央分隔島(上下行同高度的地方) ──
+//   每條主線每點找左邊的對向車道，量兩邊路面之間的空隙(前後平均，不會忽大忽小)：
+//     空隙 5 公尺內：id 小的那條負責畫，立在空隙正中間、空隙鋪滿，另一條那段不畫自己的中央護欄
+//       空隙不夠(< 1.32 公尺)或在橋上 → 一道護欄(兩面斜角)＋防眩板
+//       空隙夠 → 固定寬度的花台：兩道護欄＋中間樹籬，不裝防眩板
+//       一道 ↔ 兩道：split 0～1 在 30 公尺內慢慢變，兩道護欄斜斜地分開 / 合起來
+//     空隙 5～30 公尺(在地面)：兩道護欄＋防眩板照舊，中間鋪草
+const HEDGE_MAX = 5, MED_MAX = 30, PLANTER_MIN = 1.32;
 function medians(ways) {
   const CELL = 50, grid = new Map();
   const mains = ways.filter((w) => w.ok && w.oneway && !w.link);
@@ -801,23 +803,27 @@ function medians(ways) {
             const gap = -lat - hwA - hwB;
             if (!best || -lat < best.d) best = { d: -lat, gap, B };
           }
-      if (best && best.gap <= MED_MAX && best.gap >= -1 && A.H[k] < 1) {
-        const own = A.id < best.B.id;
-        if (best.gap <= HEDGE_MAX) { mode[k] = own ? 2 : -2; gapV[k] = best.gap; }
-        else if (own) { mode[k] = 1; gapV[k] = best.gap; }
+      if (best && best.gap <= MED_MAX && best.gap >= -1) {
+        const own = A.id < best.B.id, ground = A.H[k] < 1;
+        if (best.gap <= (ground ? HEDGE_MAX : 1.2)) { mode[k] = own ? 2 : -2; gapV[k] = Math.max(0, best.gap); }
+        else if (own && ground) { mode[k] = 1; gapV[k] = best.gap; }
       }
     }
     // 去掉一兩點的跳動(前後 2 點多數決)
     const m2 = mode.map((v, k) => { const c = { '2': 0, '-2': 0, '1': 0, '0': 0 }; for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) c[mode[j]]++; return +Object.keys(c).sort((a, b) => c[b] - c[a])[0]; });
-    // 存成段落：草地、花台 [起, 迄, 起點空隙, 迄點空隙](每段最多 25 公尺)、不畫 [起, 迄]
+    // 中間那道 / 花台的空隙：前後 40 公尺平均(不會忽大忽小)；split：空隙夠、在地面 → 1，前後 15 公尺平均(30 公尺內斜斜變過去)
+    const gS = gapV.map((_, k) => { if (m2[k] !== 2) return gapV[k]; let a = 0, c = 0; for (let j = k; j >= 0 && A.S[k] - A.S[j] <= 40; j--) if (m2[j] === 2) { a += gapV[j]; c++; } for (let j = k + 1; j < n && A.S[j] - A.S[k] <= 40; j++) if (m2[j] === 2) { a += gapV[j]; c++; } return a / c; });
+    const want = gS.map((g, k) => (m2[k] === 2 && A.H[k] < 1 && g >= PLANTER_MIN ? 1 : 0));
+    const split = want.map((_, k) => { let a = 0, c = 0; for (let j = k; j >= 0 && A.S[k] - A.S[j] <= 15; j--) { a += want[j]; c++; } for (let j = k + 1; j < n && A.S[j] - A.S[k] <= 15; j++) { a += want[j]; c++; } return a / c; });
+    // 存成段落：草地 [起, 迄, 起點空隙, 迄點空隙]、中間那道 / 花台 [起, 迄, 起點空隙, 迄點空隙, 起點 split, 迄點 split](每段最多 25 公尺)、不畫 [起, 迄]
     const L = A.S[n - 1];
     A.medC = []; A.medH = []; A.medS = [];
     for (let k = 0; k < n - 1;) {
       const v = m2[k];
       let e = k + 1;
       while (e < n - 1 && m2[e] === v && (v <= 0 || A.S[e] - A.S[k] < 25)) e++;
-      if (v === 1) { A.medC.push([A.S[k], A.S[e], gapV[k], gapV[e]]); drawM += A.S[e] - A.S[k]; }
-      else if (v === 2) { A.medH.push([A.S[k], A.S[e], gapV[k], gapV[e]]); hedgeM += A.S[e] - A.S[k]; }
+      if (v === 1) { A.medC.push([A.S[k], A.S[e], gapV[k], m2[e] === 1 ? gapV[e] : gapV[e - 1]]); drawM += A.S[e] - A.S[k]; }
+      else if (v === 2) { A.medH.push([A.S[k], A.S[e], gS[k], m2[e] === 2 ? gS[e] : gS[e - 1], split[k], split[e]]); hedgeM += (A.S[e] - A.S[k]) * (split[k] + split[e]) / 2; }   // 段落最後一點不是這種：空隙沿用前一點
       else if (v === -2) A.medS.push([A.S[k], A.S[e]]);
       k = e;
     }

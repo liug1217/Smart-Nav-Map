@@ -23,7 +23,8 @@
 //           aL / aR 每點往左 / 右加寬(減速、加速車道，公分)、x [起, 迄, ...] 這幾段不畫(匝道還疊在本線上)、
 //           g [{ l: 本線邊緣的點, r: 匝道邊緣的點, z: 高度 }] 槽化區、
 //           mg [起, 迄, 起點空隙, 迄點空隙, ...] 中央分隔島草地：從這條路的路面左緣鋪到對向路面左緣(空隙公分)、
-//           mh [同上] 窄分隔島的花台＋樹籬(這條負責畫)、ms [起, 迄, ...] 這段中央護欄不畫(對向那條畫花台)
+//           mh [起, 迄, 起點空隙, 迄點空隙, 起點 split, 迄點 split(× 100), ...] 窄分隔島立在正中間(這條負責畫)：
+//             split 0 = 一道護欄(兩面斜角)＋防眩板、1 = 花台(兩道護欄＋樹籬)，中間慢慢分開；ms [起, 迄, ...] 這段中央護欄不畫(對向那條畫)
 
 'use strict';
 
@@ -65,7 +66,7 @@ lap(`讀道路：${all.length} 段(主線 ${all.filter((w) => !w.link).length}�
 
 // ── 2～5. 修正、曲線、路寬、高度、護欄 ──
 const rep = FIX.run(mains, { lanesDone: true });
-lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(沒分開的 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里；分隔島花台樹籬 ${rep.med.hedgeKm.toFixed(1)} 公里、草地 ${rep.med.grassKm.toFixed(1)} 公里`);
+lap(`修正：清掉雜訊小折點 ${rep.jitter} 個；接點曲線 ${rep.round.nodes} 處；對向推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺)；匝道推開 ${rep.sepL.pushed} 段(最多 ${rep.sepL.maxPush.toFixed(2)} 公尺)；交流道分流 / 匯流 ${rep.junc.count} 處(沒分開的 ${rep.junc.skipped} 處)；上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里；分隔島花台 ${rep.med.hedgeKm.toFixed(1)} 公里、草地 ${rep.med.grassKm.toFixed(1)} 公里`);
 
 // ── 6. 體檢 ──
 const ang = (a, b, c) => { const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]); return lu && lv ? Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI : 0; };
@@ -127,8 +128,8 @@ for (const w of mains) {
   if (w.auxR && w.auxR.some((v) => v > 0.01)) ext.aR = cmArr(w.auxR);   // 往右加寬
   if (w.skip && w.skip.length) ext.x = [].concat(...w.skip.map((r) => [Math.round(Math.max(0, r[0]) / L * 1e6), Math.round(Math.min(L, r[1]) / L * 1e6)]));   // 這幾段不畫(還疊在本線上)
   // 分隔島草地：這條路負責鋪的段落 [起, 迄 (比例 × 1e6), 起點空隙, 迄點空隙 (公分)]
-  const rng = (list) => [].concat(...list.map((r) => [Math.round(r[0] / L * 1e6), Math.round(r[1] / L * 1e6)].concat(r.length > 2 ? [Math.round(r[2] * 100), Math.round(r[3] * 100)] : [])));
-  if (w.medH && w.medH.length) ext.mh = rng(w.medH);   // 花台＋樹籬(這條負責畫)
+  const rng = (list) => [].concat(...list.map((r) => [Math.round(r[0] / L * 1e6), Math.round(r[1] / L * 1e6)].concat(r.length > 2 ? [Math.round(r[2] * 100), Math.round(r[3] * 100)] : []).concat(r.length > 4 ? [Math.round(r[4] * 100), Math.round(r[5] * 100)] : [])));
+  if (w.medH && w.medH.length) ext.mh = rng(w.medH);   // 中間那道護欄 / 花台(這條負責畫)
   if (w.medS && w.medS.length) ext.ms = rng(w.medS);   // 這段中央護欄不畫(對向那條畫花台)
   if (w.medC && w.medC.length) ext.mg = [].concat(...w.medC.map((r) => [Math.round(r[0] / L * 1e6), Math.round(r[1] / L * 1e6), Math.round(r[2] * 100), Math.round(r[3] * 100)]));
   if (w.gores && w.gores.length) ext.g = w.gores.map((g) => { const f = (pts) => { const o = [Math.round(pts[0][0] * 1e6), Math.round(pts[0][1] * 1e6)]; for (let i = 1; i < pts.length; i++) o.push(Math.round(pts[i][0] * 1e6) - Math.round(pts[i - 1][0] * 1e6), Math.round(pts[i][1] * 1e6) - Math.round(pts[i - 1][1] * 1e6)); return o; }; return { l: f(g.l), r: f(g.r), z: g.z.map((v) => Math.round(v * 100)) }; });   // 槽化區

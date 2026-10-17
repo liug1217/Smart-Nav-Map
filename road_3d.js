@@ -5,7 +5,8 @@
 //   - 路面：深灰色柏油；車道 3.75 公尺、內側路肩 1、外側路肩 3 公尺(電腦算好的路寬)
 //   - 標線：內側黃實線、外側白實線(寬 15 公分)、車道白色虛線(劃 4 公尺、空 6 公尺)；雙向道路中央雙黃線
 //   - 中央分隔：紐澤西水泥護欄＋綠色防眩板(主線往左多鋪 0.4 公尺，跟對向之間的空隙鋪滿)；
-//     在地面、上下行之間 5 公尺內：花台＋樹籬(兩道水泥護欄中間一整排修剪過、一團一團的灌木，不裝防眩板；電腦算好由哪一邊畫)
+//     上下行之間 5 公尺內：立在空隙正中間(電腦算好由哪一邊畫)；沒空間 → 一道護欄(兩面斜角)＋防眩板，
+//       有空間 → 固定寬度的花台(兩道單斜面護欄＋中間一整排修剪過的灌木，不裝防眩板)；一道 ↔ 兩道之間斜斜地分開 / 合起來
 //     5～30 公尺：兩道護欄＋防眩板，中間鋪草地(深淺不均、中間微微隆起、兩邊水泥緣石，夠寬的種一排灌木)
 //   - 外側：平地鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、橋上紐澤西水泥護欄；會落在別條路上的那段不畫
 //   - 高架：橋每層 6 公尺(電腦算好高度、上下交叉的淨空)；兩側 1.4 公尺深的箱型梁、底面、每 30 公尺一座橋墩(柱子＋帽梁)，
@@ -178,7 +179,7 @@
     var inSkip = function (s) { return skip.some(function (r) { return s >= r[0] && s <= r[1]; }); };
     // 窄分隔島的花台：這條負責畫的段落 → 每點空隙(-1 = 不是)；兩邊的一般中央護欄、防眩板都不畫
     var hedgeR = [];
-    for (i = 0; i + 3 < w.hedge.length; i += 4) hedgeR.push([w.hedge[i] / 1e6 * L, w.hedge[i + 1] / 1e6 * L, w.hedge[i + 2] / 100, w.hedge[i + 3] / 100]);
+    for (i = 0; i + 5 < w.hedge.length; i += 6) hedgeR.push([w.hedge[i] / 1e6 * L, w.hedge[i + 1] / 1e6 * L, w.hedge[i + 2] / 100, w.hedge[i + 3] / 100, w.hedge[i + 4] / 100, w.hedge[i + 5] / 100]);
     hedgeR.forEach(function (h) { hidden['0'].push([h[0], h[1]]); });
     for (i = 0; i + 1 < w.medS.length; i += 2) hidden['0'].push([w.medS[i] / 1e6 * L, w.medS[i + 1] / 1e6 * L]);
     var hedgeGap = S.map(function (sv) { for (var q = 0; q < hedgeR.length; q++) { var h = hedgeR[q]; if (sv >= h[0] - 0.01 && sv <= h[1] + 0.01) return h[2] + (h[3] - h[2]) * ((sv - h[0]) / ((h[1] - h[0]) || 1)); } return -1; });
@@ -317,35 +318,48 @@
     }
     gore(w, origin, sc, B);
     medianGrass(w, P, S, segR, R, H, nhalf, B);
-    // 花台＋樹籬：每 1 公尺一格；左右各一道紐澤西水泥護欄(這條的在自己左緣，對向的在對向左緣)，
-    //   中間的樹籬比護欄高出約 1 公尺，高度、寬度、顏色用位置算的雜訊一團一團變化(修剪過的灌木)
+    // 中間那道護欄 / 花台：每 1 公尺一格；c = 空隙正中間，split 0～1：
+    //   兩道單斜面護欄的直立背面在 c ± 0.7 × split(split 0 = 背靠背 → 一道兩面斜角的護欄)；
+    //   split 小(一道)時頂上裝防眩板，split 大(花台)時兩道護欄中間長樹籬(高度、顏色用位置算的雜訊一團一團變化)
+    var HALF_IN = 0.7;
     hedgeR.forEach(function (h) {
       var smp = [];
       for (var sv = h[0]; sv < h[1] + 0.99; sv += 1) {
         var su = Math.min(sv, h[1]), k = 0; while (k < n - 2 && S[k + 1] < su) k++;
-        var t = (su - S[k]) / ((S[k + 1] - S[k]) || 1), g = Math.max(0.6, h[2] + (h[3] - h[2]) * ((su - h[0]) / ((h[1] - h[0]) || 1)));
-        smp.push({ s: su, k: k, t: t, e: nhalf[k] + (nhalf[k + 1] - nhalf[k]) * t, g: g });
+        var t = (su - S[k]) / ((S[k + 1] - S[k]) || 1), f = (su - h[0]) / ((h[1] - h[0]) || 1);
+        var g = h[2] + (h[3] - h[2]) * f, u = Math.max(0, Math.min(1, h[4] + (h[5] - h[4]) * f));
+        smp.push({ s: su, k: k, t: t, c: nhalf[k] + (nhalf[k + 1] - nhalf[k]) * t - g / 2, u: u });
         if (su >= h[1]) break;
       }
+      var P3 = function (sm, o, y) { return at(sm.k, sm.t, o, y); };
       for (var q = 0; q < smp.length - 1; q++) {
         var A0 = smp[q], A1 = smp[q + 1];
-        var P3 = function (sm, o, y) { return at(sm.k, sm.t, o, y); };
-        // 兩道護欄(對向的那道鏡射)
+        var ra = A0.c + A0.u * HALF_IN, rb = A1.c + A1.u * HALF_IN, la = A0.c - A0.u * HALF_IN, lb = A1.c - A1.u * HALF_IN;
         for (var j = 0; j < JERSEY_IN.length - 1; j++) {
           var p0 = JERSEY_IN[j], p1 = JERSEY_IN[j + 1];
-          B.concrete.quad(P3(A0, A0.e - 0.1 + p0[0], p0[1]), P3(A0, A0.e - 0.1 + p1[0], p1[1]), P3(A1, A1.e - 0.1 + p1[0], p1[1]), P3(A1, A1.e - 0.1 + p0[0], p0[1]));
-          B.concrete.quad(P3(A0, A0.e - A0.g + 0.1 - p0[0], p0[1]), P3(A0, A0.e - A0.g + 0.1 - p1[0], p1[1]), P3(A1, A1.e - A1.g + 0.1 - p1[0], p1[1]), P3(A1, A1.e - A1.g + 0.1 - p0[0], p0[1]));
+          // 這條路這邊的護欄(背面在 ra，斜面朝自己的車道)、對向那邊的護欄(鏡射)
+          B.concrete.quad(P3(A0, ra - 0.2 + p0[0], p0[1]), P3(A0, ra - 0.2 + p1[0], p1[1]), P3(A1, rb - 0.2 + p1[0], p1[1]), P3(A1, rb - 0.2 + p0[0], p0[1]));
+          B.concrete.quad(P3(A0, la + 0.2 - p0[0], p0[1]), P3(A0, la + 0.2 - p1[0], p1[1]), P3(A1, lb + 0.2 - p1[0], p1[1]), P3(A1, lb + 0.2 - p0[0], p0[1]));
         }
-        // 樹籬斷面：整個收在兩道護欄直立的背面之間(不壓到護欄上)，側面直上去、頂上圓圓的
-        var prof = function (sm) {
-          var n1 = hash(Math.round(sm.s / 1.3), 3.1), n2 = hash(Math.round(sm.s / 0.7), 9.7), top = 1.75 + n1 * 0.25 + n2 * 0.08;
-          var xr = sm.e + 0.07, xl = sm.e - sm.g - 0.07, mid = (xr + xl) / 2, rr = Math.min(0.15, (xr - xl) * 0.25);
-          return [[xr, 0.5], [xr, top - 0.32], [xr - rr, top - 0.08], [mid + (xr - mid) * 0.4, top], [mid + (xl - mid) * 0.4, top], [xl + rr, top - 0.08], [xl, top - 0.32], [xl, 0.5]];
-        };
-        var pa = prof(A0), pb = prof(A1), cs = HEDGE[Math.floor(hash(Math.round(A0.s), 5.5) * HEDGE.length)];
-        for (var c2 = 0; c2 < pa.length - 1; c2++) {
-          var shade = c2 === 3 ? 1.12 : (c2 === 2 || c2 === 4) ? 1.04 : 0.9, col = [cs[0] * shade, cs[1] * shade, cs[2] * shade];
-          B.grass.quadC(P3(A0, pa[c2][0], pa[c2][1]), P3(A0, pa[c2 + 1][0], pa[c2 + 1][1]), P3(A1, pb[c2 + 1][0], pb[c2 + 1][1]), P3(A1, pb[c2][0], pb[c2][1]), col);
+        // 防眩板：一道護欄的地方(split < 0.35)，每 1 公尺一片、斜 60 度、0.85～1.5 公尺高
+        if (A0.u < 0.35) {
+          var rr0 = segR[A0.k], ff = [rr0[1], -rr0[0]], cc = P3(A0, A0.c, 0), y0 = cc[1] + 0.85, y1 = cc[1] + 1.5;
+          var uu = [ff[0] * 0.5 + rr0[0] * 0.866, ff[1] * 0.5 + rr0[1] * 0.866], vv = [-uu[1], uu[0]];
+          var cs4 = [[-0.11, -0.015], [0.11, -0.015], [0.11, 0.015], [-0.11, 0.015]].map(function (z) { return [cc[0] + uu[0] * z[0] + vv[0] * z[1], cc[2] + uu[1] * z[0] + vv[1] * z[1]]; });
+          for (var e4 = 0; e4 < 4; e4++) { var Q0 = cs4[e4], Q1 = cs4[(e4 + 1) % 4]; B.glare.quad([Q0[0], y0, Q0[1]], [Q1[0], y0, Q1[1]], [Q1[0], y1, Q1[1]], [Q0[0], y1, Q0[1]]); }
+        }
+        // 樹籬：花台的地方(split > 0.5)，整個收在兩道護欄直立的背面之間，側面直上去、頂上圓圓的；分開時跟著慢慢長高
+        if (A0.u > 0.5 && A1.u > 0.5) {
+          var prof = function (sm, xr, xl) {
+            var n1 = hash(Math.round(sm.s / 1.3), 3.1), n2 = hash(Math.round(sm.s / 0.7), 9.7), grow = Math.min(1, (sm.u - 0.5) * 2);
+            var top = 0.85 + (0.9 + n1 * 0.25 + n2 * 0.08) * grow, mid = (xr + xl) / 2, rw = Math.min(0.15, (xr - xl) * 0.25);
+            return [[xr, 0.5], [xr, top - 0.32 * grow], [xr - rw, top - 0.08 * grow], [mid + (xr - mid) * 0.4, top], [mid + (xl - mid) * 0.4, top], [xl + rw, top - 0.08 * grow], [xl, top - 0.32 * grow], [xl, 0.5]];
+          };
+          var pa = prof(A0, ra - 0.03, la + 0.03), pb = prof(A1, rb - 0.03, lb + 0.03), cs = HEDGE[Math.floor(hash(Math.round(A0.s), 5.5) * HEDGE.length)];
+          for (var c2 = 0; c2 < pa.length - 1; c2++) {
+            var shade = c2 === 3 ? 1.12 : (c2 === 2 || c2 === 4) ? 1.04 : 0.9, col = [cs[0] * shade, cs[1] * shade, cs[2] * shade];
+            B.grass.quadC(P3(A0, pa[c2][0], pa[c2][1]), P3(A0, pa[c2 + 1][0], pa[c2 + 1][1]), P3(A1, pb[c2 + 1][0], pb[c2 + 1][1]), P3(A1, pb[c2][0], pb[c2][1]), col);
+          }
         }
       }
     });
