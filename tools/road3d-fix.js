@@ -760,10 +760,12 @@ function railHides(ways) {
   return { hiddenKm: hiddenM / 1000 };
 }
 
-// ── 6. 中央分隔島：上下行之間的空隙在 4 公尺內(窄的分隔島)，只畫一道護欄＋防眩板、立在正中間 ──
-//   每條主線每點找左邊的對向車道(同高度)，量兩邊路面之間的空隙；id 小的那條負責畫(中間那道、空隙鋪滿)，另一條那段不畫中央護欄
-//   空隙超過 4 公尺(中間是草地等)：兩邊各畫自己的
-const MED_MAX = 4;
+// ── 6. 中央分隔島(在地面、上下行同高度的地方) ──
+//   每條主線每點找左邊的對向車道，量兩邊路面之間的空隙：
+//     空隙 5 公尺內：花台＋樹籬(兩道水泥護欄中間一整排修剪過的灌木，不裝防眩板)
+//     空隙 5～30 公尺：兩道護欄＋防眩板照舊，中間鋪草
+//   id 小的那條負責畫(整個空隙)，另一條那段不畫自己的中央護欄(花台)或不用管(草地)
+const HEDGE_MAX = 5, MED_MAX = 30;
 function medians(ways) {
   const CELL = 50, grid = new Map();
   const mains = ways.filter((w) => w.ok && w.oneway && !w.link);
@@ -774,7 +776,7 @@ function medians(ways) {
         const k = x * 100003 + y; if (!grid.has(k)) grid.set(k, []); grid.get(k).push([w, i]);
       }
   }
-  let drawM = 0, skipM = 0;
+  let drawM = 0, hedgeM = 0;
   for (const A of mains) {
     const n = A.P.length, mode = new Array(n).fill(0), gapV = new Array(n).fill(0);
     for (let k = 0; k < n; k++) {
@@ -799,24 +801,29 @@ function medians(ways) {
             const gap = -lat - hwA - hwB;
             if (!best || -lat < best.d) best = { d: -lat, gap, B };
           }
-      if (best && best.gap <= MED_MAX && best.gap >= -1) { mode[k] = A.id < best.B.id ? 1 : -1; gapV[k] = Math.max(0, best.gap); }
+      if (best && best.gap <= MED_MAX && best.gap >= -1 && A.H[k] < 1) {
+        const own = A.id < best.B.id;
+        if (best.gap <= HEDGE_MAX) { mode[k] = own ? 2 : -2; gapV[k] = best.gap; }
+        else if (own) { mode[k] = 1; gapV[k] = best.gap; }
+      }
     }
     // 去掉一兩點的跳動(前後 2 點多數決)
-    const m2 = mode.map((v, k) => { const c = { '1': 0, '-1': 0, '0': 0 }; for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) c[mode[j]]++; return +Object.keys(c).sort((a, b) => c[b] - c[a])[0]; });
-    // 存成段落：畫在中間 [起, 迄, 起點空隙, 迄點空隙](每段最多 25 公尺)、不畫 [起, 迄]
+    const m2 = mode.map((v, k) => { const c = { '2': 0, '-2': 0, '1': 0, '0': 0 }; for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) c[mode[j]]++; return +Object.keys(c).sort((a, b) => c[b] - c[a])[0]; });
+    // 存成段落：草地、花台 [起, 迄, 起點空隙, 迄點空隙](每段最多 25 公尺)、不畫 [起, 迄]
     const L = A.S[n - 1];
-    A.medC = []; A.medS = [];
+    A.medC = []; A.medH = []; A.medS = [];
     for (let k = 0; k < n - 1;) {
       const v = m2[k];
       let e = k + 1;
-      while (e < n - 1 && m2[e] === v && (v !== 1 || A.S[e] - A.S[k] < 25)) e++;
+      while (e < n - 1 && m2[e] === v && (v <= 0 || A.S[e] - A.S[k] < 25)) e++;
       if (v === 1) { A.medC.push([A.S[k], A.S[e], gapV[k], gapV[e]]); drawM += A.S[e] - A.S[k]; }
-      else if (v === -1) { const last = A.medS[A.medS.length - 1]; if (last && Math.abs(last[1] - A.S[k]) < 1e-6) last[1] = A.S[e]; else A.medS.push([A.S[k], A.S[e]]); skipM += A.S[e] - A.S[k]; }
+      else if (v === 2) { A.medH.push([A.S[k], A.S[e], gapV[k], gapV[e]]); hedgeM += A.S[e] - A.S[k]; }
+      else if (v === -2) A.medS.push([A.S[k], A.S[e]]);
       k = e;
     }
     void L;
   }
-  return { centerKm: drawM / 1000, skipKm: skipM / 1000 };
+  return { grassKm: drawM / 1000, hedgeKm: hedgeM / 1000 };
 }
 
 // opts.lanesDone：車道數已經推過了(第 1 階段先用全部的路推車道數，再只拿主線來做)

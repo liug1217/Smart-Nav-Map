@@ -5,7 +5,8 @@
 //   - 路面：深灰色柏油；車道 3.75 公尺、內側路肩 1、外側路肩 3 公尺(電腦算好的路寬)
 //   - 標線：內側黃實線、外側白實線(寬 15 公分)、車道白色虛線(劃 4 公尺、空 6 公尺)；雙向道路中央雙黃線
 //   - 中央分隔：紐澤西水泥護欄＋綠色防眩板(主線往左多鋪 0.4 公尺，跟對向之間的空隙鋪滿)；
-//     窄的分隔島(上下行路面之間 4 公尺內)只畫一道、立在正中間，空隙鋪滿(電腦算好由哪一邊畫)
+//     在地面、上下行之間 5 公尺內：花台＋樹籬(兩道水泥護欄中間一整排修剪過、一團一團的灌木，不裝防眩板；電腦算好由哪一邊畫)
+//     5～30 公尺：兩道護欄＋防眩板，中間鋪草地(深淺不均、中間微微隆起、兩邊水泥緣石，夠寬的種一排灌木)
 //   - 外側：平地鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、橋上紐澤西水泥護欄；會落在別條路上的那段不畫
 //   - 高架：橋每層 6 公尺(電腦算好高度、上下交叉的淨空)；兩側 1.4 公尺深的箱型梁、底面、每 30 公尺一座橋墩(柱子＋帽梁)，
 //     橋墩不會立在底下別條路的路面上
@@ -48,7 +49,7 @@
     for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; coords.push([x / 1e6, y / 1e6]); }
     var n = coords.length, dd = e.d || [0, 0, 0, 0];
     return { id: r[0], link: !!(f & 1), cls: f & 2 ? 'trunk' : 'motorway', oneway: !!(f & 4), bridge: !!(f & 8), lanes: r[2], coords: coords,
-      W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [], aL: perPoint(e.aL, n, 0), aR: perPoint(e.aR, n, 0), skip: e.x || [], gores: e.g || [], medC: e.mc || [], medS: e.ms || [],
+      W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [], aL: perPoint(e.aL, n, 0), aR: perPoint(e.aR, n, 0), skip: e.x || [], gores: e.g || [], grass: e.mg || [], hedge: e.mh || [], medS: e.ms || [],
       dirB: dd[0] || dd[1] ? [dd[0] / 1e4, dd[1] / 1e4] : null, dirA: dd[2] || dd[3] ? [dd[2] / 1e4, dd[3] / 1e4] : null };
   }
   function loadIndex(cb) {
@@ -92,6 +93,11 @@
   function Bucket() { this.p = []; }
   Bucket.prototype.tri = function (a, b, c) { this.p.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); };
   Bucket.prototype.quad = function (a, b, c, d) { this.tri(a, b, c); this.tri(a, c, d); };
+  Bucket.prototype.quadC = function (a, b, c, d, col) {   // 帶顏色(草地)
+    this.quad(a, b, c, d);
+    if (!this.c) this.c = [];
+    for (var i = 0; i < 6; i++) this.c.push(col[0], col[1], col[2]);
+  };
   var JERSEY = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
   var WBEAM = [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]];   // 兩道凸起朝向車道
 
@@ -108,7 +114,7 @@
     if (!t) { building = null; return; }
     var ext = t.ext, origin = maplibregl.MercatorCoordinate.fromLngLat([(ext.w + ext.e) / 2, (ext.n + ext.s) / 2], 0);
     building = { t: t, i: 0, origin: origin, sc: origin.meterInMercatorCoordinateUnits(),
-      B: { asphalt: new Bucket(), concrete: new Bucket(), under: new Bucket(), steel: new Bucket(), glare: new Bucket(), lamp: new Bucket(), white: new Bucket(), yellow: new Bucket() }, geo: [] };
+      B: { asphalt: new Bucket(), concrete: new Bucket(), under: new Bucket(), grass: new Bucket(), steel: new Bucket(), glare: new Bucket(), lamp: new Bucket(), white: new Bucket(), yellow: new Bucket() }, geo: [] };
     requestAnimationFrame(buildSlice);
   }
   function buildSlice() {
@@ -130,6 +136,7 @@
   function makeMesh(k, bucket) {
     var T = window.THREE, g = new T.BufferGeometry();
     g.setAttribute('position', new T.Float32BufferAttribute(bucket.p, 3));
+    if (bucket.c) g.setAttribute('color', new T.Float32BufferAttribute(bucket.c, 3));
     if (k !== 'white' && k !== 'yellow' && k !== 'lamp') g.computeVertexNormals();   // 標線、燈面不受光照，不用法向量
     var mesh = new T.Mesh(g, mats[k]);
     if (k === 'white' || k === 'yellow') mesh.renderOrder = 2;
@@ -166,13 +173,12 @@
     for (i = 0; i + 1 < w.skip.length; i += 2) skip.push([w.skip[i] / 1e6 * L, w.skip[i + 1] / 1e6 * L]);
     skip.forEach(function (r) { hidden['1'].push(r); hidden['-1'].push(r); hidden['0'].push(r); });
     var inSkip = function (s) { return skip.some(function (r) { return s >= r[0] && s <= r[1]; }); };
-    // 窄分隔島：這邊負責畫的段落每點的空隙(公尺，-1 = 不是)；對向負責的段落中央護欄不畫
-    var medGap = S.map(function () { return -1; });
-    for (i = 0; i + 3 < w.medC.length; i += 4) {
-      var m0 = w.medC[i] / 1e6 * L, m1 = w.medC[i + 1] / 1e6 * L, g0 = w.medC[i + 2] / 100, g1 = w.medC[i + 3] / 100;
-      for (var mk = 0; mk < n; mk++) if (S[mk] >= m0 - 0.01 && S[mk] <= m1 + 0.01) medGap[mk] = Math.max(medGap[mk], g0 + (g1 - g0) * ((S[mk] - m0) / ((m1 - m0) || 1)));
-    }
+    // 窄分隔島的花台：這條負責畫的段落 → 每點空隙(-1 = 不是)；兩邊的一般中央護欄、防眩板都不畫
+    var hedgeR = [];
+    for (i = 0; i + 3 < w.hedge.length; i += 4) hedgeR.push([w.hedge[i] / 1e6 * L, w.hedge[i + 1] / 1e6 * L, w.hedge[i + 2] / 100, w.hedge[i + 3] / 100]);
+    hedgeR.forEach(function (h) { hidden['0'].push([h[0], h[1]]); });
     for (i = 0; i + 1 < w.medS.length; i += 2) hidden['0'].push([w.medS[i] / 1e6 * L, w.medS[i + 1] / 1e6 * L]);
+    var hedgeGap = S.map(function (sv) { for (var q = 0; q < hedgeR.length; q++) { var h = hedgeR[q]; if (sv >= h[0] - 0.01 && sv <= h[1] + 0.01) return h[2] + (h[3] - h[2]) * ((sv - h[0]) / ((h[1] - h[0]) || 1)); } return -1; });
     var ov = function (o, k) { return typeof o === 'number' ? o : o[k]; };
     var plus = function (o, d) { return typeof o === 'number' ? o + d : o.map(function (v) { return v + d; }); };
     var pt = function (k, o, y) { var v = ov(o, k); return [P[k][0] + R[k][0] * v, H[k] + y, P[k][1] + R[k][1] * v]; };
@@ -247,8 +253,8 @@
     };
     var onBridge = w.bridge;
     // 路面(主線往左多鋪 0.4 公尺：跟對向之間的空隙鋪滿；匝道沒有中央分隔，不多鋪)
-    //   窄分隔島由這邊畫的地方：整個空隙鋪滿
-    var deckL = w.oneway && !w.link ? nhalf.map(function (v, k) { return v - (medGap[k] >= 0 ? Math.max(MEDIAN_FILL, medGap[k]) : MEDIAN_FILL); }) : nhalf;
+    //   花台由這條畫的地方：空隙整個鋪滿
+    var deckL = w.oneway && !w.link ? nhalf.map(function (v, k) { return v - (hedgeGap[k] >= 0 ? Math.max(MEDIAN_FILL, hedgeGap[k]) : MEDIAN_FILL); }) : nhalf;
     strip(B.asphalt, deckL, half, 0.03);
     // 高架：兩側 1.4 公尺深的箱型梁、底面(離地不到 1.4 公尺的地方梁到地面為止)、每 30 公尺一座橋墩(柱子＋帽梁)
     var GD = 1.4, depth = function (k) { return Math.min(GD, H[k]); };
@@ -297,8 +303,7 @@
     if (w.oneway && w.link) edge(plus(nhalf, 0.3), -1, '-1');   // 匝道：左邊也是護欄(沒有中央分隔)
     if (w.oneway && !w.link) {
       // 中央分隔：紐澤西水泥護欄＋綠色防眩板(每 1 公尺一片、斜 60 度、0.85～1.5 公尺高)
-      //   窄分隔島：護欄中心立在兩邊路面正中間(護欄底寬 0.66)
-      var med = nhalf.map(function (v, k) { return medGap[k] >= 0 ? v - medGap[k] / 2 - 0.33 : v - 0.1; });
+      var med = plus(nhalf, -0.1);
       wall(B.concrete, med, 1, JERSEY, '0');
       every(1, 0.5, '0', function (k, tt) {
         var r = segR[k], f = [r[1], -r[0]], c = at(k, tt, plus(med, 0.33), 0), y0 = c[1] + 0.85, y1 = c[1] + 1.5;
@@ -308,6 +313,39 @@
       });
     }
     gore(w, origin, sc, B);
+    medianGrass(w, P, S, segR, R, H, nhalf, B);
+    // 花台＋樹籬：每 1 公尺一格；左右各一道紐澤西水泥護欄(這條的在自己左緣，對向的在對向左緣)，
+    //   中間的樹籬比護欄高出約 1 公尺，高度、寬度、顏色用位置算的雜訊一團一團變化(修剪過的灌木)
+    hedgeR.forEach(function (h) {
+      var smp = [];
+      for (var sv = h[0]; sv < h[1] + 0.99; sv += 1) {
+        var su = Math.min(sv, h[1]), k = 0; while (k < n - 2 && S[k + 1] < su) k++;
+        var t = (su - S[k]) / ((S[k + 1] - S[k]) || 1), g = Math.max(0.6, h[2] + (h[3] - h[2]) * ((su - h[0]) / ((h[1] - h[0]) || 1)));
+        smp.push({ s: su, k: k, t: t, e: nhalf[k] + (nhalf[k + 1] - nhalf[k]) * t, g: g });
+        if (su >= h[1]) break;
+      }
+      for (var q = 0; q < smp.length - 1; q++) {
+        var A0 = smp[q], A1 = smp[q + 1];
+        var P3 = function (sm, o, y) { return at(sm.k, sm.t, o, y); };
+        // 兩道護欄(對向的那道鏡射)
+        for (var j = 0; j < JERSEY.length - 1; j++) {
+          var p0 = JERSEY[j], p1 = JERSEY[j + 1];
+          B.concrete.quad(P3(A0, A0.e - 0.1 + p0[0], p0[1]), P3(A0, A0.e - 0.1 + p1[0], p1[1]), P3(A1, A1.e - 0.1 + p1[0], p1[1]), P3(A1, A1.e - 0.1 + p0[0], p0[1]));
+          B.concrete.quad(P3(A0, A0.e - A0.g + 0.1 - p0[0], p0[1]), P3(A0, A0.e - A0.g + 0.1 - p1[0], p1[1]), P3(A1, A1.e - A1.g + 0.1 - p1[0], p1[1]), P3(A1, A1.e - A1.g + 0.1 - p0[0], p0[1]));
+        }
+        // 樹籬斷面：從兩道護欄頂的內側長出來，往外鼓一點、頂上圓圓的
+        var prof = function (sm) {
+          var n1 = hash(Math.round(sm.s / 1.3), 3.1), n2 = hash(Math.round(sm.s / 0.7), 9.7), top = 1.75 + n1 * 0.25 + n2 * 0.08, bul = 0.08 + n2 * 0.08;
+          var xr = sm.e + 0.22, xl = sm.e - sm.g - 0.22, mid = (xr + xl) / 2;
+          return [[xr, 0.6], [xr + bul, 1.05], [xr - 0.05, top - 0.25], [mid + (xr - mid) * 0.45, top], [mid + (xl - mid) * 0.45, top], [xl + 0.05, top - 0.25], [xl - bul, 1.05], [xl, 0.6]];
+        };
+        var pa = prof(A0), pb = prof(A1), cs = HEDGE[Math.floor(hash(Math.round(A0.s), 5.5) * HEDGE.length)];
+        for (var c2 = 0; c2 < pa.length - 1; c2++) {
+          var shade = c2 === 3 ? 1.12 : (c2 === 2 || c2 === 4) ? 1.04 : 0.9, col = [cs[0] * shade, cs[1] * shade, cs[2] * shade];
+          B.grass.quadC(P3(A0, pa[c2][0], pa[c2][1]), P3(A0, pa[c2 + 1][0], pa[c2 + 1][1]), P3(A1, pb[c2 + 1][0], pb[c2 + 1][1]), P3(A1, pb[c2][0], pb[c2][1]), col);
+        }
+      }
+    });
     if (!w.oneway) {
       var per = Math.max(1, Math.floor(w.lanes / 2)), hl = per * LANE;
       strip(B.yellow, 0.06, 0.18, my); strip(B.yellow, -0.18, -0.06, my);   // 中央雙黃線
@@ -330,6 +368,67 @@
     });
     // 這條路的形狀：疊線(綠線、塞車、導航路線)、車子高度、電子看板高度用
     return { w: w, P: P, S: S, segR: segR, R: R, H: H, a: a, b: b, L: L, half: half, nhalf: nhalf };
+  }
+
+  // ── 中央分隔島草地：從這條路路面左緣(含多鋪的 0.4)到對向路面左緣，電腦算好空隙 ──
+  //   草：每 2 公尺一格、橫向 4 格，顏色用位置算的雜訊深淺不均(看起來是一塊塊的草皮)，中間微微隆起；
+  //   兩邊 0.2 公尺寬、0.15 公尺高的水泥緣石；空隙 2.5 公尺以上每 6 公尺一叢低矮灌木
+  var GRASS = [[0.33, 0.52, 0.22], [0.40, 0.58, 0.25], [0.29, 0.46, 0.20], [0.45, 0.60, 0.30], [0.36, 0.50, 0.24]];
+  var HEDGE = [[0.36, 0.55, 0.18], [0.42, 0.60, 0.20], [0.31, 0.50, 0.17], [0.47, 0.63, 0.24], [0.39, 0.57, 0.22]];   // 樹籬的綠(照片裡修剪過的灌木，偏黃綠)
+  function hash(x, y) { var h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); }
+  function medianGrass(w, P, S, segR, R, H, nhalf, B) {
+    if (!w.grass.length) return;
+    var n = P.length, L = S[n - 1];
+    for (var gi = 0; gi + 3 < w.grass.length; gi += 4) {
+      var s0 = w.grass[gi] / 1e6 * L, s1 = w.grass[gi + 1] / 1e6 * L, g0 = w.grass[gi + 2] / 100, g1 = w.grass[gi + 3] / 100;
+      // 沿路每 2 公尺取一點
+      var pts = [];
+      for (var sv = s0; sv < s1 + 1.99; sv += 2) {
+        var su = Math.min(sv, s1), k = 0; while (k < n - 2 && S[k + 1] < su) k++;
+        var t = (su - S[k]) / ((S[k + 1] - S[k]) || 1), r = segR[k];
+        var gap = g0 + (g1 - g0) * ((su - s0) / ((s1 - s0) || 1)), e0 = nhalf[k] + (nhalf[k + 1] - nhalf[k]) * t - MEDIAN_FILL;
+        pts.push({ s: su, c: [P[k][0] + (P[k + 1][0] - P[k][0]) * t, P[k][1] + (P[k + 1][1] - P[k][1]) * t], r: r, h: H[k] + (H[k + 1] - H[k]) * t, e0: e0, e1: e0 - (gap - 2 * MEDIAN_FILL), gap: gap });
+        if (su >= s1) break;
+      }
+      if (pts.length < 2) continue;
+      var at = function (p, o, y) { return [p.c[0] + p.r[0] * o, p.h + y, p.c[1] + p.r[1] * o]; };
+      var CURB = 0.2, CH = 0.15, COLS = 4;
+      for (var q = 0; q < pts.length - 1; q++) {
+        var A = pts[q], Bp = pts[q + 1];
+        if (A.e0 - A.e1 < 0.5 || Bp.e0 - Bp.e1 < 0.5) continue;
+        // 緣石(兩邊)
+        [[A.e0, Bp.e0, -1], [A.e1, Bp.e1, 1]].forEach(function (cb) {
+          var o0 = cb[0], o1 = cb[1], d = cb[2];
+          B.concrete.quad(at(A, o0, 0.02), at(Bp, o1, 0.02), at(Bp, o1, CH), at(A, o0, CH));
+          B.concrete.quad(at(A, o0, CH), at(Bp, o1, CH), at(Bp, o1 + d * CURB, CH), at(A, o0 + d * CURB, CH));
+        });
+        // 草地：橫向 COLS 格，中間隆起
+        var rise = function (p) { return Math.min(0.3, (p.e0 - p.e1) * 0.06); };
+        for (var cI = 0; cI < COLS; cI++) {
+          var f0 = cI / COLS, f1 = (cI + 1) / COLS;
+          var off = function (p, f) { var a0 = p.e0 - CURB, a1 = p.e1 + CURB; return a0 + (a1 - a0) * f; };
+          var yy = function (p, f) { return CH - 0.03 + rise(p) * Math.sin(Math.PI * f); };
+          var col = GRASS[Math.floor(hash(Math.round(A.s / 2), cI + Math.round(A.c[0] / 50)) * GRASS.length)];
+          B.grass.quadC(at(A, off(A, f0), yy(A, f0)), at(A, off(A, f1), yy(A, f1)), at(Bp, off(Bp, f1), yy(Bp, f1)), at(Bp, off(Bp, f0), yy(Bp, f0)), col);
+        }
+        // 灌木：空隙 2.5 公尺以上，每 6 公尺一叢(位置、大小稍微錯開)
+        if (A.gap >= 2.5 && Math.floor(A.s / 6) !== Math.floor(Bp.s / 6)) {
+          var hh = hash(Math.floor(Bp.s / 6), 7.3), rad = 0.45 + hh * 0.35, ht = 0.6 + hh * 0.5;
+          var mid = (A.e0 + A.e1) / 2 + (hh - 0.5) * Math.min(1, (A.e0 - A.e1) * 0.2), base = at(A, mid, CH - 0.03 + rise(A));
+          bush(B, base, rad, ht, A.r);
+        }
+      }
+    }
+  }
+  function bush(B, c, rad, ht, r) {   // 低矮灌木：上下兩圈八角形縮起來的一團(深綠)
+    var f = [r[1], -r[0]], ring = function (y, rr) { var o = []; for (var q = 0; q < 8; q++) { var a = q / 8 * Math.PI * 2, cs = Math.cos(a) * rr, sn = Math.sin(a) * rr; o.push([c[0] + r[0] * cs + f[0] * sn, c[1] + y, c[2] + r[1] * cs + f[1] * sn]); } return o; };
+    var r0 = ring(0, rad * 0.75), r1 = ring(ht * 0.55, rad), r2 = ring(ht, rad * 0.45), col = [0.20, 0.36, 0.16], col2 = [0.25, 0.43, 0.19];
+    for (var q = 0; q < 8; q++) {
+      var q2 = (q + 1) % 8;
+      B.grass.quadC(r0[q], r0[q2], r1[q2], r1[q], col);
+      B.grass.quadC(r1[q], r1[q2], r2[q2], r2[q], col2);
+      B.grass.quadC(r2[q], r2[q2], [c[0], c[1] + ht * 1.08, c[2]], [c[0], c[1] + ht * 1.08, c[2]], col2);
+    }
   }
 
   // ── 槽化區：本線路面邊緣(l)到匝道路面邊緣(r)之間鋪柏油、畫白邊線和斜線(每 6 公尺一條) ──
@@ -394,6 +493,7 @@
       asphalt: new T.MeshLambertMaterial({ color: 0x4A4D52, side: ds }),
       concrete: new T.MeshLambertMaterial({ color: 0xCFCCC4, side: ds }),
       under: new T.MeshLambertMaterial({ color: 0x9A978F, side: ds }),   // 橋面版底面(陰影處)
+      grass: new T.MeshLambertMaterial({ vertexColors: true, side: ds }),   // 分隔島草地、灌木(每格自己的顏色)
       steel: new T.MeshPhongMaterial({ color: 0xC4CACF, specular: 0x8A8F94, shininess: 60, side: ds }),
       glare: new T.MeshLambertMaterial({ color: 0x3F8A55, side: ds }),
       lamp: new T.MeshBasicMaterial({ color: 0xFFF3C4, side: ds }),   // 路燈燈面(看起來是亮的)
