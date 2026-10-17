@@ -347,7 +347,8 @@
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
-    var go = function () { m.on('moveend', check); check(); };
+    var lastMove = 0;
+    var go = function () { m.on('moveend', check); m.on('move', function () { var now = Date.now(); if (now - lastMove > 1500) { lastMove = now; check(); } }); check(); };   // 導航時鏡頭一直在動：移動中也更新
     if (m.loaded()) go(); else m.once('load', go);
     pageTimer = setInterval(rotatePages, PAGE_MS);
     document.addEventListener('visibilitychange', autoLoad);

@@ -474,7 +474,7 @@
   var OV_STYLE = {   // 每種線：外框寬、內線寬(公尺)、高度(比路面高一點，順序：綠色底圖 < 塞車 / 路線 < 已行駛灰色)
     green: { cw: 3.2, iw: 2.4, y: 0.065 }, traffic: { cw: 3.2, iw: 2.4, y: 0.075 }, route: { cw: 3.2, iw: 2.4, y: 0.075 }, passed: { cw: 3.2, iw: 2.4, y: 0.085 }
   };
-  var ovData = {}, ovItems = [], ovTimer = null, ovGreen = false;
+  var ovData = {}, ovItems = [], ovTimer = null, ovGreen = false, ovCache = {}, ovSig = '';
   // 接手這些圖層的資料：原本的 setData 先存起來，算好「地面那份」再交給它
   function hookSources() {
     var m = window.map;
@@ -487,7 +487,9 @@
       src.setData = function (d) { ovData[OV_SRC[id]] = d; ovSoon(); return src; };
     });
   }
-  function ovSoon() { clearTimeout(ovTimer); ovTimer = setTimeout(applyOverlays, 120); }
+  // 最多每 1.5 秒重算一次(導航中路線、已行駛的灰色每秒都在更新，每次都重算會卡)
+  var ovLast = 0;
+  function ovSoon() { clearTimeout(ovTimer); ovTimer = setTimeout(function () { ovLast = Date.now(); applyOverlays(); }, Math.max(120, 1500 - (Date.now() - ovLast))); }
   // 地面的國道綠線：放大到 3D 出現時藏起來(改畫在路面上)
   //   底圖自己的國道線(橘色那幾層，隧道除外)也一起藏，不然高架底下的地面會露出一條
   function hideFlatFreeway() {
@@ -612,6 +614,20 @@
     }
     return out;
   }
+  // 把線切成「在範圍裡 / 外」的幾段(範圍外多留 50 公尺重疊，接得起來)
+  function splitByBox(lines, b) {
+    var out = [], inB = function (c) { return c[0] >= b.w && c[0] <= b.e && c[1] >= b.s && c[1] <= b.n; };
+    lines.forEach(function (cs) {
+      var cur = null;
+      for (var i = 0; i < cs.length; i++) {
+        var ins = inB(cs[i]);
+        if (!cur || cur.inside !== ins) { if (cur) { cur.c.push(cs[i]); out.push(cur); } cur = { inside: ins, c: i ? [cs[i - 1], cs[i]] : [cs[i]] }; }
+        else cur.c.push(cs[i]);
+      }
+      if (cur && cur.c.length > 1) out.push(cur);
+    });
+    return out;
+  }
   function linesOf(f) {
     var g = f && f.geometry;
     if (!g) return [];
@@ -633,29 +649,45 @@
     var m = window.map;
     if (!m) return;
     hookSources();
-    var on = active(), items = [];
+    var on = active(), items = [], box = loadedBox();
+    wayGrid();
     Object.keys(OV_SRC).forEach(function (id) {
       var kind = OV_SRC[id], src = m.getSource(id), data = ovData[kind];
       if (!src || !src._snmOrig) return;
+      // 資料、抓到的路、放大縮小都沒變：沿用上次算好的(不重算、也不重設地面那份)
+      var c = ovCache[kind];
+      if (c && c.data === data && c.gCount === gCount && c.on === on) { items.push.apply(items, c.items); return; }
+      // 已行駛的灰色每秒都在變長：最多每 5 秒重算一次
+      if (c && kind === 'passed' && c.on === on && Date.now() - c.at < 5000) { items.push.apply(items, c.items); ovSoon(); return; }
+      var mine = [];
+      ovCache[kind] = { data: data, gCount: gCount, on: on, items: mine, at: Date.now() };
       if (!data || !data.features) { if (data) src._snmOrig(data); return; }
-      if (!on) { src._snmOrig(data); return; }
+      if (!on || !box) { src._snmOrig(data); return; }
       var keep = [];
       data.features.forEach(function (f) {
         var p = f.properties || {}, lines = linesOf(f);
         if (!lines.length || !lines.some(inLoaded) || (kind === 'traffic' && p.roadClass !== 'motorway' && p.roadClass !== 'trunk')) { keep.push(f); return; }
-        lines.forEach(function (cs) {
+        // 只對已經抓到 3D 路的範圍裡那一段(整條路線 150 公里只算畫面附近)，範圍外的直接留在地面
+        splitByBox(lines, box).forEach(function (part) {
+          if (!part.inside) { keep.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: part.c }, properties: p }); return; }
+          var cs = part.c;
           var r = matchLine(cs);
-          r.on.forEach(function (x) { items.push({ kind: kind, w: x.w, f0: x.f0, f1: x.f1, opp: x.opp, color: p.color || (kind === 'passed' ? '#C9CDD2' : '#16E098'), casing: p.casing || (kind === 'passed' ? '#9AA0A6' : kind === 'traffic' ? ({ moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' }[p.trafficLevel] || '#009B65') : '#009B65') }); });
-          r.off.forEach(function (c) { keep.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: c }, properties: p }); });
+          r.on.forEach(function (x) { mine.push({ kind: kind, w: x.w, f0: x.f0, f1: x.f1, opp: x.opp, color: p.color || (kind === 'passed' ? '#C9CDD2' : '#16E098'), casing: p.casing || (kind === 'passed' ? '#9AA0A6' : kind === 'traffic' ? ({ moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' }[p.trafficLevel] || '#009B65') : '#009B65') }); });
+          r.off.forEach(function (c2) { keep.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: c2 }, properties: p }); });
         });
       });
       src._snmOrig({ type: 'FeatureCollection', features: keep });
+      items.push.apply(items, mine);
     });
     // 綠色底圖：地面那份看得到的時候，每條國道、快速道路的 3D 路面都畫綠線
     var gl = m.getLayer('snm-roads-line-freeway');
     ovGreen = on && !!gl && m.getLayoutProperty('snm-roads-line-freeway', 'visibility') !== 'none';
     if (on) hideFlatFreeway();
+    // 畫在路面上的線跟上次一樣就不用重建模型
+    var sig = (ovGreen ? 'G' : '') + items.map(function (it) { return it.kind + it.w.id + ':' + it.f0.toFixed(4) + '-' + it.f1.toFixed(4) + it.color; }).join('|');
     ovItems = items;
+    if (sig === ovSig) { m.triggerRepaint(); return; }
+    ovSig = sig;
     Object.keys(tiles).forEach(function (k) { if (tiles[k].chunk) addOverlay(tiles[k].chunk); });
     m.triggerRepaint();
   }
@@ -869,7 +901,13 @@
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
-    var go = function () { m.on('moveend', function () { clearTimeout(timer); timer = setTimeout(check, 250); }); check(); };
+    var go = function () {
+      m.on('moveend', function () { clearTimeout(timer); timer = setTimeout(check, 250); });
+      // 導航時鏡頭一直跟著車子動、不會有「移動結束」：移動中也每 0.7 秒檢查一次(開到新的地方才抓得到 3D 路)
+      var lastMove = 0;
+      m.on('move', function () { var now = Date.now(); if (now - lastMove > 700) { lastMove = now; check(); } });
+      check();
+    };
     // 主程式會重排路線圖層(放到 3D 建築下面)：重排後把 3D 路面再放回它們上面
     var placing = false;
     m.on('styledata', function () {

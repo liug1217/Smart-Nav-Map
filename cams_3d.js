@@ -12,7 +12,7 @@
   var MIN_ZOOM = 16, MAX_MODELS = 60;
   var LAYER = 'snm-cams-3d', HIT_SRC = 'snm-cams-hit', HIT_LAYER = 'cams-hit';
   var SOURCES = [{ id: 'cctv', kind: 'cctv', icon: 'cctv-point' }, { id: 'speed-cam', kind: 'speed', icon: 'speed-point' }];
-  var renderer = null, camera = null, visible = [], models = {}, timer = null, roadLines = null;
+  var renderer = null, camera = null, visible = [], models = {}, timer = null, roadLines = null, placed = {}, roadGen = 0;
 
   var KX = function (lat) { return 111320 * Math.cos(lat * Math.PI / 180); }, KY = 110540;
   function dist(a, b) { return Math.hypot((b[0] - a[0]) * KX(a[1]), (b[1] - a[1]) * KY); }
@@ -129,7 +129,7 @@
     if (m.getZoom() < MIN_ZOOM) { if (visible.length) { visible = []; m.triggerRepaint(); } return; }
     if (!m.getLayer(LAYER)) m.addLayer(customLayer, m.getLayer('user-car') ? 'user-car' : undefined);
     fadeIcons();
-    roadLines = null;
+    roadLines = null;   // 只有要算新的位置時才會用到(nearestRoad 第一次用才抓)
     var b = m.getBounds(), c = m.getCenter(), padX = (b.getEast() - b.getWest()) * 0.2, padY = (b.getNorth() - b.getSouth()) * 0.2, list = [];
     SOURCES.forEach(function (s) {
       var src = m.getSource(s.id), d = src && src._data;
@@ -144,7 +144,8 @@
     list.sort(function (x, y) { return dist(x.p, [c.lng, c.lat]) - dist(y.p, [c.lng, c.lat]); });
     visible = list.slice(0, MAX_MODELS);
     visible.forEach(function (v) {
-      var pl = placeOf(v.p, v.kind), md = models[v.key];
+      // 位置算過就記住(監視器、測速照相不會動)；3D 路面剛載入時再重算一次
+      var pl = placed[v.key] && placed[v.key].gen === roadGen ? placed[v.key] : (placed[v.key] = Object.assign(placeOf(v.p, v.kind), { gen: roadGen })), md = models[v.key];
       if (!md || md.arm !== pl.arm) { if (md) dispose(md); md = models[v.key] = buildModel(v.kind, pl.arm); md.arm = pl.arm; }
       md.group.rotation.y = -pl.bearing * Math.PI / 180;
       md.matrix = modelMatrix(pl);
@@ -191,9 +192,10 @@
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
-    var go = function () { m.on('moveend', soon); soon(); };
+    var lastMove = 0;
+    var go = function () { m.on('moveend', soon); m.on('move', function () { var now = Date.now(); if (now - lastMove > 1500) { lastMove = now; soon(); } }); soon(); };   // 導航時鏡頭一直在動：移動中也更新
     if (m.loaded()) go(); else m.once('load', go);
-    window.addEventListener('snm-road3d-data', soon);   // 3D 路面載入後照路面重新擺
+    window.addEventListener('snm-road3d-data', function () { roadGen++; soon(); });   // 3D 路面載入後照路面重新擺
     // three.js 由 road_3d.js 載入；還沒好就等一下
     var wait = setInterval(function () { if (window.THREE) { clearInterval(wait); soon(); } }, 500);
   }

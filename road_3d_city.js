@@ -16,7 +16,7 @@
     minor:     { lanes: 1, lane: 3.0, edge: 0, y: 0.018, mark: 'none', fixedW: 6 },
     service:   { lanes: 1, lane: 2.0, edge: 0, y: 0.014, mark: 'none', fixedW: 4 }
   };
-  var renderer = null, camera = null, chunk = null, timer = null, builtFor = null, mats = null;
+  var renderer = null, camera = null, chunk = null, timer = null, builtFor = null, mats = null, dirty = false;
 
   function widthOf(c, oneway) {
     var k = CLASS[c];
@@ -52,9 +52,12 @@
     });
     // 圖磚切邊多出來的小尾巴：只接一條路的端點，又剛好落在別條路線上(0.5 公尺內) → 是切出來的，拿掉
     var kx = 111320 * Math.cos((b.s + b.n) / 2 * Math.PI / 180), ky = 110540;
+    var eg = {};   // 線段格子(找附近的線段快很多)
+    Object.keys(edges).forEach(function (key) { var e = edges[key]; for (var gx = Math.floor(Math.min(e.a[0], e.c[0]) * 2000); gx <= Math.floor(Math.max(e.a[0], e.c[0]) * 2000); gx++) for (var gy = Math.floor(Math.min(e.a[1], e.c[1]) * 2000); gy <= Math.floor(Math.max(e.a[1], e.c[1]) * 2000); gy++) (eg[gx + ',' + gy] = eg[gx + ',' + gy] || []).push(key); });
     var onOther = function (pt, self) {
-      for (var key in edges) {
-        var e = edges[key]; if (key === self) continue;
+      var near = eg[Math.floor(pt[0] * 2000) + ',' + Math.floor(pt[1] * 2000)] || [];
+      for (var q = 0; q < near.length; q++) {
+        var key = near[q], e = edges[key]; if (!e || key === self) continue;
         var ax = (e.a[0] - pt[0]) * kx, ay = (e.a[1] - pt[1]) * ky, cx = (e.c[0] - pt[0]) * kx, cy = (e.c[1] - pt[1]) * ky, dx = cx - ax, dy = cy - ay, L2 = dx * dx + dy * dy;
         if (!L2) continue;
         var t = -(ax * dx + ay * dy) / L2;
@@ -107,7 +110,7 @@
 
   function build() {
     var m = window.map, T = window.THREE, RS = window.RoadShape;
-    var bb = m.getBounds(), pw = (bb.getEast() - bb.getWest()) * 0.25, ph = (bb.getNorth() - bb.getSouth()) * 0.25;
+    var bb = m.getBounds(), pw = (bb.getEast() - bb.getWest()) * 0.6, ph = (bb.getNorth() - bb.getSouth()) * 0.6;   // 多建一點範圍，開車時不用一直重建
     var box = { w: bb.getWest() - pw, e: bb.getEast() + pw, s: bb.getSouth() - ph, n: bb.getNorth() + ph };
     var roads = collect(box);
     var c = m.getCenter(), origin = maplibregl.MercatorCoordinate.fromLngLat([c.lng, c.lat], 0), sc = origin.meterInMercatorCoordinateUnits();
@@ -196,7 +199,7 @@
     var matrix = new T.Matrix4().makeTranslation(origin.x, origin.y, origin.z).scale(new T.Vector3(sc, -sc, sc)).multiply(new T.Matrix4().makeRotationAxis(new T.Vector3(1, 0, 0), Math.PI / 2));
     if (chunk) chunk.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
     chunk = { scene: scene, matrix: matrix };
-    builtFor = { box: box, zoom: m.getZoom() };
+    builtFor = { box: box, zoom: m.getZoom(), at: Date.now() }; dirty = false;
     m.triggerRepaint();
   }
   function makeMats() {
@@ -239,7 +242,9 @@
     if (!m.getLayer(LAYER)) m.addLayer(customLayer, beforeId(m));
     // 畫面還在上次建好的範圍裡(而且縮放差不多)就不用重建
     var b = m.getBounds();
-    if (builtFor && b.getWest() >= builtFor.box.w && b.getEast() <= builtFor.box.e && b.getSouth() >= builtFor.box.s && b.getNorth() <= builtFor.box.n && Math.abs(m.getZoom() - builtFor.zoom) < 1.5) return;
+    // 畫面還在上次建好的範圍裡(而且縮放差不多)：不重建；道路資料又載入了新的(dirty)也最多每 5 秒才重建一次(導航中一直在載，每次都建會卡)
+    var inside = builtFor && b.getWest() >= builtFor.box.w && b.getEast() <= builtFor.box.e && b.getSouth() >= builtFor.box.s && b.getNorth() <= builtFor.box.n && Math.abs(m.getZoom() - builtFor.zoom) < 1.5;
+    if (inside && !(dirty && Date.now() - builtFor.at > 5000)) return;
     build();
   }
   function soon(force) { if (force) builtFor = null; clearTimeout(timer); timer = setTimeout(check, 300); }
@@ -249,7 +254,9 @@
     if (!m) { setTimeout(init, 500); return; }
     var go = function () {
       m.on('moveend', function () { soon(); });
-      m.on('sourcedata', function (e) { if (e.isSourceLoaded && (e.sourceId === 'openmaptiles' || e.sourceId === 'snm-roads') && m.getZoom() >= MIN_ZOOM) soon(true); });   // 道路資料載完再建一次
+      var lastMove = 0;   // 導航時鏡頭一直在動：移動中也每 1 秒檢查(離開上次建好的範圍才重建)
+      m.on('move', function () { var now = Date.now(); if (now - lastMove > 1000) { lastMove = now; check(); } });
+      m.on('sourcedata', function (e) { if (e.isSourceLoaded && (e.sourceId === 'openmaptiles' || e.sourceId === 'snm-roads') && m.getZoom() >= MIN_ZOOM) { dirty = true; if (!builtFor) soon(); } });   // 道路資料載完：記下來，之後再建(不要每載一塊就重建)
       soon(true);
     };
     if (m.loaded()) go(); else m.once('load', go);
