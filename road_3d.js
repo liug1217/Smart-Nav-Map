@@ -98,7 +98,10 @@
     if (!this.c) this.c = [];
     for (var i = 0; i < 6; i++) this.c.push(col[0], col[1], col[2]);
   };
-  var JERSEY = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
+  // 紐澤西水泥護欄：只有面向車道那一面是斜的(下緣兩段斜角)，背面是直的
+  //   JERSEY_IN：車道在 x 大的那邊(中央分隔、花台)；JERSEY_OUT：車道在 x = 0 那邊(橋上外側)
+  var JERSEY_IN = [[0.2, 0], [0.2, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
+  var JERSEY_OUT = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.46, 0.85], [0.46, 0]];
   var WBEAM = [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]];   // 兩道凸起朝向車道
 
   // 分批建：一塊圖磚可能有一百多條路、上萬個點，一次建完畫面會卡住一秒多；
@@ -286,7 +289,7 @@
     }
     var my = 0.06;
     var edge = function (o, side, hs) {   // 外側：橋上紐澤西水泥護欄(外緣貼齊路面邊緣)、平地鋼板護欄
-      if (onBridge) wall(B.concrete, plus(o, -0.36 * side), side, JERSEY, hs); else guardrail(o, side, hs);
+      if (onBridge) wall(B.concrete, plus(o, -0.36 * side), side, JERSEY_OUT, hs); else guardrail(o, side, hs);
     };
     if (w.oneway) {
       // 內側黃實線、外側白實線：有加寬(減速 / 加速車道)的地方跟著往外移，原本的位置改畫虛線(加寬超過 1 公尺的地方)
@@ -304,7 +307,7 @@
     if (w.oneway && !w.link) {
       // 中央分隔：紐澤西水泥護欄＋綠色防眩板(每 1 公尺一片、斜 60 度、0.85～1.5 公尺高)
       var med = plus(nhalf, -0.1);
-      wall(B.concrete, med, 1, JERSEY, '0');
+      wall(B.concrete, med, 1, JERSEY_IN, '0');
       every(1, 0.5, '0', function (k, tt) {
         var r = segR[k], f = [r[1], -r[0]], c = at(k, tt, plus(med, 0.33), 0), y0 = c[1] + 0.85, y1 = c[1] + 1.5;
         var u = [f[0] * 0.5 + r[0] * 0.866, f[1] * 0.5 + r[1] * 0.866], v = [-u[1], u[0]];
@@ -328,16 +331,16 @@
         var A0 = smp[q], A1 = smp[q + 1];
         var P3 = function (sm, o, y) { return at(sm.k, sm.t, o, y); };
         // 兩道護欄(對向的那道鏡射)
-        for (var j = 0; j < JERSEY.length - 1; j++) {
-          var p0 = JERSEY[j], p1 = JERSEY[j + 1];
+        for (var j = 0; j < JERSEY_IN.length - 1; j++) {
+          var p0 = JERSEY_IN[j], p1 = JERSEY_IN[j + 1];
           B.concrete.quad(P3(A0, A0.e - 0.1 + p0[0], p0[1]), P3(A0, A0.e - 0.1 + p1[0], p1[1]), P3(A1, A1.e - 0.1 + p1[0], p1[1]), P3(A1, A1.e - 0.1 + p0[0], p0[1]));
           B.concrete.quad(P3(A0, A0.e - A0.g + 0.1 - p0[0], p0[1]), P3(A0, A0.e - A0.g + 0.1 - p1[0], p1[1]), P3(A1, A1.e - A1.g + 0.1 - p1[0], p1[1]), P3(A1, A1.e - A1.g + 0.1 - p0[0], p0[1]));
         }
-        // 樹籬斷面：從兩道護欄頂的內側長出來，往外鼓一點、頂上圓圓的
+        // 樹籬斷面：整個收在兩道護欄直立的背面之間(不壓到護欄上)，側面直上去、頂上圓圓的
         var prof = function (sm) {
-          var n1 = hash(Math.round(sm.s / 1.3), 3.1), n2 = hash(Math.round(sm.s / 0.7), 9.7), top = 1.75 + n1 * 0.25 + n2 * 0.08, bul = 0.08 + n2 * 0.08;
-          var xr = sm.e + 0.22, xl = sm.e - sm.g - 0.22, mid = (xr + xl) / 2;
-          return [[xr, 0.6], [xr + bul, 1.05], [xr - 0.05, top - 0.25], [mid + (xr - mid) * 0.45, top], [mid + (xl - mid) * 0.45, top], [xl + 0.05, top - 0.25], [xl - bul, 1.05], [xl, 0.6]];
+          var n1 = hash(Math.round(sm.s / 1.3), 3.1), n2 = hash(Math.round(sm.s / 0.7), 9.7), top = 1.75 + n1 * 0.25 + n2 * 0.08;
+          var xr = sm.e + 0.07, xl = sm.e - sm.g - 0.07, mid = (xr + xl) / 2, rr = Math.min(0.15, (xr - xl) * 0.25);
+          return [[xr, 0.5], [xr, top - 0.32], [xr - rr, top - 0.08], [mid + (xr - mid) * 0.4, top], [mid + (xl - mid) * 0.4, top], [xl + rr, top - 0.08], [xl, top - 0.32], [xl, 0.5]];
         };
         var pa = prof(A0), pb = prof(A1), cs = HEDGE[Math.floor(hash(Math.round(A0.s), 5.5) * HEDGE.length)];
         for (var c2 = 0; c2 < pa.length - 1; c2++) {
