@@ -4,7 +4,8 @@
 //   - 標線：車道線白色虛線(劃 4 公尺、空 6 公尺)、外側路面邊線白色實線、內側路面邊線黃色實線；雙向道路中間雙黃線
 //   - 護欄：外側鋼板護欄(W 型鋼板＋每 4 公尺一根立柱)、中央分隔混凝土護欄(紐澤西護欄)、橋上兩側混凝土護欄
 //   - 匝道進出口(分流、匯流)那段不畫外側護欄，車道才接得起來
-//   - 轉角都改成貝茲曲線(彎道圓順)，匝道接點不動
+//   - 轉角都改成貝茲曲線(彎道圓順)，匝道接點不動；接續的路接縫斜接、車道數不同時寬度漸變(road_3d_shape.js)
+//   - 電腦先修好的：對向車道疊在一起已推開(中間 0.8 公尺鋪滿)、沒標的車道數已推好、會落在別條路上的護欄那段不畫
 // 資料：OpenStreetMap 的車道數 lanes、單行道、橋梁，事先切成 zoom 13 圖磚的小檔案(road3d/，用 tools/build-road3d.js 產生)，
 //       只抓畫面附近那幾塊、同一塊只抓一次。沒標車道數的用一般值：國道 3、快速道路 2、匝道 1。
 //       檔案抓不到(離線)時改用底圖的道路線。
@@ -56,8 +57,10 @@
         return (j.w || []).map(function (r) {
           var f = r[1], d = r[4], x = d[0], y = d[1], coords = [[x / 1e6, y / 1e6]];
           for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; coords.push([x / 1e6, y / 1e6]); }
-          return makeWay('o' + r[0], f & 2 ? 'trunk' : 'motorway', !!(f & 1), coords, null,
+          var w = makeWay('o' + r[0], f & 2 ? 'trunk' : 'motorway', !!(f & 1), coords, null,
             { oneway: f & 4 ? 'yes' : 'no', lanes: r[2] || '', bridge: f & 8 ? 'yes' : '', layer: r[3] });
+          w.hide = (r[5] && r[5].h) || [];   // 這幾段護欄不畫(電腦算好：會落在別條路上)[邊, 起, 迄(占整條的比例 × 1e6)]
+          return w;
         });
       });
   }
@@ -192,102 +195,109 @@
   }
 
   function buildWay(w, origin, sc, B, nearJunc) {
+    var RS = window.RoadShape;
     // 經緯度 → 這塊圖磚的公尺座標(x 東、z 南)
+    var local = function (c) { var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0); return [(m.x - origin.x) / sc, (m.y - origin.y) / sc]; };
     var P0 = [], shared = [], last = null;
     w.coords.forEach(function (c, ci) {
-      var m = maplibregl.MercatorCoordinate.fromLngLat(c, 0), p = [(m.x - origin.x) / sc, (m.y - origin.y) / sc];
+      var p = local(c);
       if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.3) { P0.push(p); shared.push((nodeIdx[nodeKey(w, ci)] || []).length > 1); last = p; }
     });
     if (P0.length < 2) return;
-    // 貝茲曲線：每個轉角改成二次貝茲曲線(兩邊各取一段，不超過那段的一半、最多 40 公尺，控制點 = 原本的轉角)，
-    // 彎道變圓順、還是貼著原本的線走；跟別條路共用的點(匝道接點)不動，路才接得起來
-    var P = [P0[0]], add = function (p) { var q = P[P.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.05) P.push(p); };   // 相鄰兩個轉角的曲線剛好接在一起時不要重複點
-    for (var c0 = 1; c0 < P0.length - 1; c0++) {
-      var pa = P0[c0 - 1], pb = P0[c0], pc = P0[c0 + 1];
-      var la = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), lc = Math.hypot(pc[0] - pb[0], pc[1] - pb[1]);
-      var cosT = ((pb[0] - pa[0]) * (pc[0] - pb[0]) + (pb[1] - pa[1]) * (pc[1] - pb[1])) / (la * lc || 1);
-      var deg = Math.acos(Math.max(-1, Math.min(1, cosT))) * 180 / Math.PI;
-      if (shared[c0] || deg < 1) { add(pb); continue; }
-      var dd = Math.min(40, la / 2, lc / 2), q0 = [pb[0] + (pa[0] - pb[0]) * dd / la, pb[1] + (pa[1] - pb[1]) * dd / la], q2 = [pb[0] + (pc[0] - pb[0]) * dd / lc, pb[1] + (pc[1] - pb[1]) * dd / lc];
-      var steps = Math.max(2, Math.ceil(deg / 3));
-      for (var j0 = 0; j0 <= steps; j0++) {
-        var tb = j0 / steps, u0 = (1 - tb) * (1 - tb), u1 = 2 * (1 - tb) * tb, u2 = tb * tb;
-        add([u0 * q0[0] + u1 * pb[0] + u2 * q2[0], u0 * q0[1] + u1 * pb[1] + u2 * q2[1]]);
-      }
-    }
-    add(P0[P0.length - 1]);
+    // 形狀(road_3d_shape.js，跟電腦算的一模一樣)：轉角貝茲曲線(接點不動)；接續的路：接縫斜接方向用兩條平均、車道數不同時寬度漸變
+    var P = RS.curve(P0, shared);
     if (P.length < 2) return;
-    var n = P.length, S = [0];
-    for (var i = 1; i < n; i++) S[i] = S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
-    var L = S[n - 1];
-    // 每段的右手方向(行車方向的右邊)；頂點用相鄰兩段平均(斜接，最多放大 2 倍)
-    var segR = [];
-    for (i = 0; i < n - 1; i++) { var dx = P[i + 1][0] - P[i][0], dz = P[i + 1][1] - P[i][1], d = Math.hypot(dx, dz); segR.push([-dz / d, dx / d]); }
-    var R = P.map(function (_, k) {
-      var a = segR[Math.max(0, k - 1)], b = segR[Math.min(n - 2, k)], x = a[0] + b[0], z = a[1] + b[1], l = Math.hypot(x, z) || 1;
-      x /= l; z /= l;
-      var cos = x * b[0] + z * b[1], f = Math.min(2, 1 / Math.max(0.5, cos));
-      return [x * f, z * f];
-    });
-    // 高度
-    var hb = baseH(w), hs = endH(w, 0), he = endH(w, w.coords.length - 1), ramp = Math.min(150, L / 2);
-    var H = S.map(function (s) {
-      return hb + (hs - hb) * Math.max(0, 1 - s / ramp) + (he - hb) * Math.max(0, 1 - (L - s) / ramp);
-    });
-    var pt = function (k, o, y) { return [P[k][0] + R[k][0] * o, H[k] + y, P[k][1] + R[k][1] * o]; };
+    var cont = function (atEnd) {   // 接續的路：這個點只有兩條路用，一條在這裡結束、一條在這裡開始
+      var list = nodeIdx[nodeKey(w, atEnd ? w.coords.length - 1 : 0)] || [];
+      if (list.length !== 2) return null;
+      var o = list[0].w === w ? list[1] : list[0];
+      if (o.w === w || o.w.oneway !== w.oneway || (atEnd ? o.i !== 0 : o.i !== o.w.coords.length - 1)) return null;
+      return o.w;
+    };
+    var dirOf = function (o, atEnd) {   // 那條路原始線的第一段 / 最後一段方向
+      var c = o.coords, A = local(atEnd ? c[c.length - 2] : c[0]), Bp = local(atEnd ? c[c.length - 1] : c[1]), l = Math.hypot(Bp[0] - A[0], Bp[1] - A[1]) || 1;
+      return [(Bp[0] - A[0]) / l, (Bp[1] - A[1]) / l];
+    };
+    var prev = cont(false), next = cont(true);
+    var fr = RS.frame(P, function (tx, tz) { return [-tz, tx]; }, prev ? dirOf(prev, true) : null, next ? dirOf(next, false) : null);
+    var n = P.length, S = fr.S, segR = fr.seg, R = fr.R, L = S[n - 1], i;
+    var Wv = RS.widths(w, S, prev ? RS.widthOf(prev) : null, next ? RS.widthOf(next) : null);
+    var hb = baseH(w), H = RS.heights(S, hb, endH(w, 0), endH(w, w.coords.length - 1));
+    // 護欄不畫的段落(沿路距離)：1 右、-1 左、0 中央
+    var hidden = { '1': [], '-1': [], '0': [] };
+    for (i = 0; i + 2 < w.hide.length; i += 3) hidden[w.hide[i]].push([w.hide[i + 1] / 1e6 * L, w.hide[i + 2] / 1e6 * L]);
+    // 偏移：一個數字 = 整條一樣；陣列 = 每點不同(路寬漸變)
+    var ov = function (o, k) { return typeof o === 'number' ? o : o[k]; };
+    var plus = function (o, d) { return typeof o === 'number' ? o + d : o.map(function (v) { return v + d; }); };
+    var pt = function (k, o, y) { var v = ov(o, k); return [P[k][0] + R[k][0] * v, H[k] + y, P[k][1] + R[k][1] * v]; };
+    var at = function (k, t, o, y) {   // 第 k 段比例 t 的點(在兩點中間：沿段的右手方向偏移)
+      if (t <= 0) return pt(k, o, y);
+      if (t >= 1) return pt(k + 1, o, y);
+      var v = ov(o, k) + (ov(o, k + 1) - ov(o, k)) * t, r = segR[k];
+      return [P[k][0] + (P[k + 1][0] - P[k][0]) * t + r[0] * v, H[k] + (H[k + 1] - H[k]) * t + y, P[k][1] + (P[k + 1][1] - P[k][1]) * t + r[1] * v];
+    };
+    // 第 k 段去掉不畫的部分，剩下的 [t0, t1]
+    var visible = function (k, side) {
+      var s0 = S[k], s1 = S[k + 1], len = s1 - s0, out = [[s0, s1]];
+      hidden[side].forEach(function (h) {
+        var nx = [];
+        out.forEach(function (r) { if (h[1] <= r[0] || h[0] >= r[1]) nx.push(r); else { if (h[0] > r[0]) nx.push([r[0], h[0]]); if (h[1] < r[1]) nx.push([h[1], r[1]]); } });
+        out = nx;
+      });
+      return out.filter(function (r) { return r[1] - r[0] > 0.05; }).map(function (r) { return [(r[0] - s0) / (len || 1), (r[1] - s0) / (len || 1)]; });
+    };
+    var isHidden = function (side, s) { return hidden[side].some(function (h) { return s >= h[0] && s <= h[1]; }); };
 
-    // 橫斷面
-    var inner, outer, W, a, b;
-    if (w.oneway) {
-      inner = 1.0; outer = w.link ? 2.0 : 3.0;
-      W = w.lanes * LANE + inner + outer; a = -W / 2 + inner; b = a + w.lanes * LANE;
-    } else {
-      outer = 1.5; W = w.lanes * LANE + outer * 2;
-    }
+    // 橫斷面(每點)：a / b = 最左 / 最右車道外緣
+    var inner = w.oneway ? 1.0 : 1.5, outer = w.oneway ? (w.link ? 2.0 : 3.0) : 1.5;
+    var half = Wv.map(function (v) { return v / 2; }), nhalf = Wv.map(function (v) { return -v / 2; });
+    var a = Wv.map(function (v) { return -v / 2 + inner; }), b = Wv.map(function (v) { return v / 2 - outer; });
     var strip = function (bk, o1, o2, y) {
       for (var k = 0; k < n - 1; k++) bk.quad(pt(k, o1, y), pt(k, o2, y), pt(k + 1, o2, y), pt(k + 1, o1, y));
     };
-    var dashed = function (bk, o, wd, y) {
-      // 沿線走，每 10 公尺畫 4 公尺
+    var dashed = function (bk, o, wd, y, ok) {
+      // 沿線走，每 10 公尺畫 4 公尺；ok(k) = 這段要不要畫
       var period = DASH + GAP;
       for (var k = 0; k < n - 1; k++) {
+        if (ok && !ok(k)) continue;
         var s0 = S[k], s1 = S[k + 1];
         var first = Math.ceil(s0 / period) * period - period;
         for (var st = first; st < s1; st += period) {
           var u0 = Math.max(st, s0), u1 = Math.min(st + DASH, s1);
           if (u1 - u0 < 0.2) continue;
-          var t0 = (u0 - s0) / (s1 - s0), t1 = (u1 - s0) / (s1 - s0), r = segR[k];
-          var y0 = H[k] + (H[k + 1] - H[k]) * t0 + y, y1 = H[k] + (H[k + 1] - H[k]) * t1 + y;
-          var x0 = P[k][0] + (P[k + 1][0] - P[k][0]) * t0, z0 = P[k][1] + (P[k + 1][1] - P[k][1]) * t0;
-          var x1 = P[k][0] + (P[k + 1][0] - P[k][0]) * t1, z1 = P[k][1] + (P[k + 1][1] - P[k][1]) * t1;
-          var h = wd / 2;
-          bk.quad([x0 + r[0] * (o - h), y0, z0 + r[1] * (o - h)], [x0 + r[0] * (o + h), y0, z0 + r[1] * (o + h)],
-                  [x1 + r[0] * (o + h), y1, z1 + r[1] * (o + h)], [x1 + r[0] * (o - h), y1, z1 + r[1] * (o - h)]);
+          var t0 = (u0 - s0) / (s1 - s0), t1 = (u1 - s0) / (s1 - s0), h = wd / 2;
+          bk.quad(at(k, t0 === 0 ? 1e-9 : t0, plus(o, -h), y), at(k, t0 === 0 ? 1e-9 : t0, plus(o, h), y), at(k, t1 === 1 ? 1 - 1e-9 : t1, plus(o, h), y), at(k, t1 === 1 ? 1 - 1e-9 : t1, plus(o, -h), y));
         }
       }
     };
-    // 牆(護欄)：profile = [[橫向偏移, 高度], ...]，沿線拉出來；skip(k) = 這一段不畫
-    var wall = function (bk, o, side, profile, skip) {
+    // 牆(護欄)：profile = [[橫向偏移, 高度], ...]，沿線拉出來；skip(k) = 這一段不畫；hs = 用哪一邊的「不畫的段落」
+    var wall = function (bk, o, side, profile, skip, hs) {
       for (var k = 0; k < n - 1; k++) {
         if (skip && skip(k)) continue;
-        for (var j = 0; j < profile.length - 1; j++) {
-          var p0 = profile[j], p1 = profile[j + 1];
-          bk.quad(pt(k, o + side * p0[0], p0[1]), pt(k, o + side * p1[0], p1[1]), pt(k + 1, o + side * p1[0], p1[1]), pt(k + 1, o + side * p0[0], p0[1]));
+        var parts = hs == null ? [[0, 1]] : visible(k, hs);
+        for (var q = 0; q < parts.length; q++) {
+          var t0 = parts[q][0], t1 = parts[q][1];
+          for (var j = 0; j < profile.length - 1; j++) {
+            var p0 = profile[j], p1 = profile[j + 1], o0 = plus(o, side * p0[0]), o1 = plus(o, side * p1[0]);
+            bk.quad(at(k, t0, o0, p0[1]), at(k, t0, o1, p1[1]), at(k, t1, o1, p1[1]), at(k, t1, o0, p0[1]));
+          }
         }
       }
     };
     // 鋼板護欄：W 型鋼板(兩道折線)＋立柱
-    var guardrail = function (o, side, skip) {
+    var guardrail = function (o, side, skip, hs) {
       // W 型鋼板：兩道凸起朝向車道(偏移 0)，上下緣和中間往立柱那邊彎(偏移 0.06)
-      wall(B.steel, o, side, [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]], skip);
+      wall(B.steel, o, side, [[0.06, 0.45], [0, 0.53], [0.06, 0.6], [0, 0.68], [0.06, 0.76]], skip, hs);
       var period = 4;
       for (var k = 0; k < n - 1; k++) {
         if (skip && skip(k)) continue;
         for (var st = Math.ceil(S[k] / period) * period; st < S[k + 1]; st += period) {
+          if (hs != null && isHidden(hs, st)) continue;
           var tt = (st - S[k]) / (S[k + 1] - S[k]), r = segR[k], f = [r[1], -r[0]];   // f：沿線方向(往前)
-          var cx = P[k][0] + (P[k + 1][0] - P[k][0]) * tt + r[0] * (o + side * 0.12), cz = P[k][1] + (P[k + 1][1] - P[k][1]) * tt + r[1] * (o + side * 0.12);
+          var oo = ov(o, k) + (ov(o, k + 1) - ov(o, k)) * tt;
+          var cx = P[k][0] + (P[k + 1][0] - P[k][0]) * tt + r[0] * (oo + side * 0.12), cz = P[k][1] + (P[k + 1][1] - P[k][1]) * tt + r[1] * (oo + side * 0.12);
           var y0 = H[k] + (H[k + 1] - H[k]) * tt, y1 = y0 + 0.78, hw = 0.07;
-          var c = [[-hw, -hw], [hw, -hw], [hw, hw], [-hw, hw]].map(function (q) { return [cx + r[0] * q[0] + f[0] * q[1], cz + r[1] * q[0] + f[1] * q[1]]; });
+          var c = [[-hw, -hw], [hw, -hw], [hw, hw], [-hw, hw]].map(function (p) { return [cx + r[0] * p[0] + f[0] * p[1], cz + r[1] * p[0] + f[1] * p[1]]; });
           for (var e = 0; e < 4; e++) {
             var A = c[e], Bq = c[(e + 1) % 4];
             B.steel.quad([A[0], y0, A[1]], [Bq[0], y0, Bq[1]], [Bq[0], y1, Bq[1]], [A[0], y1, A[1]]);
@@ -300,36 +310,39 @@
     var jersey = [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.85], [0.42, 0.85], [0.48, 0.33], [0.61, 0.08], [0.66, 0]];
     var parapet = [[0, 0], [0.04, 0.95], [0.3, 0.95], [0.3, 0]];
 
-    // 路面
-    strip(B.asphalt, -W / 2, W / 2, 0.03);
+    // 路面：主線往左多鋪一點(跟對向之間的空隙鋪滿，中央護欄底下不會露出地面)
+    var deckL = w.oneway && !w.link ? plus(nhalf, -RS.MEDIAN_FILL) : nhalf;
+    strip(B.asphalt, deckL, half, 0.03);
     if (hb > 0) {   // 橋：路面兩側的橋面版側邊
-      wall(B.concrete, -W / 2, -1, [[0, 0.03], [0, -0.5]]);
-      wall(B.concrete, W / 2, 1, [[0, 0.03], [0, -0.5]]);
+      wall(B.concrete, deckL, -1, [[0, 0.03], [0, -0.5]]);
+      wall(B.concrete, half, 1, [[0, 0.03], [0, -0.5]]);
     }
     var my = 0.06;   // 標線比路面高一點點，不會閃
     var skipEnds = function (k) { return S[k + 1] < 60 || S[k] > L - 60; };
     var skipJunc = function (k) { return nearJunc(P[k], 120) || nearJunc(P[k + 1], 120); };
-    var edge = function (o, side, skip) {   // 外側：橋上混凝土、平地鋼板
-      if (hb > 0) wall(B.concrete, o, side, parapet, skip); else guardrail(o, side, skip);
+    var edge = function (o, side, skip, hs) {   // 外側：橋上混凝土、平地鋼板；hs = 不畫的段落(會落在別條路上)
+      if (hb > 0) wall(B.concrete, o, side, parapet, skip, hs); else guardrail(o, side, skip, hs);
     };
     if (w.oneway) {
-      strip(B.yellow, a, a + 0.15, my);                     // 內側路面邊線(黃實線)
-      strip(B.white, b - 0.15, b, my);                      // 外側路面邊線(白實線)
-      for (var k2 = 1; k2 < w.lanes; k2++) dashed(B.white, a + k2 * LANE, 0.15, my);   // 車道線(白虛線)
+      strip(B.yellow, a, plus(a, 0.15), my);                // 內側路面邊線(黃實線)
+      strip(B.white, plus(b, -0.15), b, my);                // 外側路面邊線(白實線)
+      for (var k2 = 1; k2 < w.lanes; k2++) (function (kk) {   // 車道線(白虛線)：車道數漸變時，窄掉的那條不畫
+        dashed(B.white, plus(a, kk * LANE), 0.15, my, function (k) { return a[k] + kk * LANE < b[k] - 1 && a[k + 1] + kk * LANE < b[k + 1] - 1; });
+      })(k2);
       if (w.link) {
-        edge(W / 2 - 0.3, 1, skipEnds);
-        edge(-W / 2 + 0.3, -1, skipEnds);
+        edge(plus(half, -0.3), 1, skipEnds, '1');
+        edge(plus(nhalf, 0.3), -1, skipEnds, '-1');
       } else {
-        edge(W / 2 - 0.3, 1, skipJunc);
-        wall(B.concrete, -W / 2 - 0.1, 1, jersey);           // 中央分隔護欄
+        edge(plus(half, -0.3), 1, skipJunc, '1');
+        wall(B.concrete, plus(nhalf, -0.1), 1, jersey, null, '0');   // 中央分隔護欄
       }
     } else {
-      var per = Math.max(1, Math.floor(w.lanes / 2)), half = per * LANE;
+      var per = Math.max(1, Math.floor(w.lanes / 2)), hl = per * LANE;
       strip(B.yellow, 0.06, 0.18, my); strip(B.yellow, -0.18, -0.06, my);   // 中央雙黃線
-      strip(B.white, half - 0.15, half, my); strip(B.white, -half, -half + 0.15, my);
+      strip(B.white, hl - 0.15, hl, my); strip(B.white, -hl, -hl + 0.15, my);
       for (var k3 = 1; k3 < per; k3++) { dashed(B.white, k3 * LANE, 0.15, my); dashed(B.white, -k3 * LANE, 0.15, my); }
-      edge(W / 2 - 0.3, 1, skipEnds);
-      edge(-W / 2 + 0.3, -1, skipEnds);
+      edge(plus(half, -0.3), 1, skipEnds, '1');
+      edge(plus(nhalf, 0.3), -1, skipEnds, '-1');
     }
   }
 
