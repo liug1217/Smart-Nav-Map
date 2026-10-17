@@ -1,4 +1,5 @@
 // 3D 道路資料的修正(tools/build-road3d.js 用)：第一版的畫法不變，只把會出 bug 的地方先在電腦上修好
+//   0. 接點、接縫也改成貝茲曲線(手機只處理一般轉角)，接在那裡的路一起移，照樣接在一起
 //   1. 車道數：沒標的用接點車道數守恆推(進來的車道數 = 出去的)，推不出來才讓手機用一般值
 //   2. 對向車道疊在一起：OSM 兩個方向的線常常比兩邊路寬加起來還近 → 兩邊路面重疊、中央護欄畫到對向車道上。
 //      量每點跟左邊對向車道的距離，不夠(兩邊半寬 + 0.8 公尺)就兩條各往外推一半(前後 60 公尺平順過渡)，
@@ -22,6 +23,67 @@ const rightN = (tx, ty) => [ty, -tx];   // y 往北
 const O = merc(121, 23.7), KC = kAt(23.7);
 const chk = (c) => { const m = merc(c[0], c[1]); return [(m[0] - O[0]) * KC, (m[1] - O[1]) * KC]; };
 const fOf = (lat) => KC / kAt(lat);
+
+// ── 0. 接點、接縫也用貝茲曲線 ──
+//   手機只把「只有這條路用的轉角」改成曲線，接點(匝道接上來的點)、兩段路接縫的地方都保持原本的折角(不然路會接不起來)，
+//   主線在每個交流道、每個接縫都會折一下。這裡在電腦上先處理：每個接點找「直直穿過去的那條路」
+//   (路在這點中間經過，或前一段的尾接下一段的頭，挑轉彎最小的)，把那個轉角換成二次貝茲曲線(兩邊各取一段，
+//   不超過那段的一半、最多 40 公尺)，接點本身移到曲線的正中間；接在這點的其他路(匝道)也一起移過去，路照樣接在一起
+function roundNodes(ways) {
+  const at = new Map();
+  for (const w of ways) w.nodes.forEach((id, i) => { if (id == null) return; if (!at.has(id)) at.set(id, []); at.get(id).push({ w, i }); });
+  const plans = new Map();   // 節點 id → { prev, next, J, curve: [點...](經緯度，正中間那點 = 接點新位置), owner }
+  for (const [id, list] of at) {
+    if (list.length < 2) continue;
+    const J = list[0].w.ll[list[0].i], kx = 111320 * Math.cos(J[1] * D2R), ky = 110540;
+    const loc = (c) => [(c[0] - J[0]) * kx, (c[1] - J[1]) * ky];
+    const cands = [];
+    for (const o of list) {
+      const last = o.w.ll.length - 1;
+      if (o.i > 0 && o.i < last) cands.push({ prev: o.w.ll[o.i - 1], next: o.w.ll[o.i + 1], inner: o });
+    }
+    for (const a of list) for (const b of list) {
+      if (a.w === b.w || a.i !== a.w.ll.length - 1 || b.i !== 0 || a.w.oneway !== b.w.oneway) continue;
+      cands.push({ prev: a.w.ll[a.i - 1], next: b.w.ll[1], A: a, B: b });
+    }
+    let best = null;
+    for (const c of cands) {
+      const p = loc(c.prev), n = loc(c.next), lp = Math.hypot(p[0], p[1]), ln = Math.hypot(n[0], n[1]);
+      if (lp < 0.5 || ln < 0.5) continue;
+      const cos = (-p[0] * n[0] - p[1] * n[1]) / (lp * ln), deg = Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+      if (deg > 60) continue;   // 轉太大的不是「直直穿過去」
+      if (!best || deg < best.deg) best = Object.assign({ deg, p, n, lp, ln }, c);
+    }
+    if (!best || best.deg < 0.5) continue;
+    const d = Math.min(40, best.lp / 2, best.ln / 2);
+    const q0 = [best.p[0] * d / best.lp, best.p[1] * d / best.lp], q2 = [best.n[0] * d / best.ln, best.n[1] * d / best.ln];
+    let m = Math.max(2, Math.ceil(best.deg / 3)); if (m % 2) m++;   // 偶數：正中間剛好是一個點
+    const curve = [];
+    for (let j = 0; j <= m; j++) {
+      const t = j / m, x = (1 - t) * (1 - t) * q0[0] + t * t * q2[0], y = (1 - t) * (1 - t) * q0[1] + t * t * q2[1];   // 控制點 = 接點(本地座標原點)
+      curve.push([J[0] + x / kx, J[1] + y / ky]);
+    }
+    plans.set(id, { curve, mid: m / 2, best });
+  }
+  // 套用：直直穿過的路換成曲線(中間經過 → 整段曲線；前一段 → 曲線前半；下一段 → 曲線後半)，其他路的這個點移到曲線正中間
+  let rounded = 0;
+  for (const w of ways) {
+    const ll = [], nodes = [];
+    w.ll.forEach((c, i) => {
+      const id = w.nodes[i], pl = id != null ? plans.get(id) : null;
+      if (!pl) { ll.push(c); nodes.push(id); return; }
+      const b = pl.best, cv = pl.curve, mid = pl.mid;
+      const push = (from, to) => { for (let j = from; j <= to; j++) { ll.push(cv[j]); nodes.push(j === mid ? id : null); } };
+      if (b.inner && b.inner.w === w && b.inner.i === i) push(0, cv.length - 1);
+      else if (b.A && b.A.w === w && i === w.ll.length - 1) push(0, mid);
+      else if (b.B && b.B.w === w && i === 0) push(mid, cv.length - 1);
+      else { ll.push(cv[mid]); nodes.push(id); }
+    });
+    if (ll.length !== w.ll.length) rounded++;
+    w.ll = ll; w.nodes = nodes;
+  }
+  return { nodes: plans.size, ways: rounded };
+}
 
 // ── 1. 車道數 ──
 function inferLanes(ways) {
@@ -113,7 +175,7 @@ function separate(ways) {
       const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, r = rightN((b[0] - a[0]) / l, (b[1] - a[1]) / l);
       const m = merc(c[0], c[1]), k = kAt(c[1]), q = unmerc(m[0] + r[0] * sm[i] / k, m[1] + r[1] * sm[i] / k);
       const id = w.nodes[i], mv = [q[0] - c[0], q[1] - c[1]];
-      if (!nodeMove.has(id)) nodeMove.set(id, []); nodeMove.get(id).push(mv);
+      if (id != null) { if (!nodeMove.has(id)) nodeMove.set(id, []); nodeMove.get(id).push(mv); }   // 沒有節點 id 的點(接點曲線上的點)不是接點
       return q;
     });
   }
@@ -122,7 +184,7 @@ function separate(ways) {
   let followed = 0;
   for (const w of ways) {
     const n = w.ll.length, orig = w._orig || w.ll;
-    const moves = w.nodes.map((id) => moveOf(id));
+    const moves = w.nodes.map((id) => (id == null ? null : moveOf(id)));
     if (!moves.some(Boolean)) continue;
     if (shift.has(w)) {   // 主線：節點統一成平均位置
       w.ll = w.ll.map((c, i) => (moves[i] ? [w._ll0[i][0] + moves[i][0], w._ll0[i][1] + moves[i][1]] : c));
@@ -322,6 +384,7 @@ function railHides(ways) {
 
 function run(ways) {
   const lanes = inferLanes(ways);
+  const round = roundNodes(ways);
   for (const w of ways) w._ll0 = w.ll.map((c) => c.slice());
   for (const w of ways) w._orig = w.ll;
   const sep = separate(ways);
@@ -329,7 +392,7 @@ function run(ways) {
   const nodeIdx = geometry(ways);
   const clr = clearance(ways, nodeIdx);
   const hide = railHides(ways);
-  return { lanes, sep, clr, hide };
+  return { lanes, round, sep, clr, hide };
 }
 
-module.exports = { CLEAR, run, inferLanes, separate, geometry, clearance, railHides };
+module.exports = { CLEAR, run, roundNodes, inferLanes, separate, geometry, clearance, railHides };

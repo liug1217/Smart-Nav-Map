@@ -48,7 +48,7 @@ for (const e of elements) {
 }
 
 const rep = FIX.run(ways);
-console.log(`修正：推出車道數 ${rep.lanes} 段；對向車道推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺，跟著移的匝道 ${rep.sep.followed} 段)；` +
+console.log(`修正：接點、接縫改成曲線 ${rep.round.nodes} 處(${rep.round.ways} 條路)；推出車道數 ${rep.lanes} 段；對向車道推開 ${rep.sep.pushed} 段(最多 ${rep.sep.maxPush.toFixed(2)} 公尺，跟著移的匝道 ${rep.sep.followed} 段)；` +
   `上下交叉 ${rep.clr.crossings} 處(抬高 ${rep.clr.bumped} 次，淨空還不夠 ${rep.clr.left} 處)；護欄不畫 ${rep.hide.hiddenKm.toFixed(1)} 公里(會落在別條路上)`);
 
 const tiles = {};
