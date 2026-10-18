@@ -11,6 +11,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>
+// iOS 舊版的主畫面 App 不一定支援 display-mode 媒體查詢，用 navigator.standalone 補判斷(給 --safe-top 用)
+if (window.navigator.standalone) document.documentElement.classList.add('is-standalone');
+</script>
 <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <style>
 /* ===== OpenStreetMap Layer ===== */
@@ -744,7 +748,7 @@ body.searchOpen .searchResultsList{
 .rpAvBtns .apply:disabled{ background:#F4B7B5; cursor:default; }
 .rpAvBtns .done{ background:#2F80FF; color:#fff; }
 .rpAvWarn{ background:#FFF4D6; color:#6B4A00; border-radius:10px; padding:8px 10px; font-size:13px; line-height:1.45; margin:4px 0; }
-.avoidPickBar{ position:fixed; left:50%; top:calc(12px + env(safe-area-inset-top)); transform:translateX(-50%); z-index:1200; display:none; align-items:center; gap:10px;
+.avoidPickBar{ position:fixed; left:50%; top:calc(12px + var(--safe-top, env(safe-area-inset-top))); transform:translateX(-50%); z-index:1200; display:none; align-items:center; gap:10px;
   background:rgba(255,255,255,0.95); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:0.5px solid #d9d9d9; box-shadow:0 4px 12px rgba(0,0,0,0.25);
   border-radius:999px; padding:8px 8px 8px 16px; font-size:14px; color:#1c1c1e; max-width:calc(100vw - 32px); }
 .avoidPickBar.on{ display:flex; }
@@ -1730,6 +1734,9 @@ html, body {
 <style>
 /* ===== 📱 全螢幕(加入主畫面)安全區：上方元件避開瀏海 / 狀態列，下方避開底部橫條 ===== */
 :root{ --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
+/* 從主畫面開(全螢幕)時，iOS 有時量到的頂部安全區是 0，上方元件會被狀態列 / 瀏海擋住；至少讓出 60px */
+@media (display-mode: standalone), (display-mode: fullscreen){ :root{ --safe-top: max(env(safe-area-inset-top, 0px), 60px); } }
+:root.is-standalone{ --safe-top: max(env(safe-area-inset-top, 0px), 60px); }
 .searchBarWrap{ top: var(--safe-top); }
 body.searchOpen .searchBarWrap{ top:0; padding-top: var(--safe-top); }   /* 全螢幕搜尋頁：背景蓋滿，內容往下讓 */
 .rect8{ top: calc(54px + var(--safe-top)); }
@@ -3689,7 +3696,7 @@ function _flipCell(cell, from, to) {
   function _maxCardH() {
     if (!_safeTopProbe) {
       _safeTopProbe = document.createElement('div');
-      _safeTopProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
+      _safeTopProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:var(--safe-top, env(safe-area-inset-top));visibility:hidden;pointer-events:none';
       document.body.appendChild(_safeTopProbe);
     }
     const sab = window._safeBottomPx ? window._safeBottomPx() : 0;
@@ -9281,7 +9288,7 @@ setTimeout(() => {
 
 <!-- ===== WASD 鍵盤駕駛測試 ===== -->
 <div id="kbHud" style="
-  display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  display:none;position:fixed;top:calc(16px + var(--safe-top, 0px));left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,0.72);backdrop-filter:blur(12px);
   color:#fff;font-family:'SF Pro Display',Arial,sans-serif;font-size:13px;font-weight:500;
   padding:7px 16px;border-radius:20px;z-index:9999;
