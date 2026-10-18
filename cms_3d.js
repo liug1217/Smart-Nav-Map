@@ -90,41 +90,49 @@
     var n = Math.ceil(a.length / 2);
     return [a.slice(0, n).join(''), a.slice(n, Math.min(a.length, n * 2)).join('')];
   }
+  // 看板面：真的 LED 點陣(192 × 60 顆圓點，每 4 像素一顆)：字先用小解析度畫好，有字的格子點亮(訊息顏色)、其他是暗的圓點
+  var COLS = 192, ROWS = 60, PITCH = 4;
   function boardCanvas(p) {
-    var W = 512, H = 160, c = document.createElement('canvas'); c.width = W; c.height = H;
-    var x = c.getContext('2d');
-    x.fillStyle = '#0B0B0D'; x.fillRect(0, 0, W, H);
-    var lines = splitLines(p.text), col = pageColor(p);
-    var fs = lines.length > 1 ? 62 : 74;
-    x.font = '700 ' + fs + 'px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif';
-    var widest = Math.max.apply(null, lines.map(function (l) { return x.measureText(l).width; }));
-    if (widest > W - 24) { fs = Math.floor(fs * (W - 24) / widest); x.font = '700 ' + fs + 'px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif'; }
-    x.fillStyle = col; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.shadowColor = col; x.shadowBlur = 8;   // LED 發光
-    lines.forEach(function (l, i) { x.fillText(l, W / 2, lines.length > 1 ? H * (0.29 + i * 0.44) : H / 2); });
-    x.shadowBlur = 0;
-    // 點陣：每 4px 一格，格線塗黑，看起來像一顆顆 LED
-    x.fillStyle = 'rgba(0,0,0,0.55)';
-    for (var gx = 0; gx < W; gx += 4) x.fillRect(gx, 0, 1, H);
-    for (var gy = 0; gy < H; gy += 4) x.fillRect(0, gy, W, 1);
-    return c;
+    var lo = document.createElement('canvas'); lo.width = COLS; lo.height = ROWS;
+    var lx = lo.getContext('2d'), lines = splitLines(p.text), col = pageColor(p);
+    var fs = lines.length > 1 ? 26 : 34, font = function (n) { return '700 ' + n + 'px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif'; };
+    lx.font = font(fs);
+    var widest = Math.max.apply(null, lines.map(function (l) { return lx.measureText(l).width; }));
+    if (widest > COLS - 4) { fs = Math.max(12, Math.floor(fs * (COLS - 4) / widest)); lx.font = font(fs); }
+    lx.fillStyle = '#fff'; lx.textAlign = 'center'; lx.textBaseline = 'middle';
+    lines.forEach(function (l, i) { lx.fillText(l, COLS / 2, lines.length > 1 ? ROWS * (0.27 + i * 0.47) : ROWS / 2); });
+    var px = lx.getImageData(0, 0, COLS, ROWS).data;
+    var cv = document.createElement('canvas'); cv.width = COLS * PITCH; cv.height = ROWS * PITCH;
+    var x = cv.getContext('2d');
+    x.fillStyle = '#08080A'; x.fillRect(0, 0, cv.width, cv.height);
+    var lit = [], dim = [];
+    for (var gy = 0; gy < ROWS; gy++) for (var gx = 0; gx < COLS; gx++) (px[(gy * COLS + gx) * 4 + 3] > 110 ? lit : dim).push(gx, gy);
+    var dots = function (arr, color, r) { x.fillStyle = color; x.beginPath(); for (var i = 0; i < arr.length; i += 2) { var cx = arr[i] * PITCH + PITCH / 2, cy = arr[i + 1] * PITCH + PITCH / 2; x.moveTo(cx + r, cy); x.arc(cx, cy, r, 0, Math.PI * 2); } x.fill(); };
+    dots(dim, '#1E1F22', 1.35);                // 沒亮的燈珠
+    x.globalAlpha = 0.35; dots(lit, col, 2.4); // 亮的燈珠外圈一點光暈
+    x.globalAlpha = 1; dots(lit, col, 1.6);    // 亮的燈珠
+    return cv;
   }
-  // 閃光燈面：黑底上一顆顆 LED 排成圓形(跟看板一樣的點陣)；亮 = 偏黃的綠色發光、暗 = 每顆變暗但看得出點陣
+  // 閃光燈：一般會亮的燈(圓形燈面，中間最亮往外漸暗)；亮 = 偏黃的綠色、暗 = 暗灰；亮的時候外面再加一圈光暈(另一片)
   var lampTex = {};
-  function lampTexture(on) {
-    var key = on ? 'on' : 'off';
-    if (lampTex[key]) return lampTex[key];
-    var S = 96, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
-    var x = cv.getContext('2d'), col = on ? '#C4F23A' : '#2E3A14';
-    x.fillStyle = '#0B0B0D'; x.fillRect(0, 0, S, S);
-    if (on) { x.shadowColor = '#C4F23A'; x.shadowBlur = 6; }
-    x.fillStyle = col;
-    for (var gy = 6; gy < S; gy += 8) for (var gx = 6; gx < S; gx += 8) {
-      if (Math.hypot(gx - S / 2, gy - S / 2) > S / 2 - 6) continue;   // 排成圓形
-      x.beginPath(); x.arc(gx, gy, 2.6, 0, Math.PI * 2); x.fill();
+  function lampTexture(kind) {
+    if (lampTex[kind]) return lampTex[kind];
+    var S = 128, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    var x = cv.getContext('2d'), g;
+    if (kind === 'halo') {
+      g = x.createRadialGradient(S / 2, S / 2, S * 0.12, S / 2, S / 2, S / 2);
+      g.addColorStop(0, 'rgba(206,245,90,0.75)'); g.addColorStop(0.45, 'rgba(196,242,58,0.25)'); g.addColorStop(1, 'rgba(196,242,58,0)');
+      x.fillStyle = g; x.fillRect(0, 0, S, S);
+    } else {
+      x.fillStyle = '#0B0B0D'; x.fillRect(0, 0, S, S);   // 燈殼
+      g = x.createRadialGradient(S * 0.45, S * 0.42, 2, S / 2, S / 2, S * 0.42);
+      if (kind === 'on') { g.addColorStop(0, '#FBFFE0'); g.addColorStop(0.35, '#DDF86A'); g.addColorStop(0.8, '#A9D82C'); g.addColorStop(1, '#5E7A14'); }
+      else { g.addColorStop(0, '#4A5040'); g.addColorStop(0.6, '#2E3328'); g.addColorStop(1, '#1C1F18'); }
+      x.fillStyle = g; x.beginPath(); x.arc(S / 2, S / 2, S * 0.42, 0, Math.PI * 2); x.fill();
+      x.strokeStyle = '#2A2C30'; x.lineWidth = 4; x.stroke();   // 燈罩邊框
     }
-    lampTex[key] = new window.THREE.CanvasTexture(cv);
-    return lampTex[key];
+    lampTex[kind] = new window.THREE.CanvasTexture(cv);
+    return lampTex[kind];
   }
   function mileCanvas(s) {
     var c = document.createElement('canvas'); c.width = 192; c.height = 64;
@@ -191,9 +199,11 @@
     [-BW / 2 + 1.2, BW / 2 - 1.2].forEach(function (lx) {
       var ly = BY + BH / 2 + 0.45;
       box(0.5, 0.45, 0.4, dark, BX + lx, ly, 0.05);
-      var mat = new T.MeshBasicMaterial({ map: lampTexture(blinkOn) });
+      var mat = new T.MeshBasicMaterial({ map: lampTexture(blinkOn ? 'on' : 'off') });
       var led = new T.Mesh(new T.PlaneGeometry(0.42, 0.42), mat); led.position.set(BX + lx, ly, 0.255); g.add(led);
-      lamps.push(mat);
+      var halo = new T.Mesh(new T.PlaneGeometry(1.1, 1.1), new T.MeshBasicMaterial({ map: lampTexture('halo'), transparent: true, depthWrite: false }));
+      halo.position.set(BX + lx, ly, 0.27); halo.visible = blinkOn; g.add(halo);
+      lamps.push({ mat: mat, halo: halo });
     });
     // 左邊綠底里程牌
     var mt = new T.CanvasTexture(mileCanvas(s));
@@ -308,7 +318,7 @@
     m.triggerRepaint();
   }
   function disposeModel(md) {
-    md.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map && o.material.map !== lampTex.on && o.material.map !== lampTex.off) o.material.map.dispose(); o.material.dispose(); } });   // 閃光燈的貼圖是共用的，不丟
+    md.scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map && o.material.map !== lampTex.on && o.material.map !== lampTex.off && o.material.map !== lampTex.halo) o.material.map.dispose(); o.material.dispose(); } });   // 閃光燈的貼圖是共用的，不丟
   }
   // 多則訊息輪流顯示(只換畫面上的看板)
   // 閃光燈：兩盞一起一亮一暗(只有畫面上有看板、網頁在前景時才重畫)；偏黃的綠色 LED
@@ -316,7 +326,7 @@
   function blinkTick() {
     if (document.hidden || !visible.length) return;
     blinkOn = !blinkOn;
-    visible.forEach(function (s) { var md = models[s.id]; if (md && md.lamps) md.lamps.forEach(function (lm) { lm.map = lampTexture(blinkOn); lm.needsUpdate = true; }); });
+    visible.forEach(function (s) { var md = models[s.id]; if (md && md.lamps) md.lamps.forEach(function (lm) { lm.mat.map = lampTexture(blinkOn ? 'on' : 'off'); lm.mat.needsUpdate = true; lm.halo.visible = blinkOn; }); });
     if (window.map) window.map.triggerRepaint();
   }
   function rotatePages() {
