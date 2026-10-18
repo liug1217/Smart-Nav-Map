@@ -43,12 +43,14 @@ async function setStatus(action, extra) {
   catch (e) { console.log('推上 GitHub 失敗，取消「更新中」'); await setStatus('done', { push: false }); process.exit(1); }
 
   console.log('3/4 等 GitHub Pages 換成新版(最多 10 分鐘)…');
-  const local = fs.readFileSync(path.join(ROOT, '智行地圖.html'), 'utf8').replace(/\r\n/g, '\n');
+  // 比對前去掉 BOM(本機檔案開頭有，GitHub Pages 抓下來時會被去掉，不去掉永遠「不一樣」)、統一換行
+  const norm = (t) => t.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const local = norm(fs.readFileSync(path.join(ROOT, '智行地圖.html'), 'utf8'));
   let live = false;
   for (let i = 0; i < 40 && !live; i++) {
     await wait(15000);
     try {
-      const t = (await (await fetch(PAGE + '?v=' + Date.now(), { cache: 'no-store' })).text()).replace(/\r\n/g, '\n');
+      const t = norm(await (await fetch(PAGE + '?v=' + Date.now(), { cache: 'no-store' })).text());
       live = t === local;
     } catch (_) {}
     process.stdout.write(live ? '  新版上線了\n' : '  還沒…(' + ((i + 1) * 15) + ' 秒)\n');

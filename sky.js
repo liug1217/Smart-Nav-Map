@@ -63,7 +63,7 @@
   var forced = null;   // 除錯用：指定時間
   function apply() {
     var m = window.map;
-    if (!m || typeof m.setSky !== 'function' || !m.isStyleLoaded()) return;
+    if (!m || typeof m.setSky !== 'function' || !(m.style && m.style._loaded)) return;   // 不用 isStyleLoaded(圖磚在載入時常常是 false)
     var c = m.getCenter(), s = sunAt(forced || new Date(), c.lng, c.lat), col = colorsAt(s.alt, s.morning);
     try {
       m.setSky({

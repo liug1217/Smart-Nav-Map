@@ -5151,7 +5151,7 @@ function _flipCell(cell, from, to) {
     return true;
   }
   window._snmRoutePassedClear = function () {
-    _passed.geom = null; _passed.along = 0; _passed.drawn = -1;
+    _passed.geom = null; _passed.along = 0; _passed.drawn = -1; window._snmPassedPoint = null;
     if (window._snmTrafficBar) window._snmTrafficBar.reset(); // 結束導航/換新路線：路況條也從頭來，不留上一條路線的顏色
     const src = map.getSource(PASSED_SRC);
     if (src) src.setData({ type: 'FeatureCollection', features: [] });
@@ -5171,6 +5171,7 @@ function _flipCell(cell, from, to) {
     for (; i < coords.length && cum[i] < a; i++) line.push(coords[i]);
     const p = routePointAt(geom, a);
     line.push([p.lng, p.lat]);
+    window._snmPassedPoint = { lng: p.lng, lat: p.lat, along: a, geom: geom };   // 3D 道路(road_3d.js)用：橋面上的導航路線在這一點切開，後面畫灰色
     const src = map.getSource(PASSED_SRC);
     if (src) src.setData(line.length >= 2 && a > 0.5
       ? { type: 'Feature', geometry: { type: 'LineString', coordinates: line }, properties: {} }
@@ -6329,6 +6330,7 @@ function _flipCell(cell, from, to) {
       if (window._snmRoutePassedClear) window._snmRoutePassedClear(); // 新路線(含重新規劃)：已行駛從頭算
       // 目的地(路線最後一點)：導航時從目前位置拉一條紅色直線到這裡
       window._navDestCoord = plannedRouteCoordinates[plannedRouteCoordinates.length - 1] || null;
+      if (window._snmStraightLineNow) window._snmStraightLineNow();
       if (window.navRouteSource) {
         window.navRouteSource.setData({
           type: 'FeatureCollection',
@@ -12614,7 +12616,7 @@ setTimeout(() => {
 <script src="cms_3d.js?v=15"></script>
 <!-- 🛣 國道、快速道路 3D 路面(第 1 階段：主線；放大到 zoom 16 才畫) -->
 <script src="road_3d_shape.js?v=6"></script>
-<script src="road_3d.js?v=46"></script>
+<script src="road_3d.js?v=48"></script>
 <!-- 🟢 網站更新中提示、更新通知(推播) -->
 <style>
 .snmUpdPill{ position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:1001; display:none; align-items:center; gap:8px;
@@ -12699,22 +12701,24 @@ setTimeout(() => {
     var mpp = 40075016 * Math.cos(lat * Math.PI / 180) / (512 * Math.pow(2, z)), d = 25 * size * mpp;   // 半個車長(剛好從車頭接出去)
     return [lon + Math.sin(hd) * d / (111320 * Math.cos(lat * Math.PI / 180)), lat + Math.cos(hd) * d / 110540];
   }
-  setInterval(function () {
+  window._snmStraightLineNow = function () { setTimeout(tick, 0); };   // 設好目的地時馬上畫
+  setInterval(tick, 1000);
+  function tick() {
     var m = window.map;
-    if (!m || document.hidden || !m.isStyleLoaded()) return;   // 網頁在背景時不做事(省電)
+    if (!m || document.hidden || !(m.style && m.style._loaded)) return;   // 網頁在背景時不做事(省電)；不能用 isStyleLoaded(導航中圖磚一直在載入，它常常是 false，紅線就很久才畫出來)
     var on = document.body.classList.contains('navigating') && window._navDestCoord && window.currentLat != null;
     if (!on && !shown) return;   // 沒在導航：什麼都不用做
     if (!m.getSource(SRC)) m.addSource(SRC, { type: 'geojson', data: empty });   // 換地圖樣式後重加
     if (!m.getLayer(LAYER)) m.addLayer({ id: LAYER, type: 'line', source: SRC, layout: { 'line-cap': 'round' }, paint: { 'line-color': '#E53935', 'line-width': 3, 'line-opacity': 0.85 } });   // 加在最上層，車子還是在它上面
     if (on) { m.getSource(SRC).setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [carFront(m), window._navDestCoord] } }); shown = true; }
     else if (shown) { m.getSource(SRC).setData(empty); shown = false; }
-  }, 1000);
+  }
 })();
 </script>
 <!-- 🏙 一般道路 3D 路面(省道、縣道、市區道路、巷弄) -->
 <script src="road_3d_city.js?v=8"></script>
 <!-- 🌤 天空(照太陽高度角換顏色) -->
-<script src="sky.js?v=4"></script>
+<script src="sky.js?v=5"></script>
 <!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
 <script src="lamps_3d.js?v=5"></script>
 </body>

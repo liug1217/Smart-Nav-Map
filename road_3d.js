@@ -567,7 +567,9 @@
   //   - 塞車路段、導航路線：把線對到 3D 路面上(每 5 公尺一點，找方向一樣、12 公尺內的路；疊在一起的高架 / 平面用「接得上的那條」決定)，
   //     對到的那段畫在路面上，地面那份只留沒對到的部分(一般道路還是畫在地面)
   //   - 車子：在高架上時圖示往上移到橋面的高度
-  var OV_SRC = { navRoute: 'route', navRoutePassed: 'passed', 'snm-traffic-src': 'traffic' };
+  //   已行駛的灰色不再接手那份資料(每 0.12 秒更新，整段重比對很卡、又只能幾秒算一次 → 一段一段消失)：
+  //   改成照「車子在路線上的那一點」(主程式給的 window._snmPassedPoint)把橋面上的路線切開，前面原色、後面灰色，每 0.25 秒更新
+  var OV_SRC = { navRoute: 'route', 'snm-traffic-src': 'traffic' };
   var OV_STYLE = {   // 每種線：外框寬、內線寬(公尺)、高度(比路面高一點，順序：綠色底圖 < 塞車 / 路線 < 已行駛灰色)
     green: { cw: 3.2, iw: 2.4, y: 0.065 }, traffic: { cw: 3.2, iw: 2.4, y: 0.075 }, route: { cw: 3.2, iw: 2.4, y: 0.075 }, passed: { cw: 3.2, iw: 2.4, y: 0.085 }
   };
@@ -746,14 +748,14 @@
       ovCache[kind] = { data: data, gCount: gCount, on: on, items: mine, at: Date.now() };
       if (!data || !data.features) { if (data) src._snmOrig(data); return; }
       if (!on || !box) { src._snmOrig(data); return; }
-      var keep = [];
+      var keep = [], seq = 0;   // 路線的每一段照前進順序編號(切開已行駛用)
       data.features.forEach(function (f) {
         var p = f.properties || {}, lines = linesOf(f);
         if (!lines.length || (kind === 'traffic' && p.roadClass !== 'motorway' && p.roadClass !== 'trunk')) { keep.push(f); return; }
         splitByBox(lines, box).forEach(function (part) {
           if (!part.inside) { keep.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: part.c }, properties: p }); return; }
           var r = matchLine(part.c);
-          r.on.forEach(function (x) { mine.push({ kind: kind, w: x.w, f0: x.f0, f1: x.f1, opp: x.opp, color: p.color || (kind === 'passed' ? '#C9CDD2' : '#16E098'), casing: p.casing || (kind === 'passed' ? '#9AA0A6' : kind === 'traffic' ? ({ moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' }[p.trafficLevel] || '#009B65') : '#009B65') }); });
+          r.on.forEach(function (x) { mine.push({ kind: kind, seq: seq++, w: x.w, f0: x.f0, f1: x.f1, opp: x.opp, color: p.color || (kind === 'passed' ? '#C9CDD2' : '#16E098'), casing: p.casing || (kind === 'passed' ? '#9AA0A6' : kind === 'traffic' ? ({ moderate: '#B07C00', slow: '#B34C00', congested: '#A32020', severe: '#4F0000' }[p.trafficLevel] || '#009B65') : '#009B65') }); });
           r.off.forEach(function (c2) { keep.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: c2 }, properties: p }); });
         });
       });
@@ -765,6 +767,7 @@
     if (on) hideFlatFreeway();
     // 畫在路面上的線跟上次一樣就不用重建
     var sig = (ovGreen ? 'G' : '') + items.map(function (it) { return it.kind + it.w.id + ':' + it.f0.toFixed(4) + '-' + it.f1.toFixed(4) + it.color; }).join('|');
+    if (items.filter(function (it) { return it.kind === 'route'; }).length !== ovItems.filter(function (it) { return it.kind === 'route'; }).length) { passCut = null; passLast = null; }   // 換路線：已行駛重算
     ovItems = items;
     if (sig === ovSig) { m.triggerRepaint(); return; }
     ovSig = sig;
@@ -772,18 +775,46 @@
     m.triggerRepaint();
   }
   // 每塊模型的疊線(換資料時整組重建)
+  // 每塊模型的疊線：綠線＋塞車(換資料時重建)、導航路線(另外一組，已行駛前進時只重建這組)
   function addOverlay(chunk) {
-    var T = window.THREE;
     if (chunk.ov) { chunk.scene.remove(chunk.ov); chunk.ov.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); chunk.ov = null; }
     if (!chunk.geo) return;
+    var list = [];
+    ovItems.forEach(function (it) { if (it.kind !== 'route') list.push(it); });
+    chunk.ov = overlayGroup(chunk, list, ovGreen);
+    if (chunk.ov) chunk.scene.add(chunk.ov);
+    addRouteOverlay(chunk);
+  }
+  function addRouteOverlay(chunk) {
+    if (chunk.ovRoute) { chunk.scene.remove(chunk.ovRoute); chunk.ovRoute.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); chunk.ovRoute = null; }
+    if (!chunk.geo) return;
+    var list = [];
+    ovItems.forEach(function (it) {
+      if (it.kind !== 'route') return;
+      // 已行駛的切開：前面的段全灰、切到的那段分成灰 + 原色、後面的照原色
+      if (passCut && it.seq < passCut.seq) { list.push(Object.assign({}, it, { kind: 'passed', color: '#C9CDD2', casing: '#9AA0A6' })); return; }
+      if (passCut && it.seq === passCut.seq) {
+        var fp = passCut.f, lo = Math.min(it.f0, it.f1), hi = Math.max(it.f0, it.f1);
+        if (it.opp) { list.push(Object.assign({}, it, { f0: fp, f1: hi, kind: 'passed', color: '#C9CDD2', casing: '#9AA0A6' }), Object.assign({}, it, { f0: lo, f1: fp })); }
+        else { list.push(Object.assign({}, it, { f0: lo, f1: fp, kind: 'passed', color: '#C9CDD2', casing: '#9AA0A6' }), Object.assign({}, it, { f0: fp, f1: hi })); }
+        return;
+      }
+      list.push(it);
+    });
+    chunk.ovRoute = list.length ? overlayGroup(chunk, list, false) : null;
+    if (chunk.ovRoute) chunk.scene.add(chunk.ovRoute);
+  }
+  function overlayGroup(chunk, items, green) {
+    var T = window.THREE;
     var buckets = {}, bk = function (color) { return (buckets[color] = buckets[color] || new Bucket()); };
     var byWay = {};
-    ovItems.forEach(function (it) { (byWay[it.w.id] = byWay[it.w.id] || []).push(it); });
+    items.forEach(function (it) { (byWay[it.w.id] = byWay[it.w.id] || []).push(it); });
     chunk.geo.forEach(function (g) {
       var list = (byWay[g.w.id] || []).slice();
-      if (ovGreen) list.unshift({ kind: 'green', f0: 0, f1: 1, opp: false, color: '#16E098', casing: '#009B65' });
+      if (green) list.unshift({ kind: 'green', f0: 0, f1: 1, opp: false, color: '#16E098', casing: '#009B65' });
       list.forEach(function (it) {
-        var st = OV_STYLE[it.kind], s0 = Math.max(0, it.f0) * g.L, s1 = Math.min(1, it.f1) * g.L;
+        var st = OV_STYLE[it.kind], s0 = Math.max(0, Math.min(it.f0, it.f1)) * g.L, s1 = Math.min(1, Math.max(it.f0, it.f1)) * g.L;
+        if (s1 - s0 < 0.05) return;
         // 線的中心：單行道 = 車道中間；雙向道路 = 自己方向那半邊中間
         var c = function (k) { return !g.w.oneway ? (it.opp ? g.a[k] / 2 : g.b[k] / 2) : (g.a[k] + g.b[k]) / 2; };
         [[st.cw, it.casing, st.y], [st.iw, it.color, st.y + 0.005]].forEach(function (band) {
@@ -799,7 +830,7 @@
             b.quad(at(t0, -hw), at(t0, hw), at(t1, hw), at(t1, -hw));
           }
         });
-        // 導航路線：白色箭頭(每 20 公尺一個 ^，尖端朝行車方向)
+        // 導航路線(還沒走到的)：白色箭頭(每 20 公尺一個 ^，尖端朝行車方向)
         if (it.kind === 'route') {
           var dirSign = it.opp ? -1 : 1, white = bk('#FFFFFF');
           for (var sp = Math.ceil(s0 / 20) * 20 + 10; sp < s1 - 2; sp += 20) {
@@ -815,17 +846,58 @@
         }
       });
     });
+    var keys = Object.keys(buckets);
+    if (!keys.length) return null;
     var group = new T.Group();
-    Object.keys(buckets).forEach(function (color) {
+    keys.forEach(function (color) {
       var g2 = new T.BufferGeometry();
       g2.setAttribute('position', new T.Float32BufferAttribute(buckets[color].p, 3));
       var mesh = new T.Mesh(g2, ovMat(color));
       mesh.renderOrder = 3; mesh.frustumCulled = false;
       group.add(mesh);
     });
-    chunk.ov = group;
-    chunk.scene.add(group);
+    return group;
   }
+  // 已行駛切開的位置：{ seq: 路線第幾段, f: 那段的路上的比例 }；每 0.25 秒照主程式給的點(window._snmPassedPoint)往前找
+  var passCut = null, passLast = null;
+  function updatePassCut() {
+    var p = window._snmPassedPoint, m = window.map;
+    if (!p || !m || document.hidden || !active()) { if (passCut && !p) { passCut = null; passLast = null; refreshRoute(); } return; }
+    if (passLast && Math.abs(p.lng - passLast.lng) * KX < 2 && Math.abs(p.lat - passLast.lat) * KY < 2) return;   // 動不到 2 公尺不用重畫
+    passLast = { lng: p.lng, lat: p.lat };
+    var routes = ovItems.filter(function (it) { return it.kind === 'route'; });
+    if (!routes.length) return;
+    var x = p.lng * KX, y = p.lat * KY, best = null, from = passCut ? passCut.seq : 0;
+    routes.forEach(function (it) {
+      if (it.seq < from - 1 || it.seq > from + 8) return;   // 只往前找附近幾段(不會跳到很遠、也不會往回)
+      var w = it.w, lo = Math.min(it.f0, it.f1) * w._L, hi = Math.max(it.f0, it.f1) * w._L;
+      for (var i = 0; i < w.coords.length - 1; i++) {
+        if (w._len[i + 1] < lo || w._len[i] > hi) continue;
+        var A = w.coords[i], B = w.coords[i + 1], ax = A[0] * KX, ay = A[1] * KY, dx = B[0] * KX - ax, dy = B[1] * KY - ay, L2 = dx * dx + dy * dy;
+        if (!L2) continue;
+        var t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)), d = Math.hypot(x - ax - dx * t, y - ay - dy * t);
+        if (d > 15 || (best && d >= best.d)) continue;
+        best = { d: d, seq: it.seq, f: Math.max(lo, Math.min(hi, w._len[i] + Math.sqrt(L2) * t)) / w._L };
+      }
+    });
+    if (!best) {   // 車子不在 3D 路面的路線上(一般道路那段)：前面全部算走過
+      var before = routes.filter(function (it) { return it.seq >= from; })[0];
+      if (passCut && before && before.seq > passCut.seq) { passCut = { seq: before.seq, f: before.opp ? Math.max(before.f0, before.f1) : Math.min(before.f0, before.f1) }; refreshRoute(); }
+      return;
+    }
+    if (passCut && best.seq === passCut.seq && Math.abs(best.f - passCut.f) * 1e5 < 1) return;
+    passCut = { seq: best.seq, f: best.f };
+    refreshRoute();
+  }
+  // 只重建有導航路線的那幾塊模型的路線那組
+  function refreshRoute() {
+    var ids = {};
+    ovItems.forEach(function (it) { if (it.kind === 'route') ids[it.w.id] = 1; });
+    Object.keys(tiles).forEach(function (k) { var ch = tiles[k].chunk; if (ch && ch.geo && ch.geo.some(function (g) { return ids[g.w.id]; })) addRouteOverlay(ch); });
+    if (window.map) window.map.triggerRepaint();
+  }
+  setInterval(updatePassCut, 250);
+
   var ovMats = {};
   function ovMat(color) {
     var T = window.THREE;
@@ -1023,7 +1095,7 @@
     var m = window.map;
     if (window.THREE && m && m.getZoom() >= DRAW_ZOOM && mats && !m.getLayer(LAYER)) { m.addLayer(customLayer, beforeId(m)); }
   };
-  window._snmRoad3dState = function () { return { tiles: tiles, ways: ways, threeState: threeState, ovGreen: ovGreen, ovItems: ovItems, carShift: carShift }; };   // 除錯用
+  window._snmRoad3dState = function () { return { tiles: tiles, ways: ways, threeState: threeState, ovGreen: ovGreen, ovItems: ovItems, carShift: carShift, passCut: passCut }; };   // 除錯用
   function init() {
     var m = window.map;
     if (!m) { setTimeout(init, 500); return; }
