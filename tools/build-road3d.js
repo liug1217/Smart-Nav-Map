@@ -16,7 +16,7 @@
 //   road3d/index.json      有資料的圖磚清單 ["x_y", ...]
 //   road3d/report.json     體檢報告
 //   road3d/13/x_y.json     { v: 4, w: [[id, flags, 車道數, layer, [曲線點：經度, 緯度 × 1e6，第一點之後存差值], 細節], ...] }
-//     flags：1 匝道、2 快速道路(否則國道)、4 單行道、8 橋梁
+//     flags：1 匝道、2 快速道路(否則國道)、4 單行道、8 橋梁、16 隧道
 //     細節：w 每點路寬(公分；一個數字 = 整條一樣，陣列 = 差值)、z 每點高度(公分，同上，沒有 = 平地)、
 //           d [前一條在接縫的方向 x, y, 下一條的方向 x, y](× 1e4，東、北；沒有接續的路是 0)、
 //           h [邊, 起, 迄, ...] 這幾段護欄不畫(邊 1 右、-1 左、0 中央；起迄 = 占整條的比例 × 1e6)、
@@ -47,7 +47,8 @@ for (const e of elements) {
   if (e.type !== 'way' || !e.geometry || e.geometry.length < 2 || seen.has(e.id)) continue;
   seen.add(e.id);
   const t = e.tags || {};
-  if (/^(yes|building_passage|culvert)$/.test(t.tunnel || '') || t.covered === 'yes' && t.tunnel) continue;
+  if (t.tunnel === 'culvert') continue;
+  const tunnel = /^(yes|building_passage)$/.test(t.tunnel || '') || (t.covered === 'yes' && !!t.tunnel);   // 隧道也畫(路面＋雙白線)
   const hw = t.highway || '', link = /_link$/.test(hw), cls = hw.replace('_link', '');
   if (cls !== 'motorway' && cls !== 'trunk') continue;
   const ok = e.geometry.map((g, i) => (g && isFinite(g.lon) && isFinite(g.lat) ? i : -1)).filter((i) => i >= 0);
@@ -58,7 +59,7 @@ for (const e of elements) {
   const lanes = Math.max(0, Math.min(8, parseInt(t.lanes, 10) || 0));
   const bridge = !!t.bridge && t.bridge !== 'no';
   const layer = Math.max(0, Math.min(5, parseInt(t.layer, 10) || 0));
-  all.push({ id: e.id, link, cls, oneway, bridge, layer, lanes, ll, nodes });
+  all.push({ id: e.id, link, cls, oneway, bridge: bridge && !tunnel, tunnel, layer, lanes, ll, nodes });
 }
 const inferred = FIX.inferLanes(all);
 const mains = all;   // 第 2 階段：主線＋匝道都做
@@ -134,7 +135,7 @@ for (const w of mains) {
   if (w.medS && w.medS.length) ext.ms = rng(w.medS);   // 這段中央護欄不畫(對向那條畫花台)
   if (w.medC && w.medC.length) ext.mg = [].concat(...w.medC.map((r) => [Math.round(r[0] / L * 1e6), Math.round(r[1] / L * 1e6), Math.round(r[2] * 100), Math.round(r[3] * 100)]));
   if (w.gores && w.gores.length) ext.g = w.gores.map((g) => { const f = (pts) => { const o = [Math.round(pts[0][0] * 1e6), Math.round(pts[0][1] * 1e6)]; for (let i = 1; i < pts.length; i++) o.push(Math.round(pts[i][0] * 1e6) - Math.round(pts[i - 1][0] * 1e6), Math.round(pts[i][1] * 1e6) - Math.round(pts[i - 1][1] * 1e6)); return o; }; return { l: f(g.l), r: f(g.r), z: g.z.map((v) => Math.round(v * 100)) }; });   // 槽化區
-  const flags = (w.link ? 1 : 0) | (w.cls === 'trunk' ? 2 : 0) | (w.oneway ? 4 : 0) | (w.bridge ? 8 : 0);
+  const flags = (w.link ? 1 : 0) | (w.cls === 'trunk' ? 2 : 0) | (w.oneway ? 4 : 0) | (w.bridge ? 8 : 0) | (w.tunnel ? 16 : 0);
   const rec = [w.id, flags, FIX.lanesOf(w), w.layer, flat, ext];
   const keys = new Set();
   for (let i = 0; i < pts.length; i++) keys.add(lon2x(pts[i][0] / 1e6) + '_' + lat2y(pts[i][1] / 1e6));

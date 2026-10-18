@@ -487,6 +487,7 @@ function clearance(ways, nodeIdx) {
     const kk = A.id + ':' + i + ':' + B.id + ':' + j;
     if (seen.has(kk)) continue; seen.add(kk);
     if (nearJ([p[0] + (q[0] - p[0]) * ta, p[1] + (q[1] - p[1]) * ta])) continue;
+    if (A.tunnel || B.tunnel) continue;   // 隧道在地底下：上面的路不用抬高
     let up;
     if (A.layer !== B.layer) up = A.layer > B.layer ? A : B;
     else if (A.bridge !== B.bridge) up = A.bridge ? A : B;
@@ -775,7 +776,7 @@ function railHides(ways) {
 const HEDGE_MAX = 5, MED_MAX = 30, PLANTER_MIN = 1.32;
 function medians(ways) {
   const CELL = 50, grid = new Map();
-  const mains = ways.filter((w) => w.ok && w.oneway && !w.link);
+  const mains = ways.filter((w) => w.ok && w.oneway && !w.link && !w.tunnel);   // 隧道裡沒有分隔島(上下行是兩個隧道)
   for (const w of mains) for (let i = 0; i < w.Pc.length - 1; i++) {
     const a = w.Pc[i], b = w.Pc[i + 1];
     for (let x = Math.floor(Math.min(a[0], b[0]) / CELL); x <= Math.floor(Math.max(a[0], b[0]) / CELL); x++)

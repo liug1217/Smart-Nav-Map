@@ -50,7 +50,7 @@
     var f = r[1], d = r[4], e = r[5] || {}, x = d[0], y = d[1], coords = [[x / 1e6, y / 1e6]];
     for (var i = 2; i < d.length; i += 2) { x += d[i]; y += d[i + 1]; coords.push([x / 1e6, y / 1e6]); }
     var n = coords.length, dd = e.d || [0, 0, 0, 0];
-    return { id: r[0], link: !!(f & 1), cls: f & 2 ? 'trunk' : 'motorway', oneway: !!(f & 4), bridge: !!(f & 8), lanes: r[2], coords: coords,
+    return { id: r[0], link: !!(f & 1), cls: f & 2 ? 'trunk' : 'motorway', oneway: !!(f & 4), bridge: !!(f & 8), tunnel: !!(f & 16), lanes: r[2], coords: coords,
       W: perPoint(e.w, n, 10), H: perPoint(e.z, n, 0), hide: e.h || [], aL: perPoint(e.aL, n, 0), aR: perPoint(e.aR, n, 0), skip: e.x || [], gores: e.g || [], grass: e.mg || [], hedge: e.mh || [], medS: e.ms || [],
       dirB: dd[0] || dd[1] ? [dd[0] / 1e4, dd[1] / 1e4] : null, dirA: dd[2] || dd[3] ? [dd[2] / 1e4, dd[3] / 1e4] : null };
   }
@@ -293,7 +293,8 @@
       box([cx, cz], r0, fw, wd * 0.8, 2.0, hp - GD - 1.0, hp - GD);                      // 帽梁
     }
     var my = 0.06;
-    var edge = function (o, side, hs) {   // 外側：橋上紐澤西水泥護欄(外緣貼齊路面邊緣)、平地鋼板護欄
+    var edge = function (o, side, hs) {   // 外側：橋上紐澤西水泥護欄(外緣貼齊路面邊緣)、平地鋼板護欄、隧道裡是矮的水泥側牆(路緣)
+      if (w.tunnel) { wall(B.concrete, plus(o, 0.3 * side), -side, [[0, 0], [0, 0.35], [0.45, 0.35], [0.45, 0]], hs); return; }
       if (onBridge) wall(B.concrete, plus(o, -0.36 * side), side, JERSEY_OUT, hs); else guardrail(o, side, hs);
     };
     if (w.oneway) {
@@ -303,13 +304,15 @@
       strip(B.white, plus(bOut, -0.15), bOut, my);
       if (aR.some(function (v) { return v > 1; })) dashed(B.white, plus(b, -0.1), 0.2, my, function (k) { return aR[k] > 1 && aR[k + 1] > 1; });
       if (aL.some(function (v) { return v > 1; })) dashed(B.white, plus(a, 0.1), 0.2, my, function (k) { return aL[k] > 1 && aL[k + 1] > 1; });
-      for (var k2 = 1; k2 < w.lanes; k2++) (function (kk) {   // 車道線：車道數漸變時，窄掉的那條不畫
+      for (var k2 = 1; k2 < w.lanes; k2++) (function (kk) {   // 車道線：車道數漸變時，窄掉的那條不畫；隧道裡是雙白實線(禁止變換車道)
+        if (w.tunnel) { strip(B.white, plus(a, kk * LANE - 0.2), plus(a, kk * LANE - 0.08), my); strip(B.white, plus(a, kk * LANE + 0.08), plus(a, kk * LANE + 0.2), my); return; }
         dashed(B.white, plus(a, kk * LANE), 0.15, my, function (k) { return a[k] + kk * LANE < b[k] - 1 && a[k + 1] + kk * LANE < b[k + 1] - 1; });
       })(k2);
       edge(plus(half, -0.3), 1, '1');
+      if (w.tunnel && !w.link) edge(plus(nhalf, 0.3), -1, '0');   // 隧道左邊也是側牆(沒有中央分隔)
     }
     if (w.oneway && w.link) edge(plus(nhalf, 0.3), -1, '-1');   // 匝道：左邊也是護欄(沒有中央分隔)
-    if (w.oneway && !w.link) {
+    if (w.oneway && !w.link && !w.tunnel) {
       // 中央分隔：紐澤西水泥護欄＋綠色防眩板(每 1 公尺一片、斜 60 度、0.85～1.5 公尺高)
       var med = plus(nhalf, -0.1);
       wall(B.concrete, med, 1, JERSEY_IN, '0');
@@ -377,7 +380,7 @@
     }
     // 路燈：立在道路兩側外面(單行道立在自己右邊外側 → 上下行合起來就是整條路兩側；雙向道路兩邊都立)，每 50 公尺一支；
     //   平地在鋼板護欄外 0.6 公尺、橋上在外側水泥護欄頂上；護欄不畫的地方(接到別條路)不立
-    (w.oneway ? [1] : [1, -1]).forEach(function (side) {
+    (w.tunnel ? [] : w.oneway ? [1] : [1, -1]).forEach(function (side) {   // 隧道裡不立路燈
       for (var sl = side > 0 ? 25 : 50; sl < L - 10; sl += 50) {
         var kl = 0; while (kl < n - 2 && S[kl + 1] < sl) kl++;
         var tl = (sl - S[kl]) / ((S[kl + 1] - S[kl]) || 1);
@@ -597,7 +600,7 @@
       var cur = m.getPaintProperty(id, 'line-opacity');
       if (Array.isArray(cur)) return;   // 已經是跟縮放有關的設定：不動
       var v = typeof cur === 'number' ? cur : 1;
-      m.setPaintProperty(id, 'line-opacity', ['step', ['zoom'], v, MIN_ZOOM, ['case', ['==', ['get', 'brunnel'], 'tunnel'], v, 0]]);   // 隧道沒有 3D：留著
+      m.setPaintProperty(id, 'line-opacity', ['step', ['zoom'], v, MIN_ZOOM, 0]);   // 隧道也有 3D 路面了
       m.getLayer(id)._snm3d = true;
     });
     base.forEach(function (id) {
