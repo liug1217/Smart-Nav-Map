@@ -1743,6 +1743,31 @@ html, body {
   html, body, #map{ height: min(100lvh, calc(100% + var(--safe-top))); }
 }
 :root.is-standalone, :root.is-standalone body, :root.is-standalone #map{ height: min(100lvh, calc(100% + var(--safe-top))); }
+/* 同一個 bug：貼著底部的卡片、按鈕是以「少算的畫面底」為準，會比真正的螢幕底高一截。
+   --vp-gap = 少算的那段高度(JS 量：地圖高 - 畫面高；一般瀏覽器是 0)，把它們整個往下移回去 */
+:root{ --vp-gap: 0px; }
+.rect1, .bottomBar, .mapCtrlGroup, .destPanel, .pttChat,   /* .rect4、.appBrand 在 .bottomBar 裡面，會跟著移 */
+.placeSheet, .routePanel, .tripSummaryCard, .statsPanel, #ios-home-guard, .snmPushAsk, .snmRptToast{ translate: 0 var(--vp-gap); }
+body.searchOpen .searchBarWrap{ bottom: calc(-1 * var(--vp-gap)); }   /* 全螢幕搜尋頁：背景蓋到最底 */
+</style>
+<script>
+// 量出畫面少算的高度(iOS 26 主畫面 App)：地圖已經撐到螢幕底，跟 innerHeight 的差就是 --vp-gap
+(function () {
+  function update() {
+    var map = document.getElementById('map');
+    if (!map) return;
+    var gap = Math.max(0, Math.round(map.getBoundingClientRect().height - window.innerHeight));
+    if (gap > 120) gap = 0; // 不合理的值(例如還沒排版好)就不移
+    document.documentElement.style.setProperty('--vp-gap', gap + 'px');
+  }
+  window.addEventListener('load', update);
+  window.addEventListener('resize', update);
+  window.addEventListener('orientationchange', function () { setTimeout(update, 300); });
+  document.addEventListener('DOMContentLoaded', update);
+  setTimeout(update, 1000);
+})();
+</script>
+<style>
 .searchBarWrap{ top: var(--safe-top); }
 body.searchOpen .searchBarWrap{ top:0; padding-top: var(--safe-top); }   /* 全螢幕搜尋頁：背景蓋滿，內容往下讓 */
 .rect8{ top: calc(54px + var(--safe-top)); }
