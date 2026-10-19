@@ -1737,6 +1737,12 @@ html, body {
 /* 從主畫面開(全螢幕)時，iOS 有時量到的頂部安全區是 0，上方元件會被狀態列 / 瀏海擋住；至少讓出 60px */
 @media (display-mode: standalone), (display-mode: fullscreen){ :root{ --safe-top: max(env(safe-area-inset-top, 0px), 60px); } }
 :root.is-standalone{ --safe-top: max(env(safe-area-inset-top, 0px), 60px); }
+/* iOS 26 從主畫面開時，畫面高度少算了狀態列那一段(WebKit bug 301108)，地圖底下會露出一塊深藍底。
+   全螢幕時地圖(和整頁)改用 100lvh 撐到螢幕最底；最多只多加頂部安全區，避免超出畫面(WebKit bug 316008)。 */
+@media (display-mode: standalone), (display-mode: fullscreen){
+  html, body, #map{ height: min(100lvh, calc(100% + var(--safe-top))); }
+}
+:root.is-standalone, :root.is-standalone body, :root.is-standalone #map{ height: min(100lvh, calc(100% + var(--safe-top))); }
 .searchBarWrap{ top: var(--safe-top); }
 body.searchOpen .searchBarWrap{ top:0; padding-top: var(--safe-top); }   /* 全螢幕搜尋頁：背景蓋滿，內容往下讓 */
 .rect8{ top: calc(54px + var(--safe-top)); }
