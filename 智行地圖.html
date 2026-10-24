@@ -7,34 +7,13 @@
 <link rel="apple-touch-icon" href="智行地圖.png">
 <link rel="icon" type="image/png" href="智行地圖.png">
 <meta name="apple-mobile-web-app-title" content="智行地圖">
-<!-- 加入主畫面時全螢幕開：狀態列透明疊在地圖上(只有地圖延伸到狀態列底下，其他東西的位置跟原本一樣，見下面 snm-fs) -->
+<!-- 加入主畫面時全螢幕開：狀態列透明疊在地圖上(只有地圖延伸到狀態列底下，其他東西的位置跟原本一樣，寫法跟 Group 一樣，見下面 --safe-top) -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>
-// 從主畫面開(全螢幕)：量出狀態列多高(--st)，整層 UI 往下移這麼多 → 每個東西看起來跟原本一模一樣；只有地圖往上撐到螢幕最頂
-(function () {
-  var root = document.documentElement;
-  var fs = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-  if (!fs) return;
-  root.classList.add('snm-fs');
-  function measure() {
-    var probe = document.createElement('div');
-    probe.style.cssText = 'position:absolute;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
-    root.appendChild(probe);
-    var h = probe.getBoundingClientRect().height;
-    probe.remove();
-    // iOS 有時量到 0(WebKit 的 bug)：直立時照機型給狀態列高度(動態島 59、瀏海 47、Home 鍵機型 20)；橫的時候本來就沒有狀態列
-    if (!h && window.innerHeight > window.innerWidth) {
-      var sh = Math.max(screen.width, screen.height);
-      h = sh >= 852 ? 59 : sh >= 812 ? 47 : 20;
-    }
-    root.style.setProperty('--st', h + 'px');
-  }
-  measure();
-  window.addEventListener('resize', measure);
-  window.addEventListener('orientationchange', function () { setTimeout(measure, 300); });
-})();
+// 跟 Group 一樣：iOS 舊版的主畫面 App 不一定支援 display-mode 媒體查詢，用 navigator.standalone 補判斷
+if (window.navigator.standalone) document.documentElement.classList.add('is-standalone');
 </script>
 <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <style>
@@ -1645,25 +1624,51 @@ html, body {
   overflow: hidden;
   touch-action: none;
 }
-/* ===== 📱 主畫面全螢幕(snm-fs)：只有地圖全螢幕，其他東西位置不變 =====
-   body 從狀態列下面開始(往下移 --st)、到螢幕最底(100lvh)；body 有 transform，裡面 position:fixed 的東西都以 body 為準，
-   所以上面的東西跟原本一樣在狀態列下面、下面的東西跟原本一樣貼著螢幕底，不用一個一個改位置。
-   地圖往上多撐 --st，鋪滿整個螢幕(包含狀態列底下)。 */
-html.snm-fs body {
+/* ===== 📱 主畫面全螢幕：寫法跟 Group 一樣 =====
+   --safe-top：系統給的頂部安全區；從主畫面開(全螢幕、直的)時至少讓出 60px(iOS 有時量到 0，WebKit Bug 306465)。
+   智行地圖有橫式導航，橫的時候沒有狀態列，所以 60px 只用在直的。
+   只有地圖鋪滿整個螢幕；其他東西整層往下移 --safe-top(body 有 transform，裡面 position:fixed 的東西都以 body 為準)，
+   位置跟原本一樣，不用一個一個改。
+   底部：iOS 26 主畫面 App 的畫面高度會少算一段(WebKit Bug 301108)，底下會多一塊；
+   地圖和整層 UI 都用 100lvh 撐到真正的螢幕最底，不用 100%。 */
+:root { --safe-top: env(safe-area-inset-top, 0px); }
+@media (display-mode: standalone) and (orientation: portrait), (display-mode: fullscreen) and (orientation: portrait) {
+  :root { --safe-top: max(env(safe-area-inset-top, 0px), 60px); }
+}
+@media (orientation: portrait) {
+  :root.is-standalone { --safe-top: max(env(safe-area-inset-top, 0px), 60px); }
+}
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  body {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: calc(100lvh - var(--safe-top));
+    transform: translateY(var(--safe-top));
+    overflow: visible;
+  }
+  #map {
+    top: calc(-1 * var(--safe-top));
+    height: 100lvh;
+  }
+  /* 原本用 env(safe-area-inset-top) 讓開狀態列的，整層已經往下移了，不要再加一次 */
+  .avoidPickBar { top: 12px; }
+}
+:root.is-standalone body {
   position: fixed;
   left: 0;
   right: 0;
   top: 0;
-  height: calc(100lvh - var(--st, 0px));
-  transform: translateY(var(--st, 0px));
+  height: calc(100lvh - var(--safe-top));
+  transform: translateY(var(--safe-top));
   overflow: visible;
 }
-html.snm-fs #map {
-  top: calc(-1 * var(--st, 0px));
+:root.is-standalone #map {
+  top: calc(-1 * var(--safe-top));
   height: 100lvh;
 }
-/* 原本用 env(safe-area-inset-top) 讓開狀態列的，body 已經往下移了，不要再加一次 */
-html.snm-fs .avoidPickBar { top: 12px; }
+:root.is-standalone .avoidPickBar { top: 12px; }
 
 /* ===== 🌩️ 中央氣象署天氣特報橫幅 ===== */
 .weatherAlert{
