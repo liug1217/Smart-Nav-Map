@@ -12660,6 +12660,11 @@ setTimeout(() => {
   setTimeout(check, 3000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
 
+  // ── 沒網路也能打開：一載入就註冊 sw.js(存網頁用到的檔案、看過的地圖；推播通知也是它) ──
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function (e) { console.log('service worker 註冊失敗', e); }); });
+  }
+
   // ── 更新通知(推播)：手機要支援(iPhone 要先「加入主畫面」才收得到) ──
   var can = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   function b64ToBytes(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var r = atob(s), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
