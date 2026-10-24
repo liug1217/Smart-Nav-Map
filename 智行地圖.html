@@ -7,14 +7,6 @@
 <link rel="apple-touch-icon" href="智行地圖.png">
 <link rel="icon" type="image/png" href="智行地圖.png">
 <meta name="apple-mobile-web-app-title" content="智行地圖">
-<!-- 加入主畫面時用全螢幕開(狀態列透明疊在畫面上，內容用 --safe-top / --safe-bottom 避開瀏海和底部橫條) -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script>
-// iOS 舊版的主畫面 App 不一定支援 display-mode 媒體查詢，用 navigator.standalone 補判斷(給 --safe-top 用)
-if (window.navigator.standalone) document.documentElement.classList.add('is-standalone');
-</script>
 <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <style>
 /* ===== OpenStreetMap Layer ===== */
@@ -748,7 +740,7 @@ body.searchOpen .searchResultsList{
 .rpAvBtns .apply:disabled{ background:#F4B7B5; cursor:default; }
 .rpAvBtns .done{ background:#2F80FF; color:#fff; }
 .rpAvWarn{ background:#FFF4D6; color:#6B4A00; border-radius:10px; padding:8px 10px; font-size:13px; line-height:1.45; margin:4px 0; }
-.avoidPickBar{ position:fixed; left:50%; top:calc(12px + var(--safe-top, env(safe-area-inset-top))); transform:translateX(-50%); z-index:1200; display:none; align-items:center; gap:10px;
+.avoidPickBar{ position:fixed; left:50%; top:calc(12px + env(safe-area-inset-top)); transform:translateX(-50%); z-index:1200; display:none; align-items:center; gap:10px;
   background:rgba(255,255,255,0.95); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:0.5px solid #d9d9d9; box-shadow:0 4px 12px rgba(0,0,0,0.25);
   border-radius:999px; padding:8px 8px 8px 16px; font-size:14px; color:#1c1c1e; max-width:calc(100vw - 32px); }
 .avoidPickBar.on{ display:flex; }
@@ -1730,65 +1722,6 @@ html, body {
   }
 }
 
-</style>
-<style>
-/* ===== 📱 全螢幕(加入主畫面)安全區：上方元件避開瀏海 / 狀態列，下方避開底部橫條 ===== */
-:root{ --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
-/* 從主畫面開(全螢幕)時，iOS 有時量到的頂部安全區是 0，上方元件會被狀態列 / 瀏海擋住；至少讓出 60px */
-@media (display-mode: standalone), (display-mode: fullscreen){ :root{ --safe-top: max(env(safe-area-inset-top, 0px), 60px); } }
-:root.is-standalone{ --safe-top: max(env(safe-area-inset-top, 0px), 60px); }
-/* iOS 26 從主畫面開時，畫面高度少算了狀態列那一段(WebKit bug 301108)，地圖底下會露出一塊深藍底。
-   全螢幕時地圖(和整頁)改用 100lvh 撐到螢幕最底；最多只多加頂部安全區，避免超出畫面(WebKit bug 316008)。 */
-@media (display-mode: standalone), (display-mode: fullscreen){
-  html, body, #map{ height: min(100lvh, calc(100% + var(--safe-top))); }
-}
-:root.is-standalone, :root.is-standalone body, :root.is-standalone #map{ height: min(100lvh, calc(100% + var(--safe-top))); }
-/* 同一個 bug：貼著底部的卡片、按鈕是以「少算的畫面底」為準，會比真正的螢幕底高一截。
-   --vp-gap = 少算的那段高度(JS 量：地圖高 - 畫面高；一般瀏覽器是 0)，把它們整個往下移回去 */
-:root{ --vp-gap: 0px; }
-.rect1, .bottomBar, .mapCtrlGroup, .destPanel, .pttChat,   /* .rect4、.appBrand 在 .bottomBar 裡面，會跟著移 */
-.placeSheet, .routePanel, .tripSummaryCard, .statsPanel, #ios-home-guard, .snmPushAsk, .snmRptToast{ translate: 0 var(--vp-gap); }
-body.searchOpen .searchBarWrap{ bottom: calc(-1 * var(--vp-gap)); }   /* 全螢幕搜尋頁：背景蓋到最底 */
-</style>
-<script>
-// 量出畫面少算的高度(iOS 26 主畫面 App)：地圖已經撐到螢幕底，跟 innerHeight 的差就是 --vp-gap
-(function () {
-  function update() {
-    var map = document.getElementById('map');
-    if (!map) return;
-    var gap = Math.max(0, Math.round(map.getBoundingClientRect().height - window.innerHeight));
-    if (gap > 120) gap = 0; // 不合理的值(例如還沒排版好)就不移
-    document.documentElement.style.setProperty('--vp-gap', gap + 'px');
-  }
-  window.addEventListener('load', update);
-  window.addEventListener('resize', update);
-  window.addEventListener('orientationchange', function () { setTimeout(update, 300); });
-  document.addEventListener('DOMContentLoaded', update);
-  setTimeout(update, 1000);
-})();
-</script>
-<style>
-.searchBarWrap{ top: var(--safe-top); }
-body.searchOpen .searchBarWrap{ top:0; padding-top: var(--safe-top); }   /* 全螢幕搜尋頁：背景蓋滿，內容往下讓 */
-.rect8{ top: calc(54px + var(--safe-top)); }
-.onlineCapsule, .mapClock, .rect6, .speedLimitSign{ top: calc(56px + var(--safe-top)); }
-.coinDisplay{ top: calc(96px + var(--safe-top)); }
-.coinToast{ top: calc(133px + var(--safe-top)); }
-.weatherAlert{ top: calc(158px + var(--safe-top)); }
-.cctvOverlay{ top: calc(240px + var(--safe-top)); }
-body.navigating .onlineCapsule, body.navigating .mapClock, body.navigating .rect6, body.navigating .speedLimitSign{ top: calc(77px + var(--safe-top)); }
-body.navigating .coinDisplay{ top: calc(117px + var(--safe-top)); }
-body.navigating .coinToast{ top: calc(155px + var(--safe-top)); }
-body.navigating .weatherAlert{ top: calc(180px + var(--safe-top)); }
-/* 底部導航卡片：離底部 = max(原本距離, 底部安全區)；跟著卡片的地圖按鈕、路名、品牌標籤、目的地面板往上移同樣距離(展開 / 收合時 _setPanelState 也照這個算) */
-.rect1{ bottom: max(16px, var(--safe-bottom)); }
-.bottomBar{ bottom: max(8px, var(--safe-bottom)); }
-.rect4, .appBrand{ bottom: calc(109px + max(0px, var(--safe-bottom) - 16px)); }
-.mapCtrlGroup{ bottom: calc(116px + max(0px, var(--safe-bottom) - 16px)); }
-.destPanel{ bottom: calc(180px + max(0px, var(--safe-bottom) - 16px)); }
-/* 貼著底部的卡片：內容下方至少留到底部橫條上面 */
-.psBody{ padding-bottom: max(28px, var(--safe-bottom)); }
-.routePanel{ padding-bottom: max(18px, var(--safe-bottom)); }
 </style>
 </head>
 <body>
@@ -3660,14 +3593,6 @@ function _flipCell(cell, from, to) {
     if (br && br.offsetWidth) document.documentElement.style.setProperty('--brand-w', br.offsetWidth + 'px');
   });
 
-  // 底部安全區(--safe-bottom)換成 px：iPhone 加入主畫面全螢幕時約 34，其他 0
-  var _sbProbe = null;
-  function _safeBottomPx() {
-    if (!_sbProbe) { _sbProbe = document.createElement('div'); _sbProbe.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:var(--safe-bottom, 0px);visibility:hidden;pointer-events:none'; document.body.appendChild(_sbProbe); }
-    return _sbProbe.offsetHeight || 0;
-  }
-  window._safeBottomPx = _safeBottomPx;
-
   // ===== 面板狀態管理（導航收合/展開）=====
   function _setPanelState(h, animated) {
     var r1 = document.getElementById('rect1');
@@ -3677,7 +3602,7 @@ function _flipCell(cell, from, to) {
     var isNav = document.body.classList.contains('navigating');
     var l, bot, mcBot, r4Bot, showRadio;
     var COMPACT = 83, NORMAL = 232; // 232 = 原本 160 + 對講列 72
-    var sab = _safeBottomPx();
+    var sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
     if (h >= NORMAL) {
       l = 8; bot = 8; mcBot = 257; r4Bot = 250; showRadio = true;
     } else if (h <= COMPACT) {
@@ -3690,11 +3615,8 @@ function _flipCell(cell, from, to) {
     var trP = animated ? ('left .38s '+ease+',right .38s '+ease+',bottom .38s '+ease+',height .38s '+ease) : 'none';
     var trB = animated ? ('bottom .38s '+ease) : 'none';
     var trPad = animated ? ('padding .38s '+ease) : 'none';
-    // 全螢幕時卡片離底部 = max(原本距離, 底部安全區)，跟著卡片的東西往上移同樣距離
-    var lift = Math.max(bot, sab) - bot;
-    bot += lift; mcBot += lift; r4Bot += lift;
-    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = bot+'px'; r1.style.height = h+'px'; }
-    if (mc) { mc.style.transition = trB; mc.style.bottom = mcBot+'px'; }
+    if (r1) { r1.style.transition = trP; r1.style.left = l+'px'; r1.style.right = l+'px'; r1.style.bottom = (bot + sab)+'px'; r1.style.height = h+'px'; }
+    if (mc) { mc.style.transition = trB; mc.style.bottom = (mcBot + sab)+'px'; }
     if (r4) { r4.style.transition = trB; r4.style.bottom = r4Bot+'px'; }
     var br = document.getElementById('appBrand');
     if (br) {
@@ -3727,11 +3649,11 @@ function _flipCell(cell, from, to) {
   function _maxCardH() {
     if (!_safeTopProbe) {
       _safeTopProbe = document.createElement('div');
-      _safeTopProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:var(--safe-top, env(safe-area-inset-top));visibility:hidden;pointer-events:none';
+      _safeTopProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
       document.body.appendChild(_safeTopProbe);
     }
-    const sab = window._safeBottomPx ? window._safeBottomPx() : 0;
-    return window.innerHeight - _safeTopProbe.offsetHeight - 12 - Math.max(8, sab); // 卡片離底部 = max(8, 底部安全區)
+    const sab = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab')) || 0;
+    return window.innerHeight - _safeTopProbe.offsetHeight - 12 - (8 + sab); // 8 = 卡片離底部的距離
   }
   function _measureExpanded() {
     _voiceDrawer.style.maxHeight = ''; _voiceDrawer.style.overflowY = '';
@@ -9319,7 +9241,7 @@ setTimeout(() => {
 
 <!-- ===== WASD 鍵盤駕駛測試 ===== -->
 <div id="kbHud" style="
-  display:none;position:fixed;top:calc(16px + var(--safe-top, 0px));left:50%;transform:translateX(-50%);
+  display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,0.72);backdrop-filter:blur(12px);
   color:#fff;font-family:'SF Pro Display',Arial,sans-serif;font-size:13px;font-weight:500;
   padding:7px 16px;border-radius:20px;z-index:9999;
@@ -12697,14 +12619,14 @@ setTimeout(() => {
 <script src="road_3d.js?v=49"></script>
 <!-- 🟢 網站更新中提示、更新通知(推播) -->
 <style>
-.snmUpdPill{ position:fixed; top:calc(56px + var(--safe-top, 0px)); left:50%; transform:translateX(-50%); z-index:1001; display:none; align-items:center; gap:8px;
+.snmUpdPill{ position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:1001; display:none; align-items:center; gap:8px;
   padding:7px 14px; border-radius:18px; background:rgba(255,255,255,0.8); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
   border:0.5px solid #d9d9d9; box-shadow:0 4px 4px rgba(0,0,0,0.25); font:600 13px "SF Pro Display","SF Pro Text",Arial,sans-serif; color:#0B7A3E; white-space:nowrap; cursor:default; }
 .snmUpdPill .dot{ width:9px; height:9px; border-radius:50%; background:#16C060; box-shadow:0 0 0 3px rgba(22,192,96,0.25); animation:snmUpdBreath 1.4s ease-in-out infinite; }
 .snmUpdPill.done{ cursor:pointer; }
 .snmUpdPill.done .dot{ animation:none; }
 @keyframes snmUpdBreath{0%,100%{opacity:1;}50%{opacity:0.35;}}
-.snmPushAsk{ position:fixed; left:16px; right:16px; bottom:calc(118px + max(0px, var(--safe-bottom, 0px) - 16px)); z-index:1001; display:none; padding:14px 16px; border-radius:20px;
+.snmPushAsk{ position:fixed; left:16px; right:16px; bottom:118px; z-index:1001; display:none; padding:14px 16px; border-radius:20px;
   background:rgba(255,255,255,0.8); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:0.5px solid #d9d9d9; box-shadow:0 4px 4px rgba(0,0,0,0.25);
   font:14px "SF Pro Display","SF Pro Text",Arial,sans-serif; color:#1c1c1e; }
 .snmPushAsk .btns{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
