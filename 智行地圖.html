@@ -12790,12 +12790,15 @@ setTimeout(() => {
 .snmUpdPill.done .dot{ animation:none; }
 @keyframes snmUpdBreath{0%,100%{opacity:1;}50%{opacity:0.35;}}
 .snmPushAsk{ position:fixed; left:16px; right:16px; bottom:118px; z-index:1001; display:none; padding:14px 16px; border-radius:20px;
-  background:rgba(255,255,255,0.8); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:0.5px solid #d9d9d9; box-shadow:0 4px 4px rgba(0,0,0,0.25);
+  /* 玻璃：半透明白 + 模糊加飽和(看得到後面的地圖)，一圈亮邊、上緣比較亮，跟 iOS 的玻璃卡片一樣 */
+  background:rgba(255,255,255,0.42); -webkit-backdrop-filter:blur(18px) saturate(180%); backdrop-filter:blur(18px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.65); border-radius:26px;
+  box-shadow:0 10px 28px rgba(0,0,0,0.22), inset 0 1.5px 1px rgba(255,255,255,0.9), inset 0 -1px 1px rgba(255,255,255,0.35);
   font:14px "SF Pro Display","SF Pro Text",Arial,sans-serif; color:#1c1c1e; }
 .snmPushAsk .btns{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
-.snmPushAsk button{ border:none; border-radius:16px; padding:7px 16px; font-weight:600; font-size:13px; font-family:inherit; cursor:pointer; }
+.snmPushAsk button{ border:none; border-radius:999px; padding:8px 20px; /* 膠囊形(完全圓角) */ font-weight:600; font-size:13px; font-family:inherit; cursor:pointer; }
 .snmPushAsk .yes{ background:#16C060; color:#fff; }
-.snmPushAsk .no{ background:rgba(0,0,0,0.06); color:#333; }
+.snmPushAsk .no{ background:rgba(255,255,255,0.55); color:#333; box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.08); }
 </style>
 <div class="snmUpdPill" id="snmUpdPill"><span class="dot"></span><span id="snmUpdText">系統更新中…</span></div>
 <div class="snmPushAsk" id="snmPushAsk">🔔 要在智行地圖更新時收到通知嗎？<div class="btns"><button class="no" id="snmPushNo">不用</button><button class="yes" id="snmPushYes">開啟通知</button></div></div>
