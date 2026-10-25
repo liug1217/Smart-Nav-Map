@@ -14,6 +14,9 @@
 <script>
 // 跟 Group 一樣：iOS 舊版的主畫面 App 不一定支援 display-mode 媒體查詢，用 navigator.standalone 補判斷
 if (window.navigator.standalone) document.documentElement.classList.add('is-standalone');
+// 主畫面全螢幕時整層 UI(body)往下移了狀態列那麼多，body 裡 position:fixed 的東西是從 body 頂端算起。
+// 用 getBoundingClientRect 量到的是螢幕座標，要放回固定位置時先換成 body 裡的座標(一般瀏覽器裡 body 沒移，等於原值)
+window.snmFixedY = function (screenY) { return screenY - document.body.getBoundingClientRect().top; };
 </script>
 <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <style>
@@ -712,13 +715,18 @@ body.searchOpen .searchResultsList{
 @media (prefers-reduced-motion: reduce){ .snmPickPin.in, .snmPickPin.out{ animation-duration:.01s; } }
 .rpTime .rpEco{ font-size:11px; font-weight:700; color:#0A7A3E; background:#E3F7EA; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpAvoidBtn.eco{ background:#E3F7EA; border-color:#16A34A; color:#0A7A3E; font-weight:700; }
-.rpEcoRow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#F1FBF4; border:1px solid #CFEFD9; cursor:pointer; margin-top:6px; }
+.rpEcoRow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#F1FBF4; border:1px solid #CFEFD9; margin-top:6px; }
 .rpEcoRow .t{ flex:1; font-size:14px; font-weight:700; color:#0A7A3E; }
 .rpEcoRow .t small{ display:block; font-size:12px; font-weight:400; color:#5F6368; margin-top:1px; }
-.rpEcoSw{ width:44px; height:26px; border-radius:13px; background:#C7C7CC; position:relative; flex-shrink:0; transition:background .2s; }
-.rpEcoSw::after{ content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .2s; }
-.rpEcoRow.on .rpEcoSw{ background:#16A34A; }
-.rpEcoRow.on .rpEcoSw::after{ transform:translateX(18px); }
+/* 節能路線優先的開關：跟 Group 一樣的 liquidglass.dev <lg-switch>(64×28、開啟綠色、按住時圓鈕變玻璃、可以左右滑) */
+.rpEcoWrap{ display:none; flex-shrink:0; }
+.routePanel.avoidOpen .rpEcoWrap:not([hidden]){ display:block; }
+.rpEcoRow .t{ cursor:pointer; }
+.rpEcoRow lg-switch{ --lg-on:#34C759; --lg-track-off:rgba(120,120,128,0.32); --lg-surface:transparent;
+  --lg-shadow-1:0px 3px 8px rgba(0,0,0,0.15), 0px 1px 1px rgba(0,0,0,0.16); flex:none; touch-action:pan-y; }
+/* 圓鈕到底時底色才換，換的那一下淡入 0.2 秒(跟 Group 一樣) */
+@property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
+.rpEcoRow .lg-switch__control{ transition: --p 0.2s ease; }
 .rpTime .rpFast{ font-size:11px; font-weight:700; color:#fff; background:#2F80FF; border-radius:8px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
 .rpSub{ font-size:12px; color:#666; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rpStart{ width:100%; flex:none; }
@@ -1658,6 +1666,8 @@ html, body {
   .avoidPickBar { top: 12px; }
   /* 載入畫面也鋪滿整個螢幕：往上撐到狀態列底下，上面加同樣多的內距，中間的 logo、文字位置不變 */
   #splashScreen { top: calc(-1 * var(--safe-top)); padding-top: var(--safe-top); box-sizing: border-box; }
+  /* 全螢幕搜尋頁也一樣：毛玻璃鋪到狀態列底下，搜尋框和結果位置不變 */
+  body.searchOpen .searchBarWrap { top: calc(-1 * var(--safe-top)); padding-top: var(--safe-top); }
 }
 :root.is-standalone { height: 100lvh; }
 :root.is-standalone body {
@@ -1675,6 +1685,7 @@ html, body {
 }
 :root.is-standalone .avoidPickBar { top: 12px; }
 :root.is-standalone #splashScreen { top: calc(-1 * var(--safe-top)); padding-top: var(--safe-top); box-sizing: border-box; }
+:root.is-standalone body.searchOpen .searchBarWrap { top: calc(-1 * var(--safe-top)); padding-top: var(--safe-top); }
 
 /* ===== 🌩️ 中央氣象署天氣特報橫幅 ===== */
 .weatherAlert{
@@ -1845,6 +1856,7 @@ html, body {
   <!-- 🚫 避開道路：地圖點選或從目前路線的道路清單選，兩邊共用同一份避開清單 -->
   <button type="button" class="rpAvoidBtn" id="rpAvoidBtn">路線選項</button>
   <div class="rpList" id="rpList"></div>
+  <div class="rpEcoWrap" id="rpEcoWrap" hidden></div><!-- 節能路線優先(不在會捲動的清單裡，見 syncEcoRow) -->
   <div class="rpAvoid" id="rpAvoid"></div>
   <button type="button" class="navigateBtn rpStart" id="rpStart">開始導航</button>
 </div>
@@ -5757,7 +5769,8 @@ function _flipCell(cell, from, to) {
   }
   const SNM_LEAF_SVG = '<svg class="snmLeaf" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 20.5C4.5 10.5 10.5 4 20.5 3.5c.4 10-5.6 17-16 17z" fill="#16A34A"/><path d="M5.5 19.5C9 14.5 12.5 11 16.5 8" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>'; // 節能綠葉(路線清單、導航卡片、路線選項都用這個)
   window.SNM_LEAF_SVG = SNM_LEAF_SVG;
-  function ecoOn() { try { return localStorage.getItem('snm_eco_pref') === '1'; } catch (_) { return false; } }
+  // 節能路線優先：預設開啟(沒選過 = 開)；使用者關掉才存 '0'
+  function ecoOn() { try { const v = localStorage.getItem('snm_eco_pref'); return v === null ? true : v === '1'; } catch (_) { return true; } }
   // 節能路線優先：使用者還沒自己選過時，預先選最節能的那條
   function ecoAutoSelect(c) {
     if (!c || c.userPicked || !ecoOn()) return;
@@ -6161,24 +6174,39 @@ function _flipCell(cell, from, to) {
     return { id: x.id, name: x.name, sub: x.sub.replace(/^第 d+ 段 · /, '路線上 '), line: inner || x.coords, show: x.coords,
       rings: avRingsAlong(inner || x.coords, 1e9, 6, 3), from: 'list' };   // 一開始只放中間 1 個，路線還走到再補
   }
+  // 節能路線優先那一列：放在可以捲動的清單外面(iPhone 的玻璃開關放在會捲動 / 裁切的容器裡會畫錯位)，
+  // 只做一次，之後只同步開關狀態；開關跟 Group 的一樣(liquidglass.dev 的 <lg-switch>、綠色、可以按住滑、會震動)
+  function setEco(on) {
+    try { localStorage.setItem('snm_eco_pref', on ? '1' : '0'); } catch (_) {}
+    const c = _routeChoice;
+    if (c) { c.userPicked = false; if (on) ecoAutoSelect(c); else { c.sel = 0; rpDraw(); } }  // 不用重新規劃，只換選哪一條
+    paintAvoidBtn();
+  }
+  function syncEcoRow() {
+    const wrap = document.getElementById('rpEcoWrap');
+    if (!wrap) return;
+    wrap.hidden = !NAV_MODES[navMode].traffic;
+    if (wrap.hidden) return;
+    let sw = wrap.querySelector('lg-switch');
+    if (!sw) {
+      const row = document.createElement('div'); row.className = 'rpEcoRow';
+      row.innerHTML = '<div class="t">' + SNM_LEAF_SVG + ' 節能路線優先<small>依車速、轉彎、塞車估算哪條最省油，預先選它</small></div><lg-switch aria-label="節能路線優先"></lg-switch>';
+      wrap.appendChild(row);
+      sw = row.querySelector('lg-switch');
+      // 開關切換(點、滑都會)：存起來、換選的路線。滑動切換是程式切的，自己震一下；點的是原生開關，iPhone 自己會震
+      sw.addEventListener('change', (e) => { if (!e.isTrusted) window.snmHaptic(); setEco(e.target.checked); });
+      // 點文字那邊也可以切
+      row.querySelector('.t').addEventListener('click', () => { sw.checked = !sw.checked; window.snmHaptic(); setEco(sw.checked); });
+      customElements.whenDefined('lg-switch').then(() => { window.snmSwitchSnap(sw); window.snmSwitchDrag(sw); });
+    }
+    sw.toggleAttribute('checked', ecoOn());
+  }
   function renderAvoidPanel() {
     const box = document.getElementById('rpAvoid');
     if (!box || !routePanel.classList.contains('avoidOpen')) return;
     box.innerHTML = '';
     
-    if (NAV_MODES[navMode].traffic) {
-      const eco = document.createElement('div'); eco.className = 'rpEcoRow' + (ecoOn() ? ' on' : '');
-      eco.setAttribute('role', 'switch'); eco.setAttribute('aria-checked', ecoOn());
-      eco.innerHTML = '<div class="t">' + SNM_LEAF_SVG + ' 節能路線優先<small>依車速、轉彎、塞車估算哪條最省油，預先選它</small></div><div class="rpEcoSw"></div>';
-      eco.onclick = () => {
-        const on = !ecoOn();
-        try { localStorage.setItem('snm_eco_pref', on ? '1' : ''); } catch (_) {}
-        const c = _routeChoice;
-        if (c) { c.userPicked = false; if (on) ecoAutoSelect(c); else { c.sel = 0; rpDraw(); } }  // 不用重新規劃，只換選哪一條
-        paintAvoidBtn(); renderAvoidPanel();
-      };
-      box.appendChild(eco);
-    }
+    syncEcoRow();
     const chips = document.createElement('div'); chips.className = 'rpAvChips';
     chips.style.marginTop = '10px';
     AVOID_OPTS.forEach(o => {
@@ -8951,7 +8979,7 @@ setTimeout(() => {
   function floatAnim(amount, special){
     const disp = document.getElementById('coinDisplay');
     let x=window.innerWidth-90, y=90;
-    if(disp){ const r=disp.getBoundingClientRect(); x=r.left; y=r.top-4; }
+    if(disp){ const r=disp.getBoundingClientRect(); x=r.left; y=window.snmFixedY(r.top)-4; } // 螢幕座標 → body 裡的座標(主畫面全螢幕時 body 往下移了)
     const d = document.createElement('div');
     d.className = 'coinFloat';
     d.textContent = '+' + amount + ' 🪙';
@@ -11340,7 +11368,8 @@ setTimeout(() => {
     var right = tb && tb.width ? tb.right : (r && r.width ? r.right : innerWidth - 12);
     var h = bottom - top;
     bar.style.opacity = h < 110 ? '0' : '';   // 太矮(按鈕展開、或手機橫放空間不夠)就淡出，不擠壓按鈕
-    bar.style.top = top + 'px'; bar.style.height = Math.max(0, h) + 'px'; bar.style.left = (right - 10) + 'px'; // 色帶寬 10px(含白框)，右緣貼齊按鈕右緣
+    // top 是螢幕座標(量別的元素量到的)；路況條是 position:fixed，主畫面全螢幕時要換成 body 裡的座標，不然會往下多跑一個狀態列高
+    bar.style.top = window.snmFixedY(top) + 'px'; bar.style.height = Math.max(0, h) + 'px'; bar.style.left = (right - 10) + 'px'; // 色帶寬 10px(含白框)，右緣貼齊按鈕右緣
   }
   // 整條路線由下往上畫：起點(0)在底部 0%，終點(1)在頂部 100%
   function draw() {
@@ -11376,6 +11405,81 @@ setTimeout(() => {
 })();
 </script>
 
+<!-- liquidglass.dev(MIT，gentpan)：跟 Group 一樣的玻璃開關 <lg-switch>，檔案在 liquidglass/ -->
+<script type="module" src="liquidglass/components.js"></script>
+<script>
+// 開關的手感跟 Group 一樣：
+//   snmHaptic      震一下(Android 用 vibrate；iPhone 點一個看不到的原生 iOS 開關，iOS 18 以上會震)
+//   snmSwitchDrag  按住圓鈕左右滑；點一下由瀏覽器原生切換(iPhone 才會震)
+//   snmSwitchSnap  底色不跟著圓鈕慢慢變：到最右邊才變綠、到最左邊才變灰
+(function () {
+  window.snmHaptic = function () {
+    if (navigator.vibrate) { navigator.vibrate(10); return; }
+    var label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.style.display = 'none';
+    var input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('switch', '');
+    label.appendChild(input);
+    document.head.appendChild(label);
+    label.click();
+    label.remove();
+  };
+  window.snmSwitchDrag = function (sw) {
+    var input = sw.querySelector('input');
+    input.setAttribute('switch', '');
+    var drag = null, skipClick = false, clickCame = false;
+    function setChecked(on) {
+      if (on !== input.checked) { input.checked = on; input.dispatchEvent(new Event('change', { bubbles: true })); }
+      else sw.xs.set(on ? 1 : 0);
+    }
+    input.addEventListener('pointerdown', function (e) {
+      if (input.disabled) return;
+      drag = { x0: e.clientX, y0: e.clientY, from: input.checked ? 1 : 0, pos: input.checked ? 1 : 0, moved: false };
+      if (input.setPointerCapture) input.setPointerCapture(e.pointerId);
+    });
+    input.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if (!drag.moved) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; } // 先往上下走：當作捲動
+        if (Math.abs(dx) < 8) return; // 點一下的抖動
+        drag.moved = true;
+      }
+      drag.pos = Math.min(1, Math.max(0, drag.from + dx / 24)); // 圓鈕可移動 24px
+      sw.xs.set(drag.pos);
+    });
+    input.addEventListener('pointerup', function () {
+      var d = drag; drag = null;
+      if (!d) return;
+      if (!d.moved) { // 點一下：瀏覽器原生切換；手指抖動時 click 偶爾不來，等一下沒來就自己切
+        clickCame = false;
+        setTimeout(function () { if (!clickCame) setChecked(!d.from); }, 350);
+        return;
+      }
+      skipClick = true; // 滑動：程式切換，接下來的 click 不要再切一次
+      setTimeout(function () { skipClick = false; }, 500);
+      setChecked(d.pos > 0.5);
+    });
+    input.addEventListener('pointercancel', function () { drag = null; sw.xs.set(input.checked ? 1 : 0); });
+    input.addEventListener('click', function (e) {
+      clickCame = true;
+      e.stopPropagation(); // 不要讓外面那一列的點擊再切一次
+      if (skipClick) { skipClick = false; e.preventDefault(); }
+    });
+  };
+  window.snmSwitchSnap = function (sw) {
+    var base = sw.render, on = sw.checked ? 1 : 0;
+    sw.render = function () {
+      base.call(this);
+      if (this.x >= 0.99) on = 1; else if (this.x <= 0.01) on = 0;
+      this.firstChild.lastChild.style.setProperty('--p', String(on));
+    };
+    sw.render();
+  };
+})();
+</script>
 <div id="ios-home-guard"></div>
 
 <!-- ===== Smart Nav Traffic Engine ===== -->
