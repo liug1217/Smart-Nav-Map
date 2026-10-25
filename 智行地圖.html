@@ -1639,6 +1639,8 @@ html, body {
   :root.is-standalone { --safe-top: max(env(safe-area-inset-top, 0px), 60px); }
 }
 @media (display-mode: standalone), (display-mode: fullscreen) {
+  /* 最外層也要撐到真正的螢幕最底：html 停在 iOS 少算的高度又 overflow:hidden，下面就會被切掉、露出一塊 */
+  html { height: 100lvh; }
   body {
     position: fixed;
     left: 0;
@@ -1655,6 +1657,7 @@ html, body {
   /* 原本用 env(safe-area-inset-top) 讓開狀態列的，整層已經往下移了，不要再加一次 */
   .avoidPickBar { top: 12px; }
 }
+:root.is-standalone { height: 100lvh; }
 :root.is-standalone body {
   position: fixed;
   left: 0;
