@@ -1656,6 +1656,8 @@ html, body {
   }
   /* 原本用 env(safe-area-inset-top) 讓開狀態列的，整層已經往下移了，不要再加一次 */
   .avoidPickBar { top: 12px; }
+  /* 載入畫面也鋪滿整個螢幕：往上撐到狀態列底下，上面加同樣多的內距，中間的 logo、文字位置不變 */
+  #splashScreen { top: calc(-1 * var(--safe-top)); padding-top: var(--safe-top); box-sizing: border-box; }
 }
 :root.is-standalone { height: 100lvh; }
 :root.is-standalone body {
@@ -1672,6 +1674,7 @@ html, body {
   height: 100lvh;
 }
 :root.is-standalone .avoidPickBar { top: 12px; }
+:root.is-standalone #splashScreen { top: calc(-1 * var(--safe-top)); padding-top: var(--safe-top); box-sizing: border-box; }
 
 /* ===== 🌩️ 中央氣象署天氣特報橫幅 ===== */
 .weatherAlert{
