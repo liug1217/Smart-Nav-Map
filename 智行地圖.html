@@ -11469,14 +11469,32 @@ setTimeout(() => {
       if (skipClick) { skipClick = false; e.preventDefault(); }
     });
   };
+  // 切換時(點一下或滑完放開)圓鈕變成玻璃滑過去：自己撐住按住的程度(hold)，0.12 秒變玻璃，圓鈕滑到底再 0.2 秒收回
   window.snmSwitchSnap = function (sw) {
-    var base = sw.render, on = sw.checked ? 1 : 0;
+    var base = sw.render, on = sw.checked ? 1 : 0, hold = 0, holdFrame = 0;
     sw.render = function () {
+      var real = this.p;
+      this.p = Math.max(real, hold);
       base.call(this);
+      this.p = real;
       if (this.x >= 0.99) on = 1; else if (this.x <= 0.01) on = 0;
       this.firstChild.lastChild.style.setProperty('--p', String(on));
     };
     sw.render();
+    sw.querySelector('input').addEventListener('change', function () {
+      cancelAnimationFrame(holdFrame);
+      var target = sw.checked ? 1 : 0, last = performance.now(), arrived = false;
+      function step(now) {
+        var dt = (now - last) / 1000;
+        last = now;
+        if (!arrived && Math.abs(sw.x - target) < 0.02 && hold >= 1) arrived = true;
+        hold = arrived ? Math.max(0, hold - dt / 0.2) : Math.min(1, hold + dt / 0.12);
+        sw.render();
+        if (arrived && hold === 0) return;
+        holdFrame = requestAnimationFrame(step);
+      }
+      holdFrame = requestAnimationFrame(step);
+    });
   };
 })();
 </script>
