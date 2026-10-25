@@ -7135,7 +7135,7 @@ function _flipCell(cell, from, to) {
       window.currentLon = currentLon;
 
       updateDisplay(speedKmh, elapsedMs);
-      requestRoadNameUpdate(currentLon, currentLat);
+      if (typeof requestRoadNameUpdate === 'function') requestRoadNameUpdate(currentLon, currentLat); // 定位比後面的 <script> 先到時還沒定義
 
       // 定位經過監視器附近時自動顯示彈出視窗
       checkCctvProximity(currentLat, currentLon);
@@ -11085,7 +11085,7 @@ setTimeout(() => {
   var startY = 0, startH = 0, dragging = false;
   grab.addEventListener('pointerdown', function (e) {
     dragging = true; startY = e.clientY; startH = sheet.getBoundingClientRect().height;
-    sheet.classList.add('dragging'); grab.setPointerCapture(e.pointerId);
+    sheet.classList.add('dragging'); try { grab.setPointerCapture(e.pointerId); } catch (_) {}
   });
   grab.addEventListener('pointermove', function (e) {
     if (!dragging) return;
@@ -11437,7 +11437,7 @@ setTimeout(() => {
     input.addEventListener('pointerdown', function (e) {
       if (input.disabled) return;
       drag = { x0: e.clientX, y0: e.clientY, from: input.checked ? 1 : 0, pos: input.checked ? 1 : 0, moved: false };
-      if (input.setPointerCapture) input.setPointerCapture(e.pointerId);
+      try { input.setPointerCapture(e.pointerId); } catch (_) {} // 手指已經離開時會丟 NotFoundError
     });
     input.addEventListener('pointermove', function (e) {
       if (!drag) return;
