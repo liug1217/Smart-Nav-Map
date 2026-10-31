@@ -133,9 +133,12 @@
   };
   function check() {
     var m = window.map;
+    if (m && m.style && !m.style._loaded) return; // 換地圖樣式到一半：這時加圖層會丟例外，等樣式載完(style.load)再重加
     if (!m || m.getZoom() < MIN_ZOOM) return;
     if (!window.THREE) {   // 放大到 zoom 16 才載入 three.js(畫 3D 的工具)
-      if (!loading) { loading = true; var sc = document.createElement('script'); sc.src = THREE_URL; sc.onload = check; document.head.appendChild(sc); }
+      if (!loading) { loading = true; var sc = window._snmThreeScript;  // 三個 3D 模組共用同一份 three.js(各載一次會有多份)
+    if (!sc) { sc = window._snmThreeScript = document.createElement('script'); sc.src = THREE_URL; document.head.appendChild(sc); }
+    sc.addEventListener('load', function () { check(); }); }
       return;
     }
     if (!mats) {

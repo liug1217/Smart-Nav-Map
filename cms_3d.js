@@ -373,14 +373,15 @@
     if (window.THREE) { threeState = 'ready'; cb(); return; }
     if (threeState === 'loading' || threeState === 'failed') return;
     threeState = 'loading';
-    var sc = document.createElement('script'); sc.src = THREE_URL;
-    sc.onload = function () { threeState = window.THREE ? 'ready' : 'failed'; if (window.THREE) cb(); };
-    sc.onerror = function () { threeState = 'failed'; };
-    document.head.appendChild(sc);
+    var sc = window._snmThreeScript;  // 三個 3D 模組共用同一份 three.js(各載一次會有多份)
+    if (!sc) { sc = window._snmThreeScript = document.createElement('script'); sc.src = THREE_URL; document.head.appendChild(sc); }
+    sc.addEventListener('load', function () { threeState = window.THREE ? 'ready' : 'failed'; if (window.THREE) cb(); });
+    sc.addEventListener('error', function () { threeState = 'failed'; });
   }
   function addLayer() {
     var m = window.map;
     if (!m || !window.THREE || m.getLayer(LAYER)) return;
+    if (m && m.style && !m.style._loaded) return; // 換地圖樣式到一半：這時加圖層會丟例外，等樣式載完(style.load)再重加
     var before = m.getLayer('user-car') ? 'user-car' : undefined;
     m.addLayer(customLayer, before);
     if (signs.length) updateHitSource();
@@ -388,6 +389,7 @@
   }
   function check() {
     var m = window.map;
+    if (m && m.style && !m.style._loaded) return; // 換地圖樣式到一半：這時加圖層會丟例外，等樣式載完(style.load)再重加
     if (!m || m.getZoom() < MIN_ZOOM) { if (visible.length) refreshVisible(); return; }
     loadSigns();
     ensureThree(function () { addLayer(); refreshVisible(); });

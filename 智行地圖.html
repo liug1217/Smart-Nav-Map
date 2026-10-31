@@ -2376,6 +2376,10 @@ function snmIcoAccent(name, el) {
   mo.observe(document.body, { childList: true, subtree: true, characterData: true });
 })();
 
+// 外部來的文字(OpenStreetMap 地名、路名、路況資料)放進 HTML 前先轉成純文字：地名任何人都能編輯，不轉的話可以塞程式碼進來
+function snmEsc(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+}
 function snmRoundPath(x, a, b, w, h, r) {
   x.beginPath();
   x.moveTo(a + r, b); x.lineTo(a + w - r, b); x.quadraticCurveTo(a + w, b, a + w, b + r);
@@ -2560,7 +2564,6 @@ function _flipCell(cell, from, to) {
   }, 460);
 }
 </script>
-<script src="https://unpkg.com/@maplibre/maplibre-gl-geocoder/dist/maplibre-gl-geocoder.min.js"></script>
 <script>
   // 預設地圖：像 Google 地圖的街道圖(淺灰底、白色道路、黃色主要道路、立體建築)；衛星圖、夜間圖用右邊的按鈕切換
   const DEFAULT_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
@@ -2760,7 +2763,7 @@ function _flipCell(cell, from, to) {
     list.forEach(item => {
       const el = document.createElement('div');
       el.className = 'searchResultItem';
-      el.innerHTML = '<div class="name">🕐 ' + (item.name || '未知地點') + '</div><div class="addr">' + (item.addr || '') + '</div>';
+      el.innerHTML = '<div class="name">🕐 ' + snmEsc(item.name || '未知地點') + '</div><div class="addr">' + snmEsc(item.addr) + '</div>';
       el.addEventListener('click', () => {
         selectDestination(item.lat, item.lon, item.name, item.addr, item.logo);
         searchResultsList.style.display = 'none';
@@ -4209,7 +4212,7 @@ function _flipCell(cell, from, to) {
         if (job.cb) job.cb(addr);
       })
       .catch(function(){})
-      .finally(function(){ _revBusy = false; setTimeout(_processRevQueue, 280); });
+      .finally(function(){ _revBusy = false; setTimeout(_processRevQueue, 1100); }); // Nominatim 規定每秒最多 1 次
   }
   function _enqueueReverse(lat, lon, el) {
     var key = lat.toFixed(4) + ',' + lon.toFixed(4);
@@ -4468,7 +4471,7 @@ function _flipCell(cell, from, to) {
         const el = document.createElement('div');
         el.className = 'searchResultItem';
         const mainName = (item.display_name || '').split(',')[0];
-        el.innerHTML = '<div class="name">' + mainName + '</div><div class="addr">' + (item.display_name || '') + '</div>';
+        el.innerHTML = '<div class="name">' + snmEsc(mainName) + '</div><div class="addr">' + snmEsc(item.display_name) + '</div>';
         el.addEventListener('click', function() {
           selectDestination(parseFloat(item.lat), parseFloat(item.lon), mainName, item.display_name);
         });
@@ -4593,7 +4596,7 @@ function _flipCell(cell, from, to) {
     return { lat: Number(list[0].lat), lon: Number(list[0].lon), name: t, addr: list[0].display_name || '' };
   }
   async function runSmartRoute(pq) {
-    searchResultsList.innerHTML = '<div class="searchResultsEmpty">規劃「' + (pq.from || '目前位置') + ' → ' + pq.to + '」路線中…</div>';
+    searchResultsList.innerHTML = '<div class="searchResultsEmpty">規劃「' + snmEsc(pq.from || '目前位置') + ' → ' + snmEsc(pq.to) + '」路線中…</div>';
     searchResultsList.style.display = 'block';
     try {
       const [from, to] = await Promise.all([resolveEndpoint(pq.from), resolveEndpoint(pq.to)]);
@@ -4602,7 +4605,7 @@ function _flipCell(cell, from, to) {
       window._snmRouteBetween(from, to);
     } catch (e) {
       const needSet = /還沒設定/.test(e.message);
-      searchResultsList.innerHTML = '<div class="searchResultsEmpty">' + e.message + (needSet ? '，請先點上面的「' + (/公司/.test(e.message) ? '公司' : '住家') + '」設定' : '') + '</div>';
+      searchResultsList.innerHTML = '<div class="searchResultsEmpty">' + snmEsc(e.message) + (needSet ? '，請先點上面的「' + (/公司/.test(e.message) ? '公司' : '住家') + '」設定' : '') + '</div>';
       if (needSet) searchResultsList.insertBefore(savedPlaceRows(), searchResultsList.firstChild);
     }
   }
@@ -5590,6 +5593,7 @@ function _flipCell(cell, from, to) {
   };
   let navMode = (function () { try { const m = localStorage.getItem('snm_nav_mode'); return NAV_MODES[m] ? m : 'car'; } catch (_) { return 'car'; } })();
   window._navMode = () => navMode;
+  const ROUTE_TIMEOUT_MS = 12000;
   async function fetchRoutes(mode, origin, destLat, destLon, alternatives) {
     // 有設避開道路：OSRM 不能排除指定路段，改用 Valhalla 的 exclude_polygons 真正排除，算完再逐條檢查(見下方避開道路)
     if (_avoids.length || avoidOptsOn(mode).length) return fetchRoutesAvoiding(mode, origin, destLat, destLon, alternatives);
@@ -5608,8 +5612,18 @@ function _flipCell(cell, from, to) {
     } else {
       url = 'https://router.project-osrm.org/route/v1/driving/' + ll + q;
     }
-    const res = await fetch(url);
-    return res.json();
+    // 公開路線伺服器不保證一直可用：卡住 12 秒就放棄；開車路線這台不行就換另一台(同樣的 OSRM、回傳格式一樣)
+    const urls = [url];
+    if (mode !== 'scooter' && mode !== 'bike' && mode !== 'foot') urls.push('https://routing.openstreetmap.de/routed-car/route/v1/driving/' + ll + q);
+    let lastErr = null;
+    for (const u of urls) {
+      try {
+        const res = await fetch(u, { signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS) });
+        if (!res.ok && urls.length > 1 && u !== urls[urls.length - 1]) throw new Error('路線服務 ' + res.status);
+        return await res.json();
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
   }
 
   // ===== 🛣️ 路線選擇(A/B/C)：列出幾條路線(時間含目前塞車多花的時間)，地圖上選中的綠色、其他灰色，選好再開始導航 =====
@@ -5804,7 +5818,7 @@ function _flipCell(cell, from, to) {
       el.innerHTML = '<div class="rpBadge">' + String.fromCharCode(65 + i) + '</div>' +
         '<div class="rpMain"><div class="rpTime">' + rpFmtMin(tot[i]) + tolls + leaf + jam + fast + eco + '</div>' +
         '<div class="rpSub">' + (r.distance / 1000).toFixed(1) + ' 公里 · ' + String(eta.getHours()).padStart(2, '0') + ':' + String(eta.getMinutes()).padStart(2, '0') + ' 到達' +
-        (via ? ' · 經由 ' + via : '') + '</div></div>';
+        (via ? ' · 經由 ' + snmEsc(via) : '') + '</div></div>';
       el.addEventListener('click', () => rpSelect(i));
       rpList.appendChild(el);
     });
@@ -6069,7 +6083,7 @@ function _flipCell(cell, from, to) {
       const co = avoidCostingOptions(mode);
       if (co) body.costing_options = co;
       // 用 POST：避開的路段多時，放在網址裡會太長
-      const data = await (await fetch('https://valhalla1.openstreetmap.de/route', { method: 'POST', body: JSON.stringify(body) })).json();
+      const data = await (await fetch('https://valhalla1.openstreetmap.de/route', { method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS * 2) })).json();
       if (data && data.code === 'PerimeterExceeded') throw new Error('避開的範圍超過路線服務的上限');
       all = (data && data.routes) || [];
       ok = all.filter(r => routeAvoidsAll(r, ends));   // 每條都檢查，沒真的避開的不要
@@ -7327,7 +7341,7 @@ map.on('load', function() {
         'icon-size': ['interpolate', ['exponential', 2], ['zoom'], 15, 0.9, 19, 0.9, 20, 1.8, 22, 7.2],
         // 車頭朝向「地圖上的實際行進方向」:鏡頭跟隨時地圖跟著轉,車子照樣朝上;
         // 用手轉動地圖時,車子跟著道路一起轉,不會自己原地打轉
-        'icon-rotate': ['get', 'heading'],
+        'icon-rotate': ['coalesce', ['get', 'heading'], 0], // 還沒定位時 heading 是空的
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
@@ -8383,7 +8397,7 @@ setTimeout(() => {
 
 })();
 </script>
-<script async src="https://cdn.jsdelivr.net/gh/liug1217/Navigation-Map@main/cctv_data.js"></script>
+<script async src="cctv_data.js"></script>
 <script async src="speed_camera_data.js?v=moi20261005"></script>
 <script async src="thb_cctv_data.js?v=0925"></script>
 <script>
@@ -10348,9 +10362,9 @@ setTimeout(() => {
   function attach(layer, f) {
     var c = f.geometry.coordinates, box = null;
     for (var i = _opened.length - 1; i >= 0 && !box; i--) {
-      var p = _opened[i], ll = p.isOpen() && p.getLngLat();
+      var pop = _opened[i], ll = pop.isOpen() && pop.getLngLat();
       if (ll && Math.abs(ll.lng - c[0]) < 1e-7 && Math.abs(ll.lat - c[1]) < 1e-7) {
-        box = p.getElement() && p.getElement().querySelector('.maplibregl-popup-content');
+        box = pop.getElement() && pop.getElement().querySelector('.maplibregl-popup-content');
       }
     }
     if (!box || box.querySelector('.snmRptBtn')) return;
@@ -12121,14 +12135,14 @@ setTimeout(() => {
       if (OFFICIAL_SRC[p.source]) {
         info = [
           p.sectionName ? '路段：' + p.sectionName : '',
-          '目前平均車速：' + p.averageSpeed + ' km/h' + (p.baselineSpeed && p.baselineSpeed !== 'null' ? '（速限 ' + p.baselineSpeed + '）' : ''),
+          '目前平均車速：' + snmEsc(p.averageSpeed) + ' km/h' + (p.baselineSpeed && p.baselineSpeed !== 'null' ? '（速限 ' + snmEsc(p.baselineSpeed) + '）' : ''),
           '資料來源：' + OFFICIAL_SRC[p.source] + '，每分鐘更新'
         ];
       } else {
         var srcTxt0 = { learned: '實際車速學到的', limit: '依速限', 'class': '依道路等級推估' }[p.baselineSource] || '';
         var base0 = (p.baselineSpeed == null || p.baselineSpeed === 'null')
           ? '學習中（資料累積後自動判斷）'
-          : p.baselineSpeed + ' km/h' + (srcTxt0 ? '（' + srcTxt0 + '）' : '');
+          : snmEsc(p.baselineSpeed) + ' km/h' + (srcTxt0 ? '（' + srcTxt0 + '）' : '');
         info = ['目前車速：' + p.averageSpeed + ' km/h', '這段路順暢時：' + base0, '樣本數：' + p.sampleCount + '（' + p.uniqueContributors + ' 人）'];
       }
       window._snmOpenPlace({ layer: 'traffic', name: p.label || '路況', kind: p.sectionName || '即時路況', logo: trafficLogo(p.color),
@@ -12140,8 +12154,8 @@ setTimeout(() => {
         .setLngLat(e.lngLat)
         .setHTML(
           '<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
-          '<strong style="color:' + p.color + '">' + (p.label || '路況') + '</strong><br>' +
-          (p.sectionName ? p.sectionName + '<br>' : '') +
+          '<strong style="color:' + snmEsc(p.color) + '">' + snmEsc(p.label || '路況') + '</strong><br>' +
+          (p.sectionName ? snmEsc(p.sectionName) + '<br>' : '') +
           '目前平均車速：' + p.averageSpeed + ' km/h' + (p.baselineSpeed && p.baselineSpeed !== 'null' ? '（速限 ' + p.baselineSpeed + '）' : '') + '<br>' +
           '<span style="color:#888;font-size:11px">資料來源：' + OFFICIAL_SRC[p.source] + '，每分鐘更新</span>' +
           '</div>'
@@ -12157,10 +12171,10 @@ setTimeout(() => {
       .setLngLat(e.lngLat)
       .setHTML(
         '<div style="font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;">' +
-        '<strong style="color:' + p.color + '">' + (p.label || '路況') + '</strong><br>' +
-        '目前車速：' + p.averageSpeed + ' km/h<br>' +
+        '<strong style="color:' + snmEsc(p.color) + '">' + snmEsc(p.label || '路況') + '</strong><br>' +
+        '目前車速：' + snmEsc(p.averageSpeed) + ' km/h<br>' +
         '這段路順暢時：' + base + '<br>' +
-        '樣本數：' + p.sampleCount + '（' + p.uniqueContributors + ' 人）' +
+        '樣本數：' + snmEsc(p.sampleCount) + '（' + snmEsc(p.uniqueContributors) + ' 人）' +
         '</div>'
       )
       .addTo(window.map);
@@ -12794,10 +12808,10 @@ setTimeout(() => {
 </script>
 
 <!-- 🪧 國道電子看板 3D 模型(放大到街道等級才載入) -->
-<script src="cms_3d.js?v=16"></script>
+<script src="cms_3d.js?v=18"></script>
 <!-- 🛣 國道、快速道路 3D 路面(第 1 階段：主線；放大到 zoom 16 才畫) -->
 <script src="road_3d_shape.js?v=6"></script>
-<script src="road_3d.js?v=49"></script>
+<script src="road_3d.js?v=51"></script>
 <!-- 🟢 網站更新中提示、更新通知(推播) -->
 <style>
 .snmUpdPill{ position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:1001; display:none; align-items:center; gap:8px;
@@ -12905,11 +12919,11 @@ setTimeout(() => {
 })();
 </script>
 <!-- 🏙 一般道路 3D 路面(省道、縣道、市區道路、巷弄) -->
-<script src="road_3d_city.js?v=8"></script>
+<script src="road_3d_city.js?v=9"></script>
 <!-- 🌤 天空(照太陽高度角換顏色) -->
 <script src="sky.js?v=5"></script>
 <!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
-<script src="lamps_3d.js?v=5"></script>
+<script src="lamps_3d.js?v=7"></script>
 </body>
 </html>
   

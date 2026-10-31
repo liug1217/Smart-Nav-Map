@@ -1052,15 +1052,16 @@
     if (window.THREE) { threeState = 'ready'; cb(); return; }
     if (threeState === 'loading' || threeState === 'failed') return;
     threeState = 'loading';
-    var s = document.createElement('script'); s.src = THREE_URL;
-    s.onload = function () { threeState = window.THREE ? 'ready' : 'failed'; if (window.THREE) cb(); };
-    s.onerror = function () { threeState = 'failed'; };
-    document.head.appendChild(s);
+    var sc = window._snmThreeScript;  // 三個 3D 模組共用同一份 three.js(各載一次會有多份)
+    if (!sc) { sc = window._snmThreeScript = document.createElement('script'); sc.src = THREE_URL; document.head.appendChild(sc); }
+    sc.addEventListener('load', function () { threeState = window.THREE ? 'ready' : 'failed'; if (window.THREE) cb(); });
+    sc.addEventListener('error', function () { threeState = 'failed'; });
   }
   var wasActive = false, liftTimer = null;
   function check() {
     var m = window.map;
     if (!m) return;
+    if (m && m.style && !m.style._loaded) return; // 換地圖樣式到一半：這時加圖層會丟例外，等樣式載完(style.load)再重加
     var nowActive = m.getZoom() >= MIN_ZOOM;
     if (nowActive !== wasActive) {   // 放大 / 縮小跨過 16：地面的線換回完整的 / 只留沒對到路面的；3D 圖層換到綠線上面 / 下面
       wasActive = nowActive; ovSoon();

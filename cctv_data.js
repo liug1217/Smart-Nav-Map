@@ -1349,7 +1349,7 @@
 {lon:120.386932374,lat:23.489570618,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=430",road:"國道1號",mile:"264K+998"},
 {lon:120.384719849,lat:23.486387253,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=4",road:"國道1號",mile:"265K+410"},
 {lon:120.378646851,lat:23.473283768,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=431",road:"國道1號",mile:"266K+994"},
-{lon:23.4382625,lat:23.438333512,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=7",road:"國道1號",mile:"271K+250"},
+{lon:120.36525,lat:23.438333512,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=7",road:"國道1號",mile:"271K+250"},
 {lon:120.354629517,lat:23.410636902,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=377",road:"國道1號",mile:"274K+784"},
 {lon:120.354804993,lat:23.40436554,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=337",road:"國道1號",mile:"275K+146"},
 {lon:120.3550448,lat:23.40075624,url:"https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=460",road:"國道1號",mile:"275K+553"},

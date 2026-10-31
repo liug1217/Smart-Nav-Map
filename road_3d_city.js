@@ -345,6 +345,7 @@
   }
   function check() {
     var m = window.map;
+    if (m && m.style && !m.style._loaded) return; // 換地圖樣式到一半：這時加圖層會丟例外，等樣式載完(style.load)再重加
     if (!m || !window.THREE || !window.RoadShape) return;
     if (m.getZoom() < MIN_ZOOM) { if (chunk) m.triggerRepaint(); return; }
     if (!mats) makeMats();
