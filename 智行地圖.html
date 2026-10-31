@@ -2080,6 +2080,10 @@ html, body {
 
 <!-- 自訂地圖控制按鈕群 -->
 <div class="mapCtrlGroup mcCollapsed">
+  <!-- 地圖圖層開關(features.js) -->
+  <button class="mapCtrlBtn" id="layersBtn" title="地圖上要顯示什麼" aria-label="地圖上要顯示什麼" style="--k:7;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 8.5 12 14l10-5.5L12 3z" fill="#000"/><path d="m2 13 10 5.5L22 13"/><path d="m2 17.5 10 5.5 10-5.5" opacity=".55"/></svg>
+  </button>
   <!-- 即時路況 -->
   <button class="mapCtrlBtn" id="trafficBtn" title="即時路況" style="font-size:17px;--k:6;">🚦</button>
   <!-- 分享我的車給其他車友看(要本人同意) -->
@@ -2659,13 +2663,18 @@ function _flipCell(cell, from, to) {
     map.scrollZoom.enable();
     map.dragPan.enable();
     // 地圖載入完成 → 進度條衝到100% → 淡出 splash
+    setTimeout(window._snmHideSplash, 500);
+  });
+  // 載入畫面：地圖載完就淡出；訊號差、圖磚一直載不完時最多等 12 秒就先進地圖(圖磚之後繼續載)
+  window._snmHideSplash = function () {
     const sp = document.getElementById('splashScreen');
     const spBar = document.getElementById('splashProgress');
-    if(sp){
-      if(spBar){ spBar.style.width='100%'; }
-      setTimeout(()=>{ sp.classList.add('hide'); setTimeout(()=>sp.remove(), 1050); }, 500);
-    }
-  });
+    if (!sp || sp.classList.contains('hide')) return;
+    if (spBar) spBar.style.width = '100%';
+    sp.classList.add('hide');
+    setTimeout(() => sp.remove(), 1050);
+  };
+  setTimeout(window._snmHideSplash, 12000);
 
   // 使用者手動拖曳地圖時,暫停自動跟隨定位點,避免地圖被強制拉回;
   // 點擊定位按鈕(GeolocateControl)恢復跟隨。
@@ -4557,6 +4566,8 @@ function _flipCell(cell, from, to) {
     searchResultsList.innerHTML = '<div class="searchHint">輸入' + SAVED_PLACES[k].label + '的地址或附近地標，<br>點選搜尋結果就會設為' + SAVED_PLACES[k].label + '</div>';
     searchInput.focus();
   }
+  // 首頁「回家 / 上班」還沒設定時用(features.js)
+  window._snmStartSetPlace = function (k) { openSearchPage(); startSetPlace(k); };
   function savedPlaceRows() {
     const box = document.createElement('div');
     Object.keys(SAVED_PLACES).forEach(k => {
@@ -6487,7 +6498,6 @@ function _flipCell(cell, from, to) {
       updateRect8Display();
       // 確保車子圖層在導航時保持可見
       try { map.setLayoutProperty('user-car', 'visibility', 'visible'); } catch(e) {}
-      try { map.setLayoutProperty('user-pulse', 'visibility', 'visible'); } catch(e) {}
 
       // 找出第一個真正的轉彎(跳過出發點depart)
       const firstTurnIndex = navSteps.findIndex(s => s.maneuver && s.maneuver.type !== 'depart');
@@ -8058,6 +8068,8 @@ setTimeout(() => {
       map.setStyle(s.style, { diff: false });
     }
 
+    // 指定地圖樣式(0 街道、1 衛星、2 夜間)：自動夜間用(features.js)
+    window._snmSetStyle = function (idx) { if (idx !== styleIdx) { styleIdx = idx; applyStyle(idx); } };
     if(styleBtn) styleBtn.addEventListener('click', function(){
       styleIdx = (styleIdx + 1) % STYLES.length;
       applyStyle(styleIdx);
@@ -12928,6 +12940,8 @@ setTimeout(() => {
 <script src="sky.js?v=5"></script>
 <!-- 💡 國道、快速道路路燈(放大到 zoom 16 才畫) -->
 <script src="lamps_3d.js?v=7"></script>
+<!-- ✨ 圖層開關、首頁快捷鍵、記住停車位置、分享到達時間、自動夜間地圖 -->
+<script src="features.js?v=3"></script>
 </body>
 </html>
   
