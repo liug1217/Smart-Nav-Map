@@ -9459,6 +9459,10 @@ setTimeout(() => {
   document.addEventListener('keyup', function(e){
     active[e.key.toLowerCase()]=false;
   });
+  // 按著鍵切到別的視窗就收不到 keyup：不放開的話車子會一直自己開
+  function releaseKeys(){ active = {}; }
+  window.addEventListener('blur', releaseKeys);
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) releaseKeys(); });
 
   // ── 手機觸控試開：按住按鈕 = 按住鍵盤 WASD(可多指同時按：油門 + 轉彎) ──
   var padL = document.getElementById('tdPadLeft'), padR = document.getElementById('tdPadRight');
